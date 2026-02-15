@@ -16,7 +16,9 @@ from src.domain.order import Order
 class IOrderService(Protocol):
     """Interface for order services."""
 
-    def get_orders(self, directory: Path, error_queue: IErrorQueue) -> Generator[Order, None, None]:
+    json_orders_dir: Path
+
+    def get_orders(self, error_queue: IErrorQueue) -> Generator[Order, None, None]:
         """Generate orders."""
         ...
 
@@ -26,7 +28,7 @@ class IOrderService(Protocol):
         """Get the artwork service for the given order."""
         ...
 
-    def save_order(self, order: Order, directory: Path) -> None:
+    def persist_order(self, order: Order) -> None:
         """Save the given order."""
 
         def custom_serializer(obj):
@@ -34,8 +36,8 @@ class IOrderService(Protocol):
                 return obj.isoformat()
             raise TypeError(f"Type {type(obj)} not serializable")
 
-        order_name = f"S{order.id:05}.json" if order.id else f"{order.remote_order_id}.json"
-        file_path = directory / order_name
+        order_name = f"{order.id or order.remote_order_id}.json"
+        file_path = self.json_orders_dir / order_name
         order_data = asdict(order)
         text = json.dumps(order_data, indent=4, ensure_ascii=False, default=custom_serializer)
         file_path.write_text(text, encoding="utf-8")
