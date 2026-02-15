@@ -4,7 +4,6 @@ import datetime as dt
 
 import pytest
 
-from src.domain.interfaces.iartwork_service import IArtworkService
 from src.domain.line_item import LineItem
 from src.domain.order import Order, OrderStatus
 from src.domain.ship_to import ShipTo
@@ -85,8 +84,8 @@ class TestOrderInstantiation:
 
         assert order.id == 0
         assert order.status == OrderStatus.NEW
-        assert order.artwork_service is None
         assert isinstance(order.created_at, dt.datetime)
+        assert isinstance(order.ship_at, dt.date)
 
     def test_id_not_settable_via_init(self, valid_order_data):
         """Test that id cannot be set via __init__."""
@@ -102,6 +101,11 @@ class TestOrderInstantiation:
         """Test that created_at cannot be set via __init__."""
         with pytest.raises(TypeError):
             Order(created_at=dt.datetime.now(dt.UTC), **valid_order_data)  # type: ignore
+
+    def test_ship_at_not_settable_via_init(self, valid_order_data):
+        """Test that ship_at cannot be set via __init__."""
+        with pytest.raises(TypeError):
+            Order(ship_at=dt.date.today(), **valid_order_data)  # type: ignore
 
 
 class TestOrderAdministrationIDValidation:
@@ -458,42 +462,6 @@ class TestOrderLineItemsValidation:
         assert order.line_items == [line_item1, line_item2]
 
 
-class TestOrderArtworkServiceHandling:
-    """Tests for artwork_service field handling."""
-
-    @pytest.fixture
-    def minimal_order_data(self, mocker):
-        """Provide minimal valid Order data."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
-        return {
-            "administration_id": 1,
-            "customer_id": 100,
-            "order_provider": "Provider",
-            "pricelist_id": 50,
-            "remote_order_id": "ORD-123",
-            "shipment_type": "standard",
-            "ship_to": ship_to,
-            "line_items": [line_item],
-        }
-
-    def test_artwork_service_defaults_to_none(self, minimal_order_data):
-        """Test that artwork_service defaults to None."""
-        order = Order(**minimal_order_data)
-        assert order.artwork_service is None
-
-    def test_artwork_service_invalid_type_becomes_none(self, minimal_order_data):
-        """Test that invalid artwork_service type defaults to None."""
-        order = Order(artwork_service="not a service", **minimal_order_data)  # type: ignore
-        assert order.artwork_service is None
-
-    def test_artwork_service_valid(self, minimal_order_data, mocker):
-        """Test that valid artwork_service is accepted."""
-        artwork_service = mocker.Mock(spec=IArtworkService)
-        order = Order(artwork_service=artwork_service, **minimal_order_data)
-        assert order.artwork_service is artwork_service
-
-
 class TestOrderSetID:
     """Tests for set_id method."""
 
@@ -575,8 +543,76 @@ class TestOrderSetStatus:
             order.set_status(None)
 
 
-class TestOrderSetArtworkService:
-    """Tests for set_artwork_service method."""
+class TestOrderCalculateDeliveryDate:
+    """Tests for calculate_delivery_date static method."""
+
+    def test_calculate_delivery_date_zero_workdays(self):
+        """Test delivery date with 0 workdays."""
+        today = dt.date.today()
+        delivery_date = Order.calculate_delivery_date(0)
+        assert delivery_date == today
+
+    def test_calculate_delivery_date_one_workday(self):
+        """Test delivery date with 1 workday."""
+        today = dt.date.today()
+        delivery_date = Order.calculate_delivery_date(1)
+
+        # Calculate expected date (skip weekends if needed)
+        expected = today + dt.timedelta(days=1)
+        while expected.weekday() >= 5:  # Skip weekends
+            expected += dt.timedelta(days=1)
+
+        assert delivery_date == expected
+
+    def test_calculate_delivery_date_spans_weekend(self):
+        """Test that delivery date calculation skips weekends."""
+        # We calculate 5 workdays from today
+        delivery_date = Order.calculate_delivery_date(5)
+
+        # Should be a workday (Monday-Friday)
+        assert delivery_date.weekday() < 5
+
+    def test_calculate_delivery_date_multiple_weeks(self):
+        """Test delivery date calculation across multiple weeks."""
+        # 10 workdays should span at least one weekend
+        delivery_date = Order.calculate_delivery_date(10)
+
+        # Should be a workday (Monday-Friday)
+        assert delivery_date.weekday() < 5
+
+        # Should be at least 10 days in the future (accounting for weekends)
+        today = dt.date.today()
+        assert (delivery_date - today).days >= 10
+
+    def test_calculate_delivery_date_negative_workdays_raises_error(self):
+        """Test that negative workdays raises ValueError."""
+        with pytest.raises(
+            ValueError, match="Workdays for delivery must be a non-negative integer"
+        ):
+            Order.calculate_delivery_date(-1)
+
+    def test_calculate_delivery_date_can_be_called_from_instance(self, mocker):
+        """Test that static method can also be called from an instance."""
+        ship_to = mocker.Mock(spec=ShipTo)
+        line_item = mocker.Mock(spec=LineItem)
+        order = Order(
+            administration_id=1,
+            customer_id=100,
+            order_provider="Provider",
+            pricelist_id=50,
+            remote_order_id="ORD-123",
+            shipment_type="standard",
+            ship_to=ship_to,
+            line_items=[line_item],
+        )
+
+        today = dt.date.today()
+        delivery_date = order.calculate_delivery_date(0)
+        assert delivery_date == today
+
+
+class TestOrderSetShipAt:
+    """Tests for set_ship_at method."""
 
     @pytest.fixture
     def order(self, mocker):
@@ -594,97 +630,33 @@ class TestOrderSetArtworkService:
             line_items=[line_item],
         )
 
-    def test_set_artwork_service_valid(self, order, mocker):
-        """Test setting a valid artwork service."""
-        artwork_service = mocker.Mock(spec=IArtworkService)
-        order.set_artwork_service(artwork_service)
-        assert order.artwork_service is artwork_service
+    def test_set_ship_at_valid(self, order):
+        """Test setting a valid ship_at date."""
+        future_date = dt.date.today() + dt.timedelta(days=5)
+        order.set_ship_at(future_date)
+        assert order.ship_at == future_date
 
-    def test_set_artwork_service_non_service_raises_error(self, order):
-        """Test that setting non-ArtworkService value raises ValueError."""
-        with pytest.raises(
-            ValueError, match="Artwork service must be an instance of ArtworkService"
-        ):
-            order.set_artwork_service("not a service")
+    def test_set_ship_at_past_date_raises_error(self, order):
+        """Test that setting ship_at to past date raises ValueError."""
+        past_date = dt.date.today() - dt.timedelta(days=1)
+        with pytest.raises(ValueError, match="Ship at must be a date in the future"):
+            order.set_ship_at(past_date)
 
-    def test_set_artwork_service_none_raises_error(self, order):
-        """Test that setting artwork service to None raises ValueError."""
-        with pytest.raises(
-            ValueError, match="Artwork service must be an instance of ArtworkService"
-        ):
-            order.set_artwork_service(None)
+    def test_set_ship_at_today_raises_error(self, order):
+        """Test that setting ship_at to today raises ValueError."""
+        today = dt.date.today()
+        with pytest.raises(ValueError, match="Ship at must be a date in the future"):
+            order.set_ship_at(today)
 
+    def test_set_ship_at_not_date_raises_error(self, order):
+        """Test that setting non-date ship_at raises ValueError."""
+        with pytest.raises(ValueError, match="Ship at must be a date in the future"):
+            order.set_ship_at("2025-02-20")  # type: ignore
 
-class TestOrderGetDeliveryDate:
-    """Tests for get_delivery_date method."""
-
-    @pytest.fixture
-    def order_with_set_date(self, mocker):
-        """Provide an Order instance with a controlled created_at date."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
-        order = Order(
-            administration_id=1,
-            customer_id=100,
-            order_provider="Provider",
-            pricelist_id=50,
-            remote_order_id="ORD-123",
-            shipment_type="standard",
-            ship_to=ship_to,
-            line_items=[line_item],
-        )
-        # Set a known created_at date: Monday, Feb 10, 2025
-        known_date = dt.datetime(2025, 2, 10, 10, 0, 0, tzinfo=dt.UTC)
-        object.__setattr__(order, "created_at", known_date)
-        return order
-
-    def test_get_delivery_date_zero_workdays(self, order_with_set_date):
-        """Test delivery date with 0 workdays."""
-        delivery_date = order_with_set_date.get_delivery_date(0)
-        assert delivery_date == dt.date(2025, 2, 10)
-
-    def test_get_delivery_date_one_workday(self, order_with_set_date):
-        """Test delivery date with 1 workday (Monday to Tuesday)."""
-        delivery_date = order_with_set_date.get_delivery_date(1)
-        assert delivery_date == dt.date(2025, 2, 11)
-
-    def test_get_delivery_date_skips_weekends(self, order_with_set_date):
-        """Test that delivery date calculation skips weekends."""
-        # From Monday Feb 10, 5 workdays should be Monday Feb 17
-        delivery_date = order_with_set_date.get_delivery_date(5)
-        assert delivery_date == dt.date(2025, 2, 17)
-        assert delivery_date.weekday() == 0  # Monday
-
-    def test_get_delivery_date_multiple_weeks(self, order_with_set_date):
-        """Test delivery date calculation across multiple weeks."""
-        # 10 workdays from Monday Feb 10 should skip 2 weekends
-        delivery_date = order_with_set_date.get_delivery_date(10)
-        # Should land on Monday Feb 24
-        assert delivery_date == dt.date(2025, 2, 24)
-        assert delivery_date.weekday() == 0  # Monday
-
-    def test_get_delivery_date_from_friday(self, mocker):
-        """Test delivery date calculation starting from Friday."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
-        order = Order(
-            administration_id=1,
-            customer_id=100,
-            order_provider="Provider",
-            pricelist_id=50,
-            remote_order_id="ORD-123",
-            shipment_type="standard",
-            ship_to=ship_to,
-            line_items=[line_item],
-        )
-        # Friday, Feb 14, 2025
-        known_date = dt.datetime(2025, 2, 14, 10, 0, 0, tzinfo=dt.UTC)
-        object.__setattr__(order, "created_at", known_date)
-
-        # 1 workday from Friday should be Monday
-        delivery_date = order.get_delivery_date(1)
-        assert delivery_date == dt.date(2025, 2, 17)
-        assert delivery_date.weekday() == 0  # Monday
+    def test_set_ship_at_datetime_raises_error(self, order):
+        """Test that setting datetime instead of date raises ValueError."""
+        with pytest.raises(TypeError, match="datetime"):
+            order.set_ship_at(dt.datetime.now())  # type: ignore
 
 
 class TestOrderDescription:
@@ -779,17 +751,22 @@ class TestOrderImmutability:
         with pytest.raises((AttributeError, TypeError)):
             order.line_items = []
 
-    def test_can_modify_via_setter_methods(self, order, mocker):
-        """Test that settable fields can be modified via setter methods."""
-        artwork_service = mocker.Mock(spec=IArtworkService)
-        order.set_artwork_service(artwork_service)
-        assert order.artwork_service is artwork_service
+    def test_cannot_modify_ship_at_directly(self, order):
+        """Test that ship_at cannot be modified directly."""
+        with pytest.raises((AttributeError, TypeError)):
+            order.ship_at = dt.date.today()
 
+    def test_can_modify_via_setter_methods(self, order):
+        """Test that settable fields can be modified via setter methods."""
         order.set_id(999)
         assert order.id == 999
 
         order.set_status(OrderStatus.SHIPPED)
         assert order.status == OrderStatus.SHIPPED
+
+        future_date = dt.date.today() + dt.timedelta(days=5)
+        order.set_ship_at(future_date)
+        assert order.ship_at == future_date
 
 
 class TestOrderEquality:
