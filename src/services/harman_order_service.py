@@ -64,42 +64,41 @@ class HarmanOrderService(IOrderService):
 
     def _get_segment_data(self, segment: Segment, order_data: dict[str, Any]) -> dict[str, Any]:
         """Extract data from a segment."""
-        match segment.tag, segment.elements:
-            case (
+        match [segment.tag, *segment.elements]:
+            case [
                 "NAD",
-                ["ST", id, names, phone, street, city, state, postcode, country],
-            ):
-                assert isinstance(names, list) and len(names) >= 3, (
-                    "NAD segment must contain at least 3 name elements."
-                )
-                assert isinstance(phone, list) and phone, (
-                    "NAD segment must contain at least 1 phone element."
-                )
-                assert isinstance(street, list) and len(street) >= 4, (
-                    "NAD segment must contain at least 4 street elements."
-                )
-                order_data["ship_to"]["remote_customer_id"] = id
-                order_data["ship_to"]["company_name"] = names[0] if names[1] else ""
-                order_data["ship_to"]["contact_name"] = names[1] if names[1] else names[0]
-                order_data["ship_to"]["email"] = names[2]
-                order_data["ship_to"]["phone"] = phone[0]
-                order_data["ship_to"]["street1"] = f"{street[0]} {street[3]}".strip()
-                order_data["ship_to"]["street2"] = street[1]
+                "ST",
+                remote_customer_id,
+                [name1, name2, email, *_],
+                [phone, *_],
+                [street1, street2, _, house_nr, *_],
+                city,
+                state,
+                postcode,
+                country,
+            ]:
+                order_data["ship_to"]["remote_customer_id"] = remote_customer_id
+                order_data["ship_to"]["company_name"] = name1 if name2 else ""
+                order_data["ship_to"]["contact_name"] = name2 if name2 else name1
+                order_data["ship_to"]["email"] = email
+                order_data["ship_to"]["phone"] = phone
+                order_data["ship_to"]["street1"] = f"{street1} {house_nr}".strip()
+                order_data["ship_to"]["street2"] = street2
                 order_data["ship_to"]["city"] = city
                 order_data["ship_to"]["state"] = state
                 order_data["ship_to"]["postal_code"] = postcode
                 order_data["ship_to"]["country_code"] = country
-            case ("RFF", ["DQ", delivery_note_id]):
+            case ["RFF", "DQ", delivery_note_id]:
                 order_data["delivery_note_id"] = delivery_note_id
-            case ("RFF", ["ON", remote_order_id]):
+            case ["RFF", "ON", remote_order_id]:
                 order_data["remote_order_id"] = remote_order_id
-            case ("LIN", [id, "1", [product_id, "MF"]]):
+            case ["LIN", id, "1", [product_id, "MF"]]:
                 order_data["line_items"].append({"id": id, "product_id": product_id})
-            case ("QTY", ["113", quantity, unit_of_measure]):
+            case ["QTY", "113", quantity, unit_of_measure]:
                 assert order_data["line_items"], "QTY segment must be preceded by a LIN segment."
                 order_data["line_items"][-1]["quantity"] = quantity
                 order_data["line_items"][-1]["unit_of_measure"] = unit_of_measure
-            case ("FTX", ["PRD", "", "", [location, stock_status]]):
+            case ["FTX", "PRD", "", "", [location, stock_status]]:
                 assert order_data["line_items"], "FTX segment must be preceded by a LIN segment."
                 order_data["line_items"][-1]["location"] = location
                 order_data["line_items"][-1]["stock_status"] = stock_status
