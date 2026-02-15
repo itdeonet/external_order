@@ -51,8 +51,8 @@ class InsdesError(Exception):
         return base_message
 
 
-class OdooError(Exception):
-    """Raised for Odoo-related errors from the client."""
+class SaleError(Exception):
+    """Raised for sale related errors."""
 
     def __init__(self, message: str, order_id: str | None = None) -> None:
         super().__init__(message)

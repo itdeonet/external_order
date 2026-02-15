@@ -4,7 +4,7 @@ from traceback import TracebackException
 
 import pytest
 
-from src.app.errors import ErrorQueue, InsdesError, OdooError
+from src.app.errors import ErrorQueue, InsdesError, SaleError
 
 
 class TestErrorQueue:
@@ -334,65 +334,65 @@ class TestOdooError:
 
     def test_instantiation_message_only(self):
         """Test creating OdooError with message only."""
-        exc = OdooError("Test error")
+        exc = SaleError("Test error")
 
         assert str(exc) == "Test error"
         assert exc.order_id is None
 
     def test_instantiation_with_order_id(self):
         """Test creating OdooError with message and order_id."""
-        exc = OdooError("Test error", order_id="ORD-12345")
+        exc = SaleError("Test error", order_id="ORD-12345")
 
         assert exc.order_id == "ORD-12345"
 
     def test_string_representation_without_order_id(self):
         """Test string representation without order_id."""
-        exc = OdooError("Connection failed")
+        exc = SaleError("Connection failed")
 
         assert str(exc) == "Connection failed"
 
     def test_string_representation_with_order_id(self):
         """Test string representation with order_id."""
-        exc = OdooError("Connection failed", order_id="ORD-12345")
+        exc = SaleError("Connection failed", order_id="ORD-12345")
 
         assert str(exc) == "Connection failed (Order ID: ORD-12345)"
 
     def test_inherits_from_exception(self):
         """Test that OdooError inherits from Exception."""
-        exc = OdooError("Test")
+        exc = SaleError("Test")
         assert isinstance(exc, Exception)
 
     def test_can_be_raised_and_caught(self):
         """Test that OdooError can be raised and caught."""
-        with pytest.raises(OdooError):
-            raise OdooError("Test error")
+        with pytest.raises(SaleError):
+            raise SaleError("Test error")
 
     def test_can_be_caught_as_exception(self):
         """Test that OdooError can be caught as Exception."""
         with pytest.raises(Exception, match="Test error"):
-            raise OdooError("Test error")
+            raise SaleError("Test error")
 
     def test_order_id_none_by_default(self):
         """Test that order_id is None by default."""
-        exc = OdooError("Test")
+        exc = SaleError("Test")
         assert exc.order_id is None
 
     def test_order_id_explicitly_none(self):
         """Test setting order_id to None explicitly."""
-        exc = OdooError("Test", order_id=None)
+        exc = SaleError("Test", order_id=None)
 
         assert exc.order_id is None
         assert str(exc) == "Test"
 
     def test_with_empty_message(self):
         """Test creating error with empty message."""
-        exc = OdooError("", order_id="ORD-123")
+        exc = SaleError("", order_id="ORD-123")
 
         assert str(exc) == " (Order ID: ORD-123)"
 
     def test_with_numeric_order_id(self):
         """Test with numeric order_id."""
-        exc = OdooError("Error", order_id="12345")
+        exc = SaleError("Error", order_id="12345")
 
         assert exc.order_id == "12345"
         assert str(exc) == "Error (Order ID: 12345)"
@@ -400,7 +400,7 @@ class TestOdooError:
     def test_with_special_characters_in_message(self):
         """Test with special characters in message."""
         message = "Error: Invalid request <data> & 'quoted'"
-        exc = OdooError(message, order_id="ORD-123")
+        exc = SaleError(message, order_id="ORD-123")
 
         assert message in str(exc)
         assert "(Order ID: ORD-123)" in str(exc)
@@ -408,15 +408,15 @@ class TestOdooError:
     def test_with_newlines_in_message(self):
         """Test with newlines in message."""
         message = "Error occurred\non multiple\nlines"
-        exc = OdooError(message)
+        exc = SaleError(message)
 
         assert str(exc) == message
 
     def test_multiple_instances_independent(self):
         """Test that multiple instances don't interfere."""
-        exc1 = OdooError("Error 1", order_id="ORD-1")
-        exc2 = OdooError("Error 2", order_id="ORD-2")
-        exc3 = OdooError("Error 3")
+        exc1 = SaleError("Error 1", order_id="ORD-1")
+        exc2 = SaleError("Error 2", order_id="ORD-2")
+        exc3 = SaleError("Error 3")
 
         assert str(exc1) == "Error 1 (Order ID: ORD-1)"
         assert str(exc2) == "Error 2 (Order ID: ORD-2)"
@@ -424,17 +424,17 @@ class TestOdooError:
 
     def test_preserves_exception_args(self):
         """Test that base exception args are preserved."""
-        exc = OdooError("Test message")
+        exc = SaleError("Test message")
 
         assert exc.args == ("Test message",)
 
     def test_difference_from_insdes_error(self):
         """Test that OdooError and InsdesError are different classes."""
         insdes_err = InsdesError("Test")
-        odoo_err = OdooError("Test")
+        odoo_err = SaleError("Test")
 
         assert type(insdes_err) is not type(odoo_err)
-        assert not isinstance(insdes_err, OdooError)
+        assert not isinstance(insdes_err, SaleError)
         assert not isinstance(odoo_err, InsdesError)
 
 
@@ -452,22 +452,22 @@ class TestCustomExceptionIntegration:
         assert len(errors) == 1
         assert "InsdesError" in str(errors[0].exc_type)
 
-    def test_odoo_error_in_error_queue(self):
+    def test_sale_error_in_error_queue(self):
         """Test collecting OdooError in ErrorQueue."""
         queue = ErrorQueue()
-        exc = OdooError("Odoo API error", order_id="ORD-002")
+        exc = SaleError("Odoo API error", order_id="ORD-002")
 
         queue.put(exc)
         errors = queue.all()
 
         assert len(errors) == 1
-        assert "OdooError" in str(errors[0].exc_type)
+        assert "SaleError" in str(errors[0].exc_type)
 
     def test_mixed_exceptions_in_error_queue(self):
         """Test collecting different exception types in ErrorQueue."""
         queue = ErrorQueue()
         queue.put(InsdesError("INSDES error", order_id="ORD-001"))
-        queue.put(OdooError("Odoo error", order_id="ORD-002"))
+        queue.put(SaleError("Odoo error", order_id="ORD-002"))
         queue.put(ValueError("Generic error"))
 
         errors = queue.all()
@@ -477,14 +477,14 @@ class TestCustomExceptionIntegration:
         """Test summarize() with custom exceptions."""
         queue = ErrorQueue()
         queue.put(InsdesError("INSDES failed", order_id="ORD-001"))
-        queue.put(OdooError("API failed", order_id="ORD-002"))
+        queue.put(SaleError("API failed", order_id="ORD-002"))
 
         summary = queue.summarize()
 
         assert "Error 1:" in summary
         assert "Error 2:" in summary
         assert "InsdesError" in summary
-        assert "OdooError" in summary
+        assert "SaleError" in summary
 
     def test_exception_chaining_with_custom_errors(self):
         """Test exception chaining with custom errors."""
@@ -492,8 +492,8 @@ class TestCustomExceptionIntegration:
             try:
                 raise InsdesError("Segmentation failed", order_id="ORD-001")
             except InsdesError:
-                raise OdooError("Failed to save order", order_id="ORD-001") from None
-        except OdooError as exc:
+                raise SaleError("Failed to save order", order_id="ORD-001") from None
+        except SaleError as exc:
             assert exc.order_id == "ORD-001"
             assert str(exc) == "Failed to save order (Order ID: ORD-001)"
 
@@ -519,7 +519,7 @@ class TestErrorQueueEdgeCases:
     def test_exception_with_unicode_characters(self):
         """Test exception with Unicode characters."""
         queue = ErrorQueue()
-        exc = OdooError("Unicode error: café, 日本語, emoji 😀", order_id="ORD-123")
+        exc = SaleError("Unicode error: café, 日本語, emoji 😀", order_id="ORD-123")
 
         queue.put(exc)
         queue.all()
