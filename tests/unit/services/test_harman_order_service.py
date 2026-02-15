@@ -14,14 +14,19 @@ from src.services.harman_order_service import HarmanOrderService
 class TestHarmanOrderServiceInstantiation:
     """Tests for HarmanOrderService instantiation."""
 
-    def test_instantiation_with_all_fields(self):
+    def test_instantiation_with_all_fields(self, tmp_path):
         """Test creating HarmanOrderService with all fields."""
+        input_dir = tmp_path / "input"
+        json_dir = tmp_path / "output"
         service = HarmanOrderService(
             administration_id=1,
             customer_id=100,
             pricelist_id=50,
             order_provider="Harman",
             shipment_type="standard",
+            workdays_for_delivery=5,
+            input_orders_dir=input_dir,
+            json_orders_dir=json_dir,
         )
 
         assert service.administration_id == 1
@@ -29,6 +34,9 @@ class TestHarmanOrderServiceInstantiation:
         assert service.pricelist_id == 50
         assert service.order_provider == "Harman"
         assert service.shipment_type == "standard"
+        assert service.workdays_for_delivery == 5
+        assert service.input_orders_dir == input_dir
+        assert service.json_orders_dir == json_dir
 
     def test_instantiation_required_fields(self):
         """Test that all fields are required."""
@@ -44,7 +52,7 @@ class TestHarmanOrderServiceInstantiation:
 class TestHarmanOrderServiceFromSettings:
     """Tests for from_settings class method."""
 
-    def test_from_settings(self, mocker):
+    def test_from_settings(self, mocker, tmp_path):
         """Test creating HarmanOrderService from settings."""
         mock_settings = mocker.Mock()
         mock_settings.harman_administration_id = 10
@@ -52,43 +60,41 @@ class TestHarmanOrderServiceFromSettings:
         mock_settings.harman_pricelist_id = 60
         mock_settings.harman_order_provider = "HarmanProvider"
         mock_settings.harman_shipment_type = "express"
+        mock_settings.harman_workdays_for_delivery = 7
+        mock_settings.harman_input_orders_dir = tmp_path / "input"
+        mock_settings.json_orders_dir = tmp_path / "output"
 
-        mocker.patch(
-            "src.services.harman_order_service.get_settings",
-            return_value=mock_settings,
-        )
-
-        service = HarmanOrderService.from_settings()
+        service = HarmanOrderService.from_settings(mock_settings)
 
         assert service.administration_id == 10
         assert service.customer_id == 200
         assert service.pricelist_id == 60
         assert service.order_provider == "HarmanProvider"
         assert service.shipment_type == "express"
+        assert service.workdays_for_delivery == 7
 
-    def test_from_settings_calls_get_settings(self, mocker):
-        """Test that from_settings calls get_settings."""
+    def test_from_settings_with_settings_parameter(self, mocker, tmp_path):
+        """Test that from_settings accepts settings parameter."""
         mock_settings = mocker.Mock()
         mock_settings.harman_administration_id = 1
         mock_settings.harman_customer_id = 1
         mock_settings.harman_pricelist_id = 1
         mock_settings.harman_order_provider = "Provider"
         mock_settings.harman_shipment_type = "type"
+        mock_settings.harman_workdays_for_delivery = 5
+        mock_settings.harman_input_orders_dir = tmp_path / "input"
+        mock_settings.json_orders_dir = tmp_path / "output"
 
-        mock_get_settings = mocker.patch(
-            "src.services.harman_order_service.get_settings",
-            return_value=mock_settings,
-        )
+        service = HarmanOrderService.from_settings(mock_settings)
 
-        HarmanOrderService.from_settings()
-        mock_get_settings.assert_called_once()
+        assert isinstance(service, HarmanOrderService)
 
 
 class TestHarmanOrderServiceGetSegmentData:
     """Tests for _get_segment_data method."""
 
     @pytest.fixture
-    def service(self):
+    def service(self, tmp_path):
         """Provide a HarmanOrderService instance."""
         return HarmanOrderService(
             administration_id=1,
@@ -96,6 +102,9 @@ class TestHarmanOrderServiceGetSegmentData:
             pricelist_id=50,
             order_provider="Harman",
             shipment_type="standard",
+            workdays_for_delivery=5,
+            input_orders_dir=tmp_path / "input",
+            json_orders_dir=tmp_path / "output",
         )
 
     def test_get_segment_data_nad_segment(self, service, mocker):
@@ -247,7 +256,7 @@ class TestHarmanOrderServiceMakeOrder:
     """Tests for _make_order method."""
 
     @pytest.fixture
-    def service(self):
+    def service(self, tmp_path):
         """Provide a HarmanOrderService instance."""
         return HarmanOrderService(
             administration_id=1,
@@ -255,6 +264,9 @@ class TestHarmanOrderServiceMakeOrder:
             pricelist_id=50,
             order_provider="Harman",
             shipment_type="standard",
+            workdays_for_delivery=5,
+            input_orders_dir=tmp_path / "input",
+            json_orders_dir=tmp_path / "output",
         )
 
     @pytest.fixture
@@ -373,7 +385,7 @@ class TestHarmanOrderServiceGetArtworkService:
     """Tests for get_artwork_service method."""
 
     @pytest.fixture
-    def service(self):
+    def service(self, tmp_path):
         """Provide a HarmanOrderService instance."""
         return HarmanOrderService(
             administration_id=1,
@@ -381,6 +393,9 @@ class TestHarmanOrderServiceGetArtworkService:
             pricelist_id=50,
             order_provider="Harman",
             shipment_type="standard",
+            workdays_for_delivery=5,
+            input_orders_dir=tmp_path / "input",
+            json_orders_dir=tmp_path / "output",
         )
 
     @pytest.fixture
@@ -465,18 +480,23 @@ class TestHarmanOrderServiceGetArtworkService:
             assert result is mock_spectrum, f"Failed for format: {format_id}"
 
 
-class TestHarmanOrderServiceSaveOrder:
-    """Tests for save_order method."""
+class TestHarmanOrderServicePersistOrder:
+    """Tests for persist_order method."""
 
     @pytest.fixture
-    def service(self):
+    def service(self, tmp_path):
         """Provide a HarmanOrderService instance."""
+        (tmp_path / "input").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "output").mkdir(parents=True, exist_ok=True)
         return HarmanOrderService(
             administration_id=1,
             customer_id=100,
             pricelist_id=50,
             order_provider="Harman",
             shipment_type="standard",
+            workdays_for_delivery=5,
+            input_orders_dir=tmp_path / "input",
+            json_orders_dir=tmp_path / "output",
         )
 
     @pytest.fixture
@@ -503,23 +523,24 @@ class TestHarmanOrderServiceSaveOrder:
         order.pricelist_id = 50
         return order
 
-    def test_save_order_with_id(self, service, mock_order_with_id, mocker, tmp_path):
-        """Test saving order with ID set."""
+    def test_persist_order_with_id(self, service, mock_order_with_id, mocker):
+        """Test persisting order with ID set."""
         mocker.patch("src.domain.interfaces.iorder_service.asdict", return_value={})
         spy = mocker.spy(pathlib.Path, "write_text")
-        service.save_order(mock_order_with_id, tmp_path)
-        file_path = tmp_path / f"S{mock_order_with_id.id}.json"
-        spy.assert_called_once_with(file_path, "{}", encoding="utf-8")
+        service.persist_order(mock_order_with_id)
+        spy.assert_called_once_with(
+            service.json_orders_dir / f"{mock_order_with_id.id}.json", "{}", encoding="utf-8"
+        )
 
-    def test_save_order_without_id(self, service, mock_order_without_id, mocker, tmp_path):
-        """Test saving order without ID."""
+    def test_persist_order_without_id(self, service, mock_order_without_id, mocker):
+        """Test persisting order without ID."""
         mocker.patch("src.domain.interfaces.iorder_service.asdict", return_value={})
         spy = mocker.spy(pathlib.Path, "write_text")
-        service.save_order(mock_order_without_id, tmp_path)
+        service.persist_order(mock_order_without_id)
         spy.assert_called_once()
 
-    def test_save_order_json_format(self, service, mock_order_with_id, mocker, tmp_path):
-        """Test that order is saved as properly formatted JSON."""
+    def test_persist_order_json_format(self, service, mock_order_with_id, mocker):
+        """Test that order is persisted as properly formatted JSON."""
         mock_order_with_id.id = 12345
         mocker.patch(
             "src.domain.interfaces.iorder_service.asdict",
@@ -527,14 +548,14 @@ class TestHarmanOrderServiceSaveOrder:
         )
 
         spy = mocker.spy(pathlib.Path, "write_text")
-        service.save_order(mock_order_with_id, tmp_path)
+        service.persist_order(mock_order_with_id)
         spy.assert_called_once()
 
         written_content = spy.call_args[0][1]
         assert isinstance(written_content, str)
         assert "12345" in written_content
 
-    def test_save_order_datetime_serialization(self, service, mocker, tmp_path):
+    def test_persist_order_datetime_serialization(self, service, mocker):
         """Test that datetime objects are properly serialized."""
         order = mocker.Mock(spec=Order)
         order.id = 100
@@ -545,7 +566,7 @@ class TestHarmanOrderServiceSaveOrder:
         )
 
         spy = mocker.spy(pathlib.Path, "write_text")
-        service.save_order(order, tmp_path)
+        service.persist_order(order)
         written_content = spy.call_args[0][1]
         assert "2025-02-14" in written_content
 
@@ -554,20 +575,25 @@ class TestHarmanOrderServiceGetOrders:
     """Tests for get_orders method."""
 
     @pytest.fixture
-    def service(self):
+    def service(self, tmp_path):
         """Provide a HarmanOrderService instance."""
+        (tmp_path / "input").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "output").mkdir(parents=True, exist_ok=True)
         return HarmanOrderService(
             administration_id=1,
             customer_id=100,
             pricelist_id=50,
             order_provider="Harman",
             shipment_type="standard",
+            workdays_for_delivery=5,
+            input_orders_dir=tmp_path / "input",
+            json_orders_dir=tmp_path / "output",
         )
 
     def test_get_orders_generates_orders(self, service, mocker, tmp_path):
         """Test that get_orders generates Order instances."""
         # Create a test file
-        test_file = tmp_path / "test.insdes"
+        test_file = service.input_orders_dir / "test.insdes"
         test_file.write_text("test content")
 
         # Mock the Parser
@@ -611,7 +637,7 @@ class TestHarmanOrderServiceGetOrders:
         )
 
         mock_error_queue = mocker.Mock(spec=["put"])
-        orders = list(service.get_orders(tmp_path, mock_error_queue))
+        orders = list(service.get_orders(mock_error_queue))
 
         assert len(orders) == 1
         assert isinstance(orders[0], Order)
@@ -620,9 +646,9 @@ class TestHarmanOrderServiceGetOrders:
         """Test that get_orders processes multiple files."""
         # Create test files
         test_files = [
-            tmp_path / "test1.insdes",
-            tmp_path / "test2.insdes",
-            tmp_path / "test3.insdes",
+            service.input_orders_dir / "test1.insdes",
+            service.input_orders_dir / "test2.insdes",
+            service.input_orders_dir / "test3.insdes",
         ]
         for f in test_files:
             f.write_text("test content")
@@ -663,13 +689,13 @@ class TestHarmanOrderServiceGetOrders:
         )
 
         mock_error_queue = mocker.Mock(spec=["put"])
-        orders = list(service.get_orders(tmp_path, mock_error_queue))
+        orders = list(service.get_orders(mock_error_queue))
 
         assert len(orders) == 3
 
     def test_get_orders_handles_exception(self, service, mocker, tmp_path):
         """Test that exceptions are put in error queue."""
-        test_file = tmp_path / "test.insdes"
+        test_file = service.input_orders_dir / "test.insdes"
         test_file.write_text("test content")
 
         mock_parser = mocker.Mock()
@@ -681,7 +707,7 @@ class TestHarmanOrderServiceGetOrders:
         )
 
         mock_error_queue = mocker.Mock(spec=["put"])
-        orders = list(service.get_orders(tmp_path, mock_error_queue))
+        orders = list(service.get_orders(mock_error_queue))
 
         assert len(orders) == 0
         mock_error_queue.put.assert_called_once()
@@ -691,9 +717,9 @@ class TestHarmanOrderServiceGetOrders:
         """Test that file globbing is case insensitive."""
         # Create files with different cases
         test_files = [
-            tmp_path / "test.INSDES",
-            tmp_path / "test2.Insdes",
-            tmp_path / "test3.insdes",
+            service.input_orders_dir / "test.INSDES",
+            service.input_orders_dir / "test2.Insdes",
+            service.input_orders_dir / "test3.insdes",
         ]
         for f in test_files:
             f.write_text("test content")
@@ -728,13 +754,13 @@ class TestHarmanOrderServiceGetOrders:
         )
 
         mock_error_queue = mocker.Mock(spec=["put"])
-        orders = list(service.get_orders(tmp_path, mock_error_queue))
+        orders = list(service.get_orders(mock_error_queue))
 
         assert len(orders) == 3
 
     def test_get_orders_is_generator(self, service, mocker, tmp_path):
         """Test that get_orders returns a generator."""
-        test_file = tmp_path / "test.insdes"
+        test_file = service.input_orders_dir / "test.insdes"
         test_file.write_text("test content")
 
         mock_parser = mocker.Mock()
@@ -765,7 +791,7 @@ class TestHarmanOrderServiceGetOrders:
         )
 
         mock_error_queue = mocker.Mock(spec=["put"])
-        result = service.get_orders(tmp_path, mock_error_queue)
+        result = service.get_orders(mock_error_queue)
 
         from collections.abc import Generator
 
@@ -776,7 +802,7 @@ class TestHarmanOrderServiceImmutability:
     """Tests for HarmanOrderService immutability (frozen dataclass)."""
 
     @pytest.fixture
-    def service(self):
+    def service(self, tmp_path):
         """Provide a HarmanOrderService instance."""
         return HarmanOrderService(
             administration_id=1,
@@ -784,6 +810,9 @@ class TestHarmanOrderServiceImmutability:
             pricelist_id=50,
             order_provider="Harman",
             shipment_type="standard",
+            workdays_for_delivery=5,
+            input_orders_dir=tmp_path / "input",
+            json_orders_dir=tmp_path / "output",
         )
 
     def test_cannot_modify_administration_id(self, service):
@@ -810,3 +839,18 @@ class TestHarmanOrderServiceImmutability:
         """Test that shipment_type cannot be modified."""
         with pytest.raises((AttributeError, TypeError)):
             service.shipment_type = "express"
+
+    def test_cannot_modify_workdays_for_delivery(self, service):
+        """Test that workdays_for_delivery cannot be modified."""
+        with pytest.raises((AttributeError, TypeError)):
+            service.workdays_for_delivery = 10
+
+    def test_cannot_modify_input_orders_dir(self, service):
+        """Test that input_orders_dir cannot be modified."""
+        with pytest.raises((AttributeError, TypeError)):
+            service.input_orders_dir = pathlib.Path("/other/path")
+
+    def test_cannot_modify_json_orders_dir(self, service):
+        """Test that json_orders_dir cannot be modified."""
+        with pytest.raises((AttributeError, TypeError)):
+            service.json_orders_dir = pathlib.Path("/other/path")

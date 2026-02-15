@@ -15,7 +15,7 @@ from src.domain.interfaces.iorder_service import IOrderService
 from src.domain.line_item import LineItem
 from src.domain.order import Order
 from src.domain.ship_to import ShipTo
-from src.settings import Settings, get_settings
+from src.settings import Settings
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -27,25 +27,33 @@ class HarmanOrderService(IOrderService):
     pricelist_id: int
     order_provider: str
     shipment_type: str
+    workdays_for_delivery: int
+    input_orders_dir: Path
+    json_orders_dir: Path
 
     @classmethod
-    def from_settings(cls) -> Self:
+    def from_settings(cls, settings: Settings) -> Self:
         """Create a HarmanOrderService instance from settings."""
-        settings: Settings = get_settings()
         return cls(
             administration_id=settings.harman_administration_id,
             customer_id=settings.harman_customer_id,
             pricelist_id=settings.harman_pricelist_id,
             order_provider=settings.harman_order_provider,
             shipment_type=settings.harman_shipment_type,
+            workdays_for_delivery=settings.harman_workdays_for_delivery,
+            input_orders_dir=settings.harman_input_orders_dir,
+            json_orders_dir=settings.json_orders_dir,
         )
 
-    def get_orders(self, directory: Path, error_queue: IErrorQueue) -> Generator[Order, None, None]:
+    def get_orders(self, error_queue: IErrorQueue) -> Generator[Order, None, None]:
         """Generate orders."""
         # parse each .insdes file in the directory and yield an Order instance
-        for file in directory.glob("*.insdes", case_sensitive=False):
+        for file in self.input_orders_dir.glob("*.insdes", case_sensitive=False):
             try:
-                order_data: dict[str, Any] = {"ship_to": {}, "line_items": []}
+                order_data: dict[str, Any] = {
+                    "ship_to": {},
+                    "line_items": [],
+                }
                 for segment in Parser().parse(file.read_text(encoding="utf-8")):
                     # extract data from the segment and update the order data
                     self._get_segment_data(segment, order_data)
@@ -101,7 +109,7 @@ class HarmanOrderService(IOrderService):
     def _make_order(self, data: dict[str, Any]) -> Order:
         """Create an Order instance from the given data."""
         is_company = bool(data.get("ship_to", {}).get("company_name"))
-        return Order(
+        order = Order(
             administration_id=self.administration_id,
             customer_id=self.customer_id,
             order_provider=self.order_provider,
@@ -130,6 +138,9 @@ class HarmanOrderService(IOrderService):
                 for item in data.get("line_items", [])
             ],
         )
+
+        order.set_ship_at(Order.calculate_delivery_date(self.workdays_for_delivery))
+        return order
 
     def get_artwork_service(
         self, order: Order, artwork_services: Registry[IArtworkService]
