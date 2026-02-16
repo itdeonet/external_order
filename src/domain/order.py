@@ -1,7 +1,7 @@
 """Order class."""
 
-from dataclasses import dataclass, field
 import datetime as dt
+from dataclasses import dataclass, field
 from enum import Enum
 
 from src.domain.line_item import LineItem
@@ -14,6 +14,7 @@ class OrderStatus(Enum):
     NEW = "new"
     CREATED = "created"
     ARTWORK = "artwork"
+    CONFIRMED = "confirmed"
     COMPLETED = "completed"
     SHIPPED = "shipped"
     FAILED = "failed"

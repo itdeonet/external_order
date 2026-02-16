@@ -17,6 +17,7 @@ class TestOrderStatus:
         assert OrderStatus.NEW.value == "new"
         assert OrderStatus.CREATED.value == "created"
         assert OrderStatus.ARTWORK.value == "artwork"
+        assert OrderStatus.CONFIRMED.value == "confirmed"
         assert OrderStatus.COMPLETED.value == "completed"
         assert OrderStatus.SHIPPED.value == "shipped"
         assert OrderStatus.FAILED.value == "failed"
@@ -24,7 +25,7 @@ class TestOrderStatus:
     def test_order_status_enum_members(self):
         """Test that all expected OrderStatus members exist."""
         statuses = {member.name for member in OrderStatus}
-        expected = {"NEW", "CREATED", "ARTWORK", "COMPLETED", "SHIPPED", "FAILED"}
+        expected = {"NEW", "CREATED", "ARTWORK", "CONFIRMED", "COMPLETED", "SHIPPED", "FAILED"}
         assert statuses == expected
 
 
