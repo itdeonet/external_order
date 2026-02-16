@@ -1,8 +1,8 @@
 """Settings for the application."""
 
+import os
 from dataclasses import dataclass, field
 from functools import cache
-import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -17,6 +17,7 @@ class Settings:
     work_dir: Path = Path.home() / "projects_data" / "external_order"
     digitals_dir: Path = field(default=Path.home(), init=False)
     json_orders_dir: Path = field(default=Path.home(), init=False)
+    open_orders_dir: Path = field(default=Path.home(), init=False)
 
     # Harman settings
     harman_administration_id: int = 2
@@ -42,10 +43,12 @@ class Settings:
         object.__setattr__(self, "harman_input_orders_dir", self.work_dir / "in" / "insdes")
         object.__setattr__(self, "digitals_dir", self.work_dir / "digitals")
         object.__setattr__(self, "json_orders_dir", self.work_dir / "orders")
+        object.__setattr__(self, "open_orders_dir", self.work_dir / "open_orders")
 
         self.harman_input_orders_dir.mkdir(parents=True, exist_ok=True)
         self.digitals_dir.mkdir(parents=True, exist_ok=True)
         self.json_orders_dir.mkdir(parents=True, exist_ok=True)
+        self.open_orders_dir.mkdir(parents=True, exist_ok=True)
 
 
 @cache
