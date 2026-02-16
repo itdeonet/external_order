@@ -1,8 +1,8 @@
 """A line item in an order."""
 
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-import uuid
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

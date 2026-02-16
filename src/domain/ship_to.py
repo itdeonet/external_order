@@ -1,7 +1,7 @@
 """A shipping address for an order."""
 
-from dataclasses import dataclass, field
 import uuid
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
