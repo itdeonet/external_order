@@ -3,11 +3,11 @@
 import datetime as dt
 import pathlib
 
-from pydifact import Segment  # type: ignore
 import pytest
+from pydifact import Segment  # type: ignore
 
 from src.domain.interfaces.iartwork_service import IArtworkService
-from src.domain.order import Order
+from src.domain.order import Order, OrderStatus
 from src.services.harman_order_service import HarmanOrderService
 
 
@@ -499,6 +499,54 @@ class TestHarmanOrderServicePersistOrder:
             json_orders_dir=tmp_path / "output",
         )
 
+    def test_persist_order_renames_input_files_with_status(self, service, mocker, tmp_path):
+        """Test that input files are renamed with the order status value."""
+        # Create input files
+        input_file = service.input_orders_dir / "ORD-123.insdes"
+        input_file.write_text("test")
+
+        order = mocker.Mock(spec=Order)
+        order.remote_order_id = "ORD-123"
+        order.status = OrderStatus.CONFIRMED
+
+        mocker.patch(
+            "src.services.harman_order_service.asdict",
+            return_value={},
+        )
+
+        service.persist_order(order, OrderStatus.CONFIRMED)
+
+        # Verify file was renamed with the status value
+        expected_file = service.input_orders_dir / "ORD-123.CONFIRMED"
+        assert expected_file.exists()
+        assert not input_file.exists()
+
+    def test_persist_order_multiple_input_file_formats(self, service, mocker, tmp_path):
+        """Test that all matching input files are renamed with status."""
+        # Create multiple input files with same remote_order_id
+        input_file1 = service.input_orders_dir / "ORD-456.insdes"
+        input_file2 = service.input_orders_dir / "ORD-456.xml"
+        input_file1.write_text("test1")
+        input_file2.write_text("test2")
+
+        order = mocker.Mock(spec=Order)
+        order.remote_order_id = "ORD-456"
+        order.status = OrderStatus.SHIPPED
+
+        mocker.patch(
+            "src.services.harman_order_service.asdict",
+            return_value={},
+        )
+
+        service.persist_order(order, OrderStatus.SHIPPED)
+
+        # Verify both files were renamed
+        expected_file1 = service.input_orders_dir / "ORD-456.SHIPPED"
+        # Note: Both files will have the same name after rename, so only one should exist
+        assert expected_file1.exists()
+        assert not input_file1.exists()
+        assert not input_file2.exists()
+
     @pytest.fixture
     def mock_order_with_id(self, mocker):
         """Provide a mock Order with ID set."""
@@ -509,6 +557,7 @@ class TestHarmanOrderServicePersistOrder:
         order.customer_id = 100
         order.order_provider = "Harman"
         order.pricelist_id = 50
+        order.set_status = mocker.Mock()
         return order
 
     @pytest.fixture
@@ -521,34 +570,41 @@ class TestHarmanOrderServicePersistOrder:
         order.customer_id = 100
         order.order_provider = "Harman"
         order.pricelist_id = 50
+        order.set_status = mocker.Mock()
         return order
 
     def test_persist_order_with_id(self, service, mock_order_with_id, mocker):
         """Test persisting order with ID set."""
-        mocker.patch("src.domain.interfaces.iorder_service.asdict", return_value={})
+        mocker.patch("src.services.harman_order_service.asdict", return_value={})
         spy = mocker.spy(pathlib.Path, "write_text")
-        service.persist_order(mock_order_with_id)
+        service.persist_order(mock_order_with_id, OrderStatus.CREATED)
+        mock_order_with_id.set_status.assert_called_once_with(OrderStatus.CREATED)
         spy.assert_called_once_with(
-            service.json_orders_dir / f"{mock_order_with_id.id}.json", "{}", encoding="utf-8"
+            service.json_orders_dir / f"{mock_order_with_id.remote_order_id}.json",
+            "{}",
+            encoding="utf-8",
         )
 
     def test_persist_order_without_id(self, service, mock_order_without_id, mocker):
         """Test persisting order without ID."""
-        mocker.patch("src.domain.interfaces.iorder_service.asdict", return_value={})
+        mocker.patch("src.services.harman_order_service.asdict", return_value={})
         spy = mocker.spy(pathlib.Path, "write_text")
-        service.persist_order(mock_order_without_id)
+        service.persist_order(mock_order_without_id, OrderStatus.ARTWORK)
+        mock_order_without_id.set_status.assert_called_once_with(OrderStatus.ARTWORK)
         spy.assert_called_once()
 
     def test_persist_order_json_format(self, service, mock_order_with_id, mocker):
         """Test that order is persisted as properly formatted JSON."""
         mock_order_with_id.id = 12345
+        mock_order_with_id.status = OrderStatus.CONFIRMED
         mocker.patch(
-            "src.domain.interfaces.iorder_service.asdict",
+            "src.services.harman_order_service.asdict",
             return_value={"id": 12345, "remote_order_id": "ORD-123"},
         )
 
         spy = mocker.spy(pathlib.Path, "write_text")
-        service.persist_order(mock_order_with_id)
+        service.persist_order(mock_order_with_id, OrderStatus.CONFIRMED)
+        mock_order_with_id.set_status.assert_called_once_with(OrderStatus.CONFIRMED)
         spy.assert_called_once()
 
         written_content = spy.call_args[0][1]
@@ -559,14 +615,16 @@ class TestHarmanOrderServicePersistOrder:
         """Test that datetime objects are properly serialized."""
         order = mocker.Mock(spec=Order)
         order.id = 100
+        order.status = OrderStatus.SHIPPED
         created_at = dt.datetime(2025, 2, 14, 10, 30, 45, tzinfo=dt.UTC)
         mocker.patch(
-            "src.domain.interfaces.iorder_service.asdict",
+            "src.services.harman_order_service.asdict",
             return_value={"id": 100, "created_at": created_at},
         )
 
         spy = mocker.spy(pathlib.Path, "write_text")
-        service.persist_order(order)
+        service.persist_order(order, OrderStatus.SHIPPED)
+        order.set_status.assert_called_once_with(OrderStatus.SHIPPED)
         written_content = spy.call_args[0][1]
         assert "2025-02-14" in written_content
 

@@ -1,25 +1,26 @@
 """Harman order service implementation."""
 
-from collections.abc import Generator
-from dataclasses import dataclass
-from pathlib import Path
+import datetime as dt
+import json
 import re
+from collections.abc import Generator
+from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any, Self
 
 from pydifact import Parser, Segment  # type: ignore
 
-from src.app.registry import Registry
 from src.domain.interfaces.iartwork_service import IArtworkService
 from src.domain.interfaces.ierror_queue import IErrorQueue
-from src.domain.interfaces.iorder_service import IOrderService
+from src.domain.interfaces.iregistry import IRegistry
 from src.domain.line_item import LineItem
-from src.domain.order import Order
+from src.domain.order import Order, OrderStatus
 from src.domain.ship_to import ShipTo
 from src.settings import Settings
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class HarmanOrderService(IOrderService):
+class HarmanOrderService:
     """Harman order service implementation."""
 
     administration_id: int
@@ -142,9 +143,26 @@ class HarmanOrderService(IOrderService):
         return order
 
     def get_artwork_service(
-        self, order: Order, artwork_services: Registry[IArtworkService]
+        self, order: Order, artwork_services: IRegistry[IArtworkService]
     ) -> IArtworkService | None:
         """Get the artwork service for the given order."""
         if re.match(r"(HA|JB)-EM-(ST-)?\d+", order.remote_order_id):
             return artwork_services.get("Spectrum")
         return None
+
+    def persist_order(self, order: Order, status: OrderStatus) -> None:
+        """Save the given order."""
+
+        def custom_serializer(obj):
+            if isinstance(obj, dt.datetime):
+                return obj.isoformat()
+            raise TypeError(f"Type {type(obj)} not serializable")
+
+        order.set_status(status)
+        order_data = asdict(order)
+        file_path = self.json_orders_dir / f"{order.remote_order_id}.json"
+        text = json.dumps(order_data, indent=4, ensure_ascii=False, default=custom_serializer)
+        file_path.write_text(text, encoding="utf-8")
+
+        for file in self.input_orders_dir.glob(f"{order.remote_order_id}.*"):
+            file.rename(file.parent / f"{order.remote_order_id}.{order.status.value}".upper())
