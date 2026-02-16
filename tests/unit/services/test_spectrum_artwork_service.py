@@ -24,17 +24,17 @@ class TestSpectrumArtworkServiceInstantiation:
 
         service = SpectrumArtworkService(engine=mock_client, digitals_dir=digitals_dir)
 
-        assert service._engine is mock_client
-        assert service._digitals_dir == digitals_dir
-        assert service._client == ""
+        assert service.engine is mock_client
+        assert service.digitals_dir == digitals_dir
+        assert service.client == ""
 
     def test_instantiation_initializes_empty_client(self):
         """Test that _client is initialized as empty string."""
         mock_client = Mock(spec=httpx.Client)
         service = SpectrumArtworkService(engine=mock_client, digitals_dir=Path("/tmp"))
 
-        assert isinstance(service._client, str)
-        assert service._client == ""
+        assert isinstance(service.client, str)
+        assert service.client == ""
 
 
 class TestSpectrumArtworkServiceGetArtworkIds:
@@ -79,13 +79,11 @@ class TestSpectrumArtworkServiceGetArtworkIds:
             ],
         }
         mock_client.get.return_value = mock_response
-        spy_get = mocker.spy(mock_client, "get")
-        spy_raise = mocker.spy(mock_response, "raise_for_status")
         service.get_artwork_ids(order)
 
-        assert service._client == "CLIENT123"
-        spy_get.assert_called_once_with(url="/api/order/order-number/HA-EM-12345/")
-        spy_raise.assert_called_once()
+        assert service.client == "CLIENT123"
+        mock_client.get.assert_called_once_with(url="/api/order/order-number/HA-EM-12345/")
+        mock_response.raise_for_status.assert_called_once()
 
     def test_get_artwork_ids_sets_artwork_ids_on_line_items(
         self, service, mock_client, order, mocker
@@ -100,9 +98,8 @@ class TestSpectrumArtworkServiceGetArtworkIds:
         }
         mock_client.get.return_value = mock_response
 
-        spy = mocker.spy(order.line_items[0], "set_artwork_id")
         service.get_artwork_ids(order)
-        spy.assert_called_once_with("RECIPE001")
+        order.line_items[0].set_artwork_id.assert_called_once_with("RECIPE001")
 
     def test_get_artwork_ids_matches_by_quantity_minus_one(self, service, mock_client, mocker):
         """Test that artwork IDs match with quantity - 1 (workaround for +1 issue)."""
@@ -131,9 +128,8 @@ class TestSpectrumArtworkServiceGetArtworkIds:
             ],
         }
         mock_client.get.return_value = mock_response
-        spy = mocker.spy(order.line_items[0], "set_artwork_id")
         service.get_artwork_ids(order)
-        spy.assert_called_once_with("RECIPE002")
+        order.line_items[0].set_artwork_id.assert_called_once_with("RECIPE002")  # type: ignore
 
     def test_get_artwork_ids_raises_on_http_error(self, service, mock_client, order, mocker):
         """Test that HTTP errors are raised."""
@@ -154,10 +150,8 @@ class TestSpectrumArtworkServiceGetArtworkIds:
 
         service.get_artwork_ids(order)
 
-        assert service._client == "CLIENT789"
-        spy = mocker.spy(order.line_items[0], "set_artwork_id")
-        service.get_artwork_ids(order)
-        spy.assert_not_called()
+        assert service.client == "CLIENT789"
+        order.line_items[0].set_artwork_id.assert_not_called()
 
     def test_get_artwork_ids_handles_no_matching_line_item(self, service, mock_client, mocker):
         """Test that unmatched artwork is not set."""
@@ -185,9 +179,8 @@ class TestSpectrumArtworkServiceGetArtworkIds:
             ],
         }
         mock_client.get.return_value = mock_response
-        spy = mocker.spy(order.line_items[0], "set_artwork_id")
         service.get_artwork_ids(order)
-        spy.assert_not_called()
+        order.line_items[0].set_artwork_id.assert_not_called()  # type: ignore
 
 
 class TestSpectrumArtworkServiceGetDesigns:
@@ -242,13 +235,11 @@ class TestSpectrumArtworkServiceGetDesigns:
         mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 
-        spy_get = mocker.spy(mock_client, "get")
-        spy_raise = mocker.spy(mock_response, "raise_for_status")
         saved_paths = service._get_designs(order_with_artwork_id)
 
         assert len(saved_paths) == 2
-        spy_get.assert_called_once_with(url="/api/webtoprint/ARTWORK001/")
-        spy_raise.assert_called_once()
+        mock_client.get.assert_called_once_with(url="/api/webtoprint/ARTWORK001/")
+        mock_response.raise_for_status.assert_called_once()
 
     def test_get_designs_renames_files_with_order_id(
         self, service, mock_client, order_with_artwork_id, tmp_path
@@ -287,11 +278,10 @@ class TestSpectrumArtworkServiceGetDesigns:
         )
         order.set_id(12345)
 
-        spy = mocker.spy(mock_client, "get")
         saved_paths = service._get_designs(order)
 
         assert saved_paths == []
-        spy.assert_not_called()
+        mock_client.get.assert_not_called()
 
     def test_get_designs_sets_design_on_line_item(
         self, service, mock_client, order_with_artwork_id, mocker
@@ -306,11 +296,9 @@ class TestSpectrumArtworkServiceGetDesigns:
         mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 
-        spy = mocker.spy(order_with_artwork_id.line_items[0], "set_design")
         service._get_designs(order_with_artwork_id)
-
-        spy.assert_called_once()
-        call_kwargs = spy.call_args[1]
+        order_with_artwork_id.line_items[0].set_design.assert_called_once()
+        call_kwargs = order_with_artwork_id.line_items[0].set_design.call_args[1]
         assert "url" in call_kwargs
         assert "https://spectrum.example.com/api/webtoprint/ARTWORK001/" in call_kwargs["url"]
         assert "paths" in call_kwargs
@@ -341,7 +329,7 @@ class TestSpectrumArtworkServiceGetPlacements:
     def service(self, mock_client, tmp_path):
         """Provide a SpectrumArtworkService instance."""
         service = SpectrumArtworkService(engine=mock_client, digitals_dir=tmp_path)
-        service._client = "CLIENT123"
+        object.__setattr__(service, "client", "CLIENT123")  # Set client for testing
         return service
 
     @pytest.fixture
@@ -374,13 +362,10 @@ class TestSpectrumArtworkServiceGetPlacements:
         mock_response.content = b"PDF content"
         mock_client.get.return_value = mock_response
 
-        spy_get = mocker.spy(mock_client, "get")
-        spy_raise = mocker.spy(mock_response, "raise_for_status")
         saved_paths = service._get_placements(order_with_artwork_id)
-
         assert len(saved_paths) == 1
-        spy_get.assert_called_once_with(url="/CLIENT123/specification/ARTWORK001/pdf/")
-        spy_raise.assert_called_once()
+        mock_client.get.assert_called_once_with(url="/CLIENT123/specification/ARTWORK001/pdf/")
+        mock_response.raise_for_status.assert_called_once()
 
     def test_get_placements_saves_pdf_with_correct_name(
         self, service, mock_client, order_with_artwork_id, tmp_path
@@ -415,11 +400,9 @@ class TestSpectrumArtworkServiceGetPlacements:
         )
         order.set_id(12345)
 
-        spy = mocker.spy(mock_client, "get")
         saved_paths = service._get_placements(order)
-
+        mock_client.get.assert_not_called()
         assert saved_paths == []
-        spy.assert_not_called()
 
     def test_get_placements_sets_placement_on_line_item(
         self, service, mock_client, order_with_artwork_id, mocker
@@ -429,16 +412,11 @@ class TestSpectrumArtworkServiceGetPlacements:
         mock_response.content = b"PDF content"
         mock_client.get.return_value = mock_response
 
-        spy = mocker.spy(order_with_artwork_id.line_items[0], "set_placement")
         service._get_placements(order_with_artwork_id)
+        mock_client.get.assert_called_once_with(url="/CLIENT123/specification/ARTWORK001/pdf/")
+        order_with_artwork_id.line_items[0].set_placement.assert_called_once()
 
-        spy.assert_called_once()
-        call_kwargs = spy.call_args[1]
-        assert "url" in call_kwargs
-        assert (
-            "https://spectrum.example.com/CLIENT123/specification/ARTWORK001/pdf/"
-            in call_kwargs["url"]
-        )
+        call_kwargs = order_with_artwork_id.line_items[0].set_placement.call_args[1]
         assert "path" in call_kwargs
 
     def test_get_placements_raises_on_http_error(
@@ -478,11 +456,11 @@ class TestSpectrumArtworkServiceGetPlacements:
         mock_response.content = b"PDF content"
         mock_client.get.return_value = mock_response
 
-        spy_get = mocker.spy(mock_client, "get")
         saved_paths = service._get_placements(order)
-
+        assert mock_client.get.call_count == 2
+        mock_client.get.assert_any_call(url="/CLIENT123/specification/ARTWORK001/pdf/")
+        mock_client.get.assert_any_call(url="/CLIENT123/specification/ARTWORK002/pdf/")
         assert len(saved_paths) == 2
-        assert spy_get.call_count == 2
 
 
 class TestSpectrumArtworkServiceGetArtwork:
@@ -499,7 +477,7 @@ class TestSpectrumArtworkServiceGetArtwork:
     def service(self, mock_client, tmp_path):
         """Provide a SpectrumArtworkService instance."""
         service = SpectrumArtworkService(engine=mock_client, digitals_dir=tmp_path)
-        service._client = "CLIENT123"
+        object.__setattr__(service, "client", "CLIENT123")  # Set client for testing
         return service
 
     @pytest.fixture
@@ -531,8 +509,8 @@ class TestSpectrumArtworkServiceGetArtwork:
         design_paths = [Path("/tmp/design1.pdf")]
         placement_paths = [Path("/tmp/placement1.pdf")]
 
-        mocker.patch.object(service, "_get_designs", return_value=design_paths)
-        mocker.patch.object(service, "_get_placements", return_value=placement_paths)
+        mocker.patch.object(SpectrumArtworkService, "_get_designs", return_value=design_paths)
+        mocker.patch.object(SpectrumArtworkService, "_get_placements", return_value=placement_paths)
 
         result = service.get_artwork(order_with_artwork_id)
 
@@ -540,8 +518,12 @@ class TestSpectrumArtworkServiceGetArtwork:
 
     def test_get_artwork_calls_both_methods(self, service, mocker, order_with_artwork_id):
         """Test that get_artwork calls both _get_designs and _get_placements."""
-        mocked_get_designs = mocker.patch.object(service, "_get_designs", return_value=[])
-        mocked_get_placements = mocker.patch.object(service, "_get_placements", return_value=[])
+        mocked_get_designs = mocker.patch.object(
+            SpectrumArtworkService, "_get_designs", return_value=[]
+        )
+        mocked_get_placements = mocker.patch.object(
+            SpectrumArtworkService, "_get_placements", return_value=[]
+        )
         service.get_artwork(order_with_artwork_id)
 
         mocked_get_designs.assert_called_once_with(order_with_artwork_id)

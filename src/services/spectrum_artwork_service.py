@@ -1,6 +1,7 @@
 """Spectrum artwork service implementation."""
 
 import io
+from dataclasses import dataclass, field
 from logging import getLogger
 from pathlib import Path
 from zipfile import ZipFile
@@ -12,14 +13,13 @@ from src.domain.order import Order
 logger = getLogger(__name__)
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
 class SpectrumArtworkService:
     """Spectrum artwork service implementation."""
 
-    def __init__(self, engine: httpx.Client, digitals_dir: Path) -> None:
-        """Initialize the service."""
-        self._engine = engine
-        self._digitals_dir = digitals_dir
-        self._client = ""
+    engine: httpx.Client
+    digitals_dir: Path
+    client: str = field(default="", init=False)
 
     def get_artwork(self, order: Order) -> list[Path]:
         """Get artwork data for the given remote ID."""
@@ -29,9 +29,9 @@ class SpectrumArtworkService:
         """Get artwork IDs for the given remote ID."""
         logger.info(f"Getting artwork IDs for order {order.remote_order_id}")
         endpoint = f"/api/order/order-number/{order.remote_order_id}/"
-        response = self._engine.get(url=endpoint)
+        response = self.engine.get(url=endpoint)
         response.raise_for_status()
-        self._client = response.json().get("clientHandle", "")
+        object.__setattr__(self, "client", response.json().get("clientHandle", ""))
 
         artwork_data = {
             (sku_qty["sku"], sku_qty["quantity"]): item.get("recipeSetId")
@@ -62,19 +62,19 @@ class SpectrumArtworkService:
                 continue
 
             endpoint = f"/api/webtoprint/{line_item.artwork_id}/"
-            response = self._engine.get(url=endpoint)
+            response = self.engine.get(url=endpoint)
             response.raise_for_status()
 
             saved_as: list[Path] = []
             with ZipFile(io.BytesIO(response.content)) as zip_file:
                 for member in zip_file.infolist():
-                    # Set filename to include order ID and extract to self._digitals_dir
+                    # Set filename to include order ID and extract to self.digitals_dir
                     member.filename = f"S{order.id:05}_{member.filename}"
-                    zip_file.extract(member, path=self._digitals_dir)
-                    saved_as.append(self._digitals_dir / member.filename)
+                    zip_file.extract(member, path=self.digitals_dir)
+                    saved_as.append(self.digitals_dir / member.filename)
 
             line_item.set_design(
-                url=f"{str(self._engine.base_url).rstrip('/')}{endpoint}", paths=saved_as
+                url=f"{str(self.engine.base_url).rstrip('/')}{endpoint}", paths=saved_as
             )
             saved_paths.extend(saved_as)
 
@@ -89,14 +89,14 @@ class SpectrumArtworkService:
             if not line_item.artwork_id:
                 continue
 
-            endpoint = f"/{self._client}/specification/{line_item.artwork_id}/pdf/"
-            response = self._engine.get(url=endpoint)
+            endpoint = f"/{self.client}/specification/{line_item.artwork_id}/pdf/"
+            response = self.engine.get(url=endpoint)
             response.raise_for_status()
-            saved_as = self._digitals_dir / f"S{order.id:05}_{line_item.artwork_id}_placement.pdf"
+            saved_as = self.digitals_dir / f"S{order.id:05}_{line_item.artwork_id}_placement.pdf"
             saved_as.write_bytes(response.content)
 
             line_item.set_placement(
-                url=f"{str(self._engine.base_url).rstrip('/')}{endpoint}", path=saved_as
+                url=f"{str(self.engine.base_url).rstrip('/')}{endpoint}", path=saved_as
             )
             saved_paths.append(saved_as)
 
