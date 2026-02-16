@@ -1,6 +1,5 @@
 """Sale service interface."""
 
-from pathlib import Path
 from typing import Any, Protocol
 
 from src.domain.order import Order
@@ -27,10 +26,6 @@ class ISalesService(Protocol):
 
     def verify_sale_quantities(self, order: Order, sale: dict[str, Any]) -> bool:
         """Verify sale order line quantities for an order in the sales system."""
-        ...
-
-    def prepare_artwork(self, order: Order, files: list[Path]) -> None:
-        """Prepare artwork for the given order."""
         ...
 
     def get_completed_sales(self, order_provider: str) -> list[int]:

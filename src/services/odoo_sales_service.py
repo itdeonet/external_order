@@ -1,7 +1,8 @@
 """Odoo service implementation."""
 
+from collections.abc import Iterator
+from dataclasses import dataclass, field
 from logging import getLogger
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -14,13 +15,13 @@ from src.domain.order import Order
 logger = getLogger(__name__)
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
 class OdooSalesService:
     """Odoo service implementation."""
 
-    def __init__(self, auth: OdooAuth, engine: httpx.Client) -> None:
-        self.auth = auth
-        self.engine = engine
-        self._id_counter = iter(range(1, 1000000))
+    auth: OdooAuth
+    engine: httpx.Client
+    _id_counter: Iterator[int] = field(default_factory=lambda: iter(range(1, 1000000)), init=False)
 
     def create_sale(self, order: Order) -> int:
         """Create a draft order for the given order."""
@@ -83,10 +84,6 @@ class OdooSalesService:
         if isinstance(result, list) and result and isinstance(result[0], dict):
             return result[0]
         return {}
-
-    def prepare_artwork(self, order: Order, files: list[Path]) -> None:
-        """Prepare artwork for the given order."""
-        ...
 
     def get_completed_sales(self, order_provider: str) -> list[int]:
         """Get a list of completed sales for the given order provider."""
