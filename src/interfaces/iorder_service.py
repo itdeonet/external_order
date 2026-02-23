@@ -2,12 +2,12 @@
 
 from collections.abc import Generator
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
-from src.domain.interfaces.iartwork_service import IArtworkService
-from src.domain.interfaces.ierror_queue import IErrorQueue
-from src.domain.interfaces.iregistry import IRegistry
 from src.domain.order import Order, OrderStatus
+from src.interfaces.iartwork_service import IArtworkService
+from src.interfaces.ierror_queue import IErrorQueue
+from src.interfaces.iregistry import IRegistry
 
 
 class IOrderService(Protocol):
@@ -22,6 +22,14 @@ class IOrderService(Protocol):
         """Generate orders."""
         ...
 
+    def get_order_data_by_remote_order_id(self, remote_order_id: str) -> dict[str, Any] | None:
+        """Get order data by remote ID."""
+        ...
+
+    def notify_completed_sale(self, order: Order) -> None:
+        """Notify the order provider of a completed sale."""
+        ...
+
     def get_artwork_service(
         self, order: Order, artwork_services: IRegistry[IArtworkService]
     ) -> IArtworkService | None:
@@ -30,4 +38,8 @@ class IOrderService(Protocol):
 
     def persist_order(self, order: Order, status: OrderStatus) -> None:
         """Save the given order."""
+        ...
+
+    def load_order(self, remote_order_id: str) -> Order | None:
+        """Load an order by remote ID."""
         ...
