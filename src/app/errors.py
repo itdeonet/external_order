@@ -1,14 +1,17 @@
 """Errors module."""
 
 import queue
+from dataclasses import dataclass, field
 from traceback import TracebackException
 
 
+@dataclass(frozen=True, slots=True)
 class ErrorQueue:
     """A thread-safe queue to store exceptions."""
 
-    def __init__(self) -> None:
-        self._queue: queue.Queue[TracebackException] = queue.Queue()
+    _queue: queue.Queue[TracebackException] = field(
+        default_factory=queue.Queue, init=False, repr=False
+    )
 
     def put(self, exc: Exception) -> None:
         """Add an exception to the queue."""
@@ -37,8 +40,8 @@ class ErrorQueue:
         return "\n\n".join(summary)
 
 
-class InsdesError(Exception):
-    """Custom exception for INSDES processing errors."""
+class BaseError(Exception):
+    """Base exception for custom errors."""
 
     def __init__(self, message: str, order_id: str | None = None) -> None:
         super().__init__(message)
@@ -51,15 +54,25 @@ class InsdesError(Exception):
         return base_message
 
 
-class SaleError(Exception):
+class ArtworkError(BaseError):
+    """Raised for errors related to artwork retrieval."""
+
+    pass
+
+
+class InsdesError(BaseError):
+    """Raised for errors related to .insdes file processing."""
+
+    pass
+
+
+class NotifyError(BaseError):
+    """Raised for errors related to notifying order providers."""
+
+    pass
+
+
+class SaleError(BaseError):
     """Raised for sale related errors."""
 
-    def __init__(self, message: str, order_id: str | None = None) -> None:
-        super().__init__(message)
-        self.order_id = order_id
-
-    def __str__(self) -> str:
-        base_message = super().__str__()
-        if self.order_id:
-            return f"{base_message} (Order ID: {self.order_id})"
-        return base_message
+    pass
