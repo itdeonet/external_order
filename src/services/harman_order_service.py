@@ -2,21 +2,25 @@
 
 import datetime as dt
 import json
+import random
 import re
+import string
 from collections.abc import Generator
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Self
 
-from pydifact import Parser, Segment  # type: ignore
+from pydifact import Parser, Segment, Serializer  # type: ignore
 
-from src.domain.interfaces.iartwork_service import IArtworkService
-from src.domain.interfaces.ierror_queue import IErrorQueue
-from src.domain.interfaces.iregistry import IRegistry
+from src.app.errors import NotifyError
+from src.config import Config
 from src.domain.line_item import LineItem
 from src.domain.order import Order, OrderStatus
 from src.domain.ship_to import ShipTo
-from src.settings import Settings
+from src.interfaces.iartwork_service import IArtworkService
+from src.interfaces.ierror_queue import IErrorQueue
+from src.interfaces.iregistry import IRegistry
+from src.services.render_service import RenderService
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -31,19 +35,23 @@ class HarmanOrderService:
     workdays_for_delivery: int
     input_orders_dir: Path
     json_orders_dir: Path
+    notify_dir: Path
+    renderer: RenderService
 
     @classmethod
-    def from_settings(cls, settings: Settings) -> Self:
+    def from_config(cls, config: Config) -> Self:
         """Create a HarmanOrderService instance from settings."""
         return cls(
-            administration_id=settings.harman_administration_id,
-            customer_id=settings.harman_customer_id,
-            pricelist_id=settings.harman_pricelist_id,
-            order_provider=settings.harman_order_provider,
-            shipment_type=settings.harman_shipment_type,
-            workdays_for_delivery=settings.harman_workdays_for_delivery,
-            input_orders_dir=settings.harman_input_orders_dir,
-            json_orders_dir=settings.json_orders_dir,
+            administration_id=config.harman_administration_id,
+            customer_id=config.harman_customer_id,
+            pricelist_id=config.harman_pricelist_id,
+            order_provider=config.harman_order_provider,
+            shipment_type=config.harman_shipment_type,
+            workdays_for_delivery=config.harman_workdays_for_delivery,
+            input_orders_dir=config.harman_input_orders_dir,
+            json_orders_dir=config.json_orders_dir,
+            notify_dir=config.harman_notify_dir,
+            renderer=RenderService(directory=config.templates_dir),
         )
 
     def get_orders(self, error_queue: IErrorQueue) -> Generator[Order, None, None]:
@@ -51,17 +59,21 @@ class HarmanOrderService:
         # parse each .insdes file in the directory and yield an Order instance
         for file in self.input_orders_dir.glob("*.insdes", case_sensitive=False):
             try:
-                order_data: dict[str, Any] = {
-                    "ship_to": {},
-                    "line_items": [],
-                }
-                for segment in Parser().parse(file.read_text(encoding="utf-8")):
-                    # extract data from the segment and update the order data
-                    self._get_segment_data(segment, order_data)
-
+                order_data = self._get_order_data(file)
                 yield self._make_order(order_data)
             except Exception as exc:
                 error_queue.put(exc)
+
+    def _get_order_data(self, file: Path) -> dict[str, Any]:
+        """Extract order data from the given file."""
+        order_data: dict[str, Any] = {
+            "ship_to": {},
+            "line_items": [],
+        }
+        for segment in Parser().parse(file.read_text(encoding="utf-8")):
+            # extract data from the segment and update the order data
+            self._get_segment_data(segment, order_data)
+        return order_data
 
     def _get_segment_data(self, segment: Segment, order_data: dict[str, Any]) -> dict[str, Any]:
         """Extract data from a segment."""
@@ -93,8 +105,10 @@ class HarmanOrderService:
                 order_data["delivery_note_id"] = delivery_note_id
             case ["RFF", "ON", remote_order_id]:
                 order_data["remote_order_id"] = remote_order_id
-            case ["LIN", id, "1", [product_id, "MF"]]:
-                order_data["line_items"].append({"id": id, "product_id": product_id})
+            case ["LIN", id, "1", [product_code, "MF"]]:
+                order_data["line_items"].append(
+                    {"remote_line_id": id, "product_code": product_code}
+                )
             case ["QTY", "113", quantity, unit_of_measure]:
                 assert order_data["line_items"], "QTY segment must be preceded by a LIN segment."
                 order_data["line_items"][-1]["quantity"] = quantity
@@ -131,8 +145,8 @@ class HarmanOrderService:
             ),
             line_items=[
                 LineItem(
-                    id=item.get("id", ""),
-                    product_id=item.get("product_id", ""),
+                    remote_line_id=item.get("id", ""),
+                    product_code=item.get("product_code", ""),
                     quantity=int(item.get("quantity", 0)),
                 )
                 for item in data.get("line_items", [])
@@ -141,6 +155,12 @@ class HarmanOrderService:
 
         order.set_ship_at(Order.calculate_delivery_date(self.workdays_for_delivery))
         return order
+
+    def get_order_data_by_remote_order_id(self, remote_order_id: str) -> dict[str, Any] | None:
+        """Get order data by remote ID."""
+        for file in self.input_orders_dir.glob(f"{remote_order_id}.*"):
+            return self._get_order_data(file)
+        return None
 
     def get_artwork_service(
         self, order: Order, artwork_services: IRegistry[IArtworkService]
@@ -166,3 +186,59 @@ class HarmanOrderService:
 
         for file in self.input_orders_dir.glob(f"{order.remote_order_id}.*"):
             file.rename(file.parent / f"{order.remote_order_id}.{order.status.value}".upper())
+
+    def load_order(self, remote_order_id: str) -> Order | None:
+        """Load an order by remote ID."""
+        file_path = self.json_orders_dir / f"{remote_order_id}.json"
+        if not file_path.exists():
+            return None
+        text = file_path.read_text(encoding="utf-8")
+        data = json.loads(text)
+        return Order(**data)
+
+    def notify_completed_sale(self, order: Order) -> None:
+        """Notify the order provider of a completed sale."""
+        for file in self.renderer.directory.glob("desadv-*.j2"):
+            doc_type = "D96A" if "D96A" in file.name.upper() else "D99A"
+            notify_data = self._get_notify_data(order, doc_type)
+            message = self.renderer.render(file.name, notify_data)
+            segments = Parser().parse(message)
+            content = Serializer().serialize(list(segments), break_lines=True)
+            notify_path = (
+                self.notify_dir / file.stem / f"{order.remote_order_id}.{file.stem}".upper()
+            )
+            notify_path.write_text(content, encoding="utf-8")
+
+    def _get_notify_data(self, order: Order, doc_type: str) -> dict[str, Any]:
+        """Get the data needed for the notification."""
+        order_data = self.get_order_data_by_remote_order_id(order.remote_order_id)
+        if not (order_data and order_data.get("ship_to") and order_data.get("line_items")):
+            raise NotifyError("No valid order data found", order_id=order.remote_order_id)
+
+        segments_d96a = [
+            35,  # Header and trailer segments
+            4 * len(order_data["line_items"]),  # Segments per line item
+            sum(item.get("quantity", 0) for item in order_data["line_items"]),  # Serial segments
+            1
+            + sum(item.get("quantity", 0) for item in order_data["line_items"])
+            // 10,  # PCI segments (1 per 10 products)
+        ]
+        segments_d99a = [
+            9,  # Header and trailer segments
+            4 * len(order_data["line_items"]),  # Segments per item
+            sum(item.get("quantity", 0) for item in order_data["line_items"]),  # Serial segments
+            1,  # FTX segment
+        ]
+        notify_data = {
+            "interchange_control_ref": "".join(random.choices(string.digits, k=10)),
+            "ship_date": dt.datetime.now(dt.UTC),
+            "expected_date": dt.datetime.now(dt.UTC) + dt.timedelta(days=2),
+            "box_length": 24,
+            "box_width": 21,
+            "box_height": 6,
+            "sscc": "".join(random.choices(string.digits, k=20)),
+            "segments": sum(segments_d96a) if doc_type == "D96A" else sum(segments_d99a),
+            "item_description": "CLEAR",
+            "order": order_data,
+        }
+        return notify_data
