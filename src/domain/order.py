@@ -1,6 +1,7 @@
 """Order class."""
 
 import datetime as dt
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -24,7 +25,8 @@ class OrderStatus(Enum):
 class Order:
     """Order entity."""
 
-    id: int = field(default=0, init=False)
+    id: uuid.UUID = field(default_factory=uuid.uuid4, init=False)
+    sale_id: int = field(default=0, init=False)
     administration_id: int
     customer_id: int
     order_provider: str
@@ -73,11 +75,11 @@ class Order:
         ):
             raise ValueError("Line items must be a list of LineItem instances.")
 
-    def set_id(self, value: int) -> None:
-        """Set the order ID."""
+    def set_sale_id(self, value: int) -> None:
+        """Set the sale ID."""
         if not (isinstance(value, int) and value > 0):
-            raise ValueError("ID must be a positive integer.")
-        object.__setattr__(self, "id", value)
+            raise ValueError("value must be a positive integer.")
+        object.__setattr__(self, "sale_id", value)
 
     def set_status(self, value: OrderStatus) -> None:
         """Set the order status."""

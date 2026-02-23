@@ -1,6 +1,7 @@
 """Unit tests for the Order domain class."""
 
 import datetime as dt
+import uuid
 
 import pytest
 
@@ -47,10 +48,9 @@ class TestOrderInstantiation:
         )
 
     @pytest.fixture
-    def valid_line_item(self, mocker):
-        """Provide a mocked LineItem instance."""
-        line_item = mocker.Mock(spec=LineItem)
-        return line_item
+    def valid_line_item(self):
+        """Provide a LineItem instance."""
+        return LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
 
     @pytest.fixture
     def valid_order_data(self, valid_ship_to, valid_line_item):
@@ -83,7 +83,7 @@ class TestOrderInstantiation:
         """Test that Order has correct default values."""
         order = Order(**valid_order_data)
 
-        assert order.id == 0
+        assert order.sale_id == 0
         assert order.status == OrderStatus.NEW
         assert isinstance(order.created_at, dt.datetime)
         assert isinstance(order.ship_at, dt.date)
@@ -113,10 +113,19 @@ class TestOrderAdministrationIDValidation:
     """Tests for administration_id field validation."""
 
     @pytest.fixture
-    def minimal_order_data(self, mocker):
+    def minimal_order_data(self):
         """Provide minimal valid Order data."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "customer_id": 100,
             "order_provider": "Provider",
@@ -157,10 +166,19 @@ class TestOrderCustomerIDValidation:
     """Tests for customer_id field validation."""
 
     @pytest.fixture
-    def minimal_order_data(self, mocker):
+    def minimal_order_data(self):
         """Provide minimal valid Order data."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "order_provider": "Provider",
@@ -201,10 +219,19 @@ class TestOrderOrderProviderValidation:
     """Tests for order_provider field validation."""
 
     @pytest.fixture
-    def minimal_order_data(self, mocker):
+    def minimal_order_data(self):
         """Provide minimal valid Order data."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "customer_id": 100,
@@ -245,10 +272,19 @@ class TestOrderPricelistIDValidation:
     """Tests for pricelist_id field validation."""
 
     @pytest.fixture
-    def minimal_order_data(self, mocker):
+    def minimal_order_data(self):
         """Provide minimal valid Order data."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "customer_id": 100,
@@ -284,10 +320,19 @@ class TestOrderRemoteOrderIDValidation:
     """Tests for remote_order_id field validation."""
 
     @pytest.fixture
-    def minimal_order_data(self, mocker):
+    def minimal_order_data(self):
         """Provide minimal valid Order data."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "customer_id": 100,
@@ -328,10 +373,19 @@ class TestOrderShipmentTypeValidation:
     """Tests for shipment_type field validation."""
 
     @pytest.fixture
-    def minimal_order_data(self, mocker):
+    def minimal_order_data(self):
         """Provide minimal valid Order data."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "customer_id": 100,
@@ -372,9 +426,9 @@ class TestOrderShipToValidation:
     """Tests for ship_to field validation."""
 
     @pytest.fixture
-    def minimal_order_data(self, mocker):
+    def minimal_order_data(self):
         """Provide minimal valid Order data."""
-        line_item = mocker.Mock(spec=LineItem)
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "customer_id": 100,
@@ -400,9 +454,18 @@ class TestOrderShipToValidation:
         with pytest.raises(ValueError, match="Ship to must be an instance of ShipTo"):
             Order(ship_to=None, **minimal_order_data)  # type: ignore
 
-    def test_ship_to_valid(self, minimal_order_data, mocker):
+    def test_ship_to_valid(self, minimal_order_data):
         """Test that valid ship_to is accepted."""
-        ship_to = mocker.Mock(spec=ShipTo)
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
         order = Order(ship_to=ship_to, **minimal_order_data)
         assert order.ship_to is ship_to
 
@@ -411,9 +474,18 @@ class TestOrderLineItemsValidation:
     """Tests for line_items field validation."""
 
     @pytest.fixture
-    def minimal_order_data(self, mocker):
+    def minimal_order_data(self):
         """Provide minimal valid Order data."""
-        ship_to = mocker.Mock(spec=ShipTo)
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
         return {
             "administration_id": 1,
             "customer_id": 100,
@@ -444,33 +516,43 @@ class TestOrderLineItemsValidation:
         with pytest.raises(ValueError, match="Line items must be a list of LineItem instances"):
             Order(line_items=None, **minimal_order_data)  # type: ignore
 
-    def test_line_items_contains_non_line_item_raises_error(self, minimal_order_data, mocker):
+    def test_line_items_contains_non_line_item_raises_error(self, minimal_order_data):
         """Test that line_items containing non-LineItem objects raises ValueError."""
         with pytest.raises(ValueError, match="Line items must be a list of LineItem instances"):
             Order(line_items=["not a LineItem"], **minimal_order_data)  # type: ignore
 
-    def test_line_items_valid(self, minimal_order_data, mocker):
+    def test_line_items_valid(self, minimal_order_data):
         """Test that valid line_items are accepted."""
-        line_item = mocker.Mock(spec=LineItem)
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
         order = Order(line_items=[line_item], **minimal_order_data)
         assert order.line_items == [line_item]
 
-    def test_line_items_multiple_valid(self, minimal_order_data, mocker):
+    def test_line_items_multiple_valid(self, minimal_order_data):
         """Test that multiple valid line_items are accepted."""
-        line_item1 = mocker.Mock(spec=LineItem)
-        line_item2 = mocker.Mock(spec=LineItem)
+        line_item1 = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item2 = LineItem(remote_line_id="RL-002", product_code="PROD-002", quantity=10)
+
         order = Order(line_items=[line_item1, line_item2], **minimal_order_data)
         assert order.line_items == [line_item1, line_item2]
 
 
-class TestOrderSetID:
-    """Tests for set_id method."""
+class TestOrderSetSaleID:
+    """Tests for set_sale_id method."""
 
     @pytest.fixture
-    def order(self, mocker):
+    def order(self):
         """Provide an Order instance."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
         return Order(
             administration_id=1,
             customer_id=100,
@@ -482,35 +564,44 @@ class TestOrderSetID:
             line_items=[line_item],
         )
 
-    def test_set_id_valid(self, order):
+    def test_set_sale_id_valid(self, order):
         """Test setting a valid ID."""
-        order.set_id(999)
-        assert order.id == 999
+        order.set_sale_id(999)
+        assert order.sale_id == 999
 
-    def test_set_id_zero_raises_error(self, order):
+    def test_set_sale_id_zero_raises_error(self, order):
         """Test that setting ID to 0 raises ValueError."""
-        with pytest.raises(ValueError, match="ID must be a positive integer"):
-            order.set_id(0)
+        with pytest.raises(ValueError, match="value must be a positive integer"):
+            order.set_sale_id(0)
 
-    def test_set_id_negative_raises_error(self, order):
+    def test_set_sale_id_negative_raises_error(self, order):
         """Test that setting negative ID raises ValueError."""
-        with pytest.raises(ValueError, match="ID must be a positive integer"):
-            order.set_id(-1)
+        with pytest.raises(ValueError, match="value must be a positive integer"):
+            order.set_sale_id(-1)
 
-    def test_set_id_non_int_raises_error(self, order):
+    def test_set_sale_id_non_int_raises_error(self, order):
         """Test that setting non-integer ID raises ValueError."""
-        with pytest.raises(ValueError, match="ID must be a positive integer"):
-            order.set_id("123")
+        with pytest.raises(ValueError, match="value must be a positive integer"):
+            order.set_sale_id("123")
 
 
 class TestOrderSetStatus:
     """Tests for set_status method."""
 
     @pytest.fixture
-    def order(self, mocker):
+    def order(self):
         """Provide an Order instance."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
         return Order(
             administration_id=1,
             customer_id=100,
@@ -592,10 +683,19 @@ class TestOrderCalculateDeliveryDate:
         ):
             Order.calculate_delivery_date(-1)
 
-    def test_calculate_delivery_date_can_be_called_from_instance(self, mocker):
+    def test_calculate_delivery_date_can_be_called_from_instance(self):
         """Test that static method can also be called from an instance."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
         order = Order(
             administration_id=1,
             customer_id=100,
@@ -616,10 +716,19 @@ class TestOrderSetShipAt:
     """Tests for set_ship_at method."""
 
     @pytest.fixture
-    def order(self, mocker):
+    def order(self):
         """Provide an Order instance."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
         return Order(
             administration_id=1,
             customer_id=100,
@@ -664,10 +773,19 @@ class TestOrderDescription:
     """Tests for description property."""
 
     @pytest.fixture
-    def order(self, mocker):
+    def order(self):
         """Provide an Order instance."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
         return Order(
             administration_id=1,
             customer_id=100,
@@ -683,11 +801,19 @@ class TestOrderDescription:
         """Test that description has correct format."""
         assert order.description == "Harman Order ORD-12345"
 
-    def test_description_different_providers(self, mocker):
+    def test_description_different_providers(self):
         """Test description with different order providers."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
-
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
         providers = ["Harman", "Odoo", "Spectrum"]
         for provider in providers:
             order = Order(
@@ -707,10 +833,19 @@ class TestOrderImmutability:
     """Tests for Order immutability (frozen dataclass)."""
 
     @pytest.fixture
-    def order(self, mocker):
+    def order(self):
         """Provide an Order instance."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
         return Order(
             administration_id=1,
             customer_id=100,
@@ -759,8 +894,8 @@ class TestOrderImmutability:
 
     def test_can_modify_via_setter_methods(self, order):
         """Test that settable fields can be modified via setter methods."""
-        order.set_id(999)
-        assert order.id == 999
+        order.set_sale_id(999)
+        assert order.sale_id == 999
 
         order.set_status(OrderStatus.SHIPPED)
         assert order.status == OrderStatus.SHIPPED
@@ -774,10 +909,19 @@ class TestOrderEquality:
     """Tests for Order equality comparison."""
 
     @pytest.fixture
-    def order_data(self, mocker):
+    def order_data(self):
         """Provide Order data for equality tests."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "customer_id": 100,
@@ -789,9 +933,9 @@ class TestOrderEquality:
             "line_items": [line_item],
         }
 
-    def test_not_equal_orders_with_same_data(self, order_data, mocker):
+    def test_not_equal_orders_with_same_data(self, order_data):
         """Test that orders with same data are not equal."""
-        # Use same mocked objects
+        # Use same real objects
         ship_to = order_data["ship_to"]
         line_items = order_data["line_items"]
 
@@ -828,3 +972,365 @@ class TestOrderEquality:
         )
 
         assert order1 != order2
+
+
+class TestOrderIDGeneration:
+    """Tests for Order ID auto-generation."""
+
+    @pytest.fixture
+    def valid_order_data(self):
+        """Provide valid Order data."""
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        return {
+            "administration_id": 1,
+            "customer_id": 100,
+            "order_provider": "Provider",
+            "pricelist_id": 50,
+            "remote_order_id": "ORD-123",
+            "shipment_type": "standard",
+            "ship_to": ship_to,
+            "line_items": [line_item],
+        }
+
+    def test_id_is_auto_generated_uuid(self, valid_order_data):
+        """Test that id is auto-generated as UUID."""
+        order = Order(**valid_order_data)
+        assert isinstance(order.id, uuid.UUID)
+
+    def test_id_unique_across_instances(self, valid_order_data):
+        """Test that different instances get unique IDs."""
+        order1 = Order(**valid_order_data)
+        order2 = Order(**valid_order_data)
+        assert order1.id != order2.id
+        assert isinstance(order1.id, uuid.UUID)
+        assert isinstance(order2.id, uuid.UUID)
+
+    def test_id_cannot_be_passed_as_parameter(self, valid_order_data):
+        """Test that id parameter is rejected (init=False)."""
+        with pytest.raises(TypeError):
+            Order(id=uuid.uuid4(), **valid_order_data)  # type: ignore
+
+
+class TestOrderSaleIDDefault:
+    """Tests for sale_id field defaults."""
+
+    @pytest.fixture
+    def valid_order_data(self):
+        """Provide valid Order data."""
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        return {
+            "administration_id": 1,
+            "customer_id": 100,
+            "order_provider": "Provider",
+            "pricelist_id": 50,
+            "remote_order_id": "ORD-123",
+            "shipment_type": "standard",
+            "ship_to": ship_to,
+            "line_items": [line_item],
+        }
+
+    def test_sale_id_defaults_to_zero(self, valid_order_data):
+        """Test that sale_id defaults to 0."""
+        order = Order(**valid_order_data)
+        assert order.sale_id == 0
+
+    def test_sale_id_cannot_be_initialized_directly(self, valid_order_data):
+        """Test that sale_id cannot be passed as init parameter."""
+        with pytest.raises(TypeError):
+            Order(sale_id=999, **valid_order_data)  # type: ignore
+
+
+class TestOrderStatusDefault:
+    """Tests for status field defaults."""
+
+    @pytest.fixture
+    def valid_order_data(self):
+        """Provide valid Order data."""
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        return {
+            "administration_id": 1,
+            "customer_id": 100,
+            "order_provider": "Provider",
+            "pricelist_id": 50,
+            "remote_order_id": "ORD-123",
+            "shipment_type": "standard",
+            "ship_to": ship_to,
+            "line_items": [line_item],
+        }
+
+    def test_status_defaults_to_new(self, valid_order_data):
+        """Test that status defaults to OrderStatus.NEW."""
+        order = Order(**valid_order_data)
+        assert order.status == OrderStatus.NEW
+
+    def test_status_cannot_be_initialized_directly(self, valid_order_data):
+        """Test that status cannot be passed as init parameter."""
+        with pytest.raises(TypeError):
+            Order(status=OrderStatus.CREATED, **valid_order_data)  # type: ignore
+
+
+class TestOrderCreatedAtDefault:
+    """Tests for created_at field defaults."""
+
+    @pytest.fixture
+    def valid_order_data(self):
+        """Provide valid Order data."""
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        return {
+            "administration_id": 1,
+            "customer_id": 100,
+            "order_provider": "Provider",
+            "pricelist_id": 50,
+            "remote_order_id": "ORD-123",
+            "shipment_type": "standard",
+            "ship_to": ship_to,
+            "line_items": [line_item],
+        }
+
+    def test_created_at_is_auto_generated(self, valid_order_data):
+        """Test that created_at is automatically set."""
+        before = dt.datetime.now(dt.UTC)
+        order = Order(**valid_order_data)
+        after = dt.datetime.now(dt.UTC)
+
+        assert before <= order.created_at <= after
+
+    def test_created_at_is_datetime(self, valid_order_data):
+        """Test that created_at is a datetime object."""
+        order = Order(**valid_order_data)
+        assert isinstance(order.created_at, dt.datetime)
+
+    def test_created_at_has_utc_timezone(self, valid_order_data):
+        """Test that created_at is in UTC timezone."""
+        order = Order(**valid_order_data)
+        assert order.created_at.tzinfo == dt.UTC
+
+    def test_created_at_cannot_be_initialized_directly(self, valid_order_data):
+        """Test that created_at cannot be passed as init parameter."""
+        with pytest.raises(TypeError):
+            Order(created_at=dt.datetime.now(dt.UTC), **valid_order_data)  # type: ignore
+
+
+class TestOrderShipAtDefault:
+    """Tests for ship_at field defaults."""
+
+    @pytest.fixture
+    def valid_order_data(self):
+        """Provide valid Order data."""
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        return {
+            "administration_id": 1,
+            "customer_id": 100,
+            "order_provider": "Provider",
+            "pricelist_id": 50,
+            "remote_order_id": "ORD-123",
+            "shipment_type": "standard",
+            "ship_to": ship_to,
+            "line_items": [line_item],
+        }
+
+    def test_ship_at_defaults_to_seven_days_from_today(self, valid_order_data):
+        """Test that ship_at defaults to 7 days from today."""
+        order = Order(**valid_order_data)
+        expected_date = dt.date.today() + dt.timedelta(days=7)
+        assert order.ship_at == expected_date
+
+    def test_ship_at_is_date(self, valid_order_data):
+        """Test that ship_at is a date object."""
+        order = Order(**valid_order_data)
+        assert isinstance(order.ship_at, dt.date)
+        assert not isinstance(order.ship_at, dt.datetime)
+
+    def test_ship_at_cannot_be_initialized_directly(self, valid_order_data):
+        """Test that ship_at cannot be passed as init parameter."""
+        with pytest.raises(TypeError):
+            Order(ship_at=dt.date.today() + dt.timedelta(days=5), **valid_order_data)  # type: ignore
+
+
+class TestOrderAdministrationIDValidationMessages:
+    """Tests for administration_id validation error messages."""
+
+    @pytest.fixture
+    def minimal_order_data(self):
+        """Provide minimal valid Order data."""
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        return {
+            "customer_id": 100,
+            "order_provider": "Provider",
+            "pricelist_id": 50,
+            "remote_order_id": "ORD-123",
+            "shipment_type": "standard",
+            "ship_to": ship_to,
+            "line_items": [line_item],
+        }
+
+    def test_administration_id_error_message_format(self, minimal_order_data):
+        """Test that error message ends with period."""
+        with pytest.raises(ValueError, match="Administration ID must be a positive integer\\."):
+            Order(administration_id=0, **minimal_order_data)
+
+
+class TestOrderLargeQuantities:
+    """Tests for Order with large quantities."""
+
+    def test_order_with_large_line_item_quantities(self):
+        """Test that Order can handle large quantities in line items."""
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=1000000)
+        order = Order(
+            administration_id=1,
+            customer_id=100,
+            order_provider="Provider",
+            pricelist_id=50,
+            remote_order_id="ORD-123",
+            shipment_type="standard",
+            ship_to=ship_to,
+            line_items=[line_item],
+        )
+        assert order.line_items[0].quantity == 1000000
+
+
+class TestOrderMultipleLineItems:
+    """Tests for Order with multiple line items."""
+
+    def test_order_preserves_line_items_order(self):
+        """Test that Order preserves the order of line items."""
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_items = [
+            LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=1),
+            LineItem(remote_line_id="RL-002", product_code="PROD-002", quantity=2),
+            LineItem(remote_line_id="RL-003", product_code="PROD-003", quantity=3),
+        ]
+        order = Order(
+            administration_id=1,
+            customer_id=100,
+            order_provider="Provider",
+            pricelist_id=50,
+            remote_order_id="ORD-123",
+            shipment_type="standard",
+            ship_to=ship_to,
+            line_items=line_items,
+        )
+        assert order.line_items == line_items
+        assert len(order.line_items) == 3
+
+
+class TestOrderRepresentation:
+    """Tests for Order string representation."""
+
+    @pytest.fixture
+    def order(self):
+        """Provide an Order instance."""
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        return Order(
+            administration_id=1,
+            customer_id=100,
+            order_provider="Harman",
+            pricelist_id=50,
+            remote_order_id="ORD-12345",
+            shipment_type="standard",
+            ship_to=ship_to,
+            line_items=[line_item],
+        )
+
+    def test_repr_contains_class_name(self, order):
+        """Test that repr contains Order class name."""
+        repr_str = repr(order)
+        assert "Order" in repr_str
+
+    def test_repr_contains_remote_order_id(self, order):
+        """Test that repr contains remote_order_id value."""
+        repr_str = repr(order)
+        assert "ORD-12345" in repr_str
+
+    def test_description_property_format(self, order):
+        """Test description property returns correct format."""
+        assert order.description == "Harman Order ORD-12345"
