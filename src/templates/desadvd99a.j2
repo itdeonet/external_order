@@ -1,0 +1,23 @@
+UNA:+.? '
+UNB+UNOA:2+{{ order.interchange_receiver }}:ZZ+{{ order.interchange_sender }}:ZZ+{{ ship_date.strftime("%y%m%d") }}:{{ ship_date.strftime("%H%M") }}+{{ interchange_control_ref }}++++++1'
+UNH+{{ ship_date.strftime("%H%M%S") }}+DESADV:D:99A:UN'
+BGM+351:9+{{ order.order_number }}+9'
+DTM+137:{{ ship_date.strftime("%Y%m%d") }}:102'
+RFF+DQ:{{ order.delivery_note_number }}'
+DTM+404:{{ ship_date.strftime('%Y%m%d%H%M%S') }}:203'
+RFF+ASM:{{ order.recipient.customer_number }}'
+CPS+1'
+FTX+ZZZ+++https?://www.dpdgroup.com/nl/mydpd/my-parcels/track??:lang=nl&parcelNumber={{ order.tracking_numbers|first|default('') }}'
+
+{% for item in order.items %}
+LIN+{{ item.line_number }}+1+{{ item.product_sku }}:MF'
+PIA+1+{{ item_description }}'
+QTY+12:{{ item.quantity }}:EA'
+{% for serial in item.serials %}
+GIN+BN+{{ serial }}'
+{% endfor %}
+FTX+PRD+++ECOM:UNR'
+{% endfor %}
+
+UNT+{{ segments_d99a|sum }}+{{ ship_date.strftime("%H%M%S") }}'
+UNZ+1+{{ interchange_control_ref }}'
