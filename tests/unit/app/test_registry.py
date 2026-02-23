@@ -605,3 +605,587 @@ class TestRegistryEdgeCases:
 
         assert registry.get(" key with spaces ") == "value1"
         assert registry.get("\tkey\twith\ttabs\t") == "value2"
+
+
+class TestRegistryImmutability:
+    """Tests for Registry immutability (frozen dataclass)."""
+
+    def test_registry_is_frozen(self):
+        """Test that Registry is frozen and cannot be modified."""
+        registry = Registry()
+
+        with pytest.raises(Exception):  # FrozenInstanceError  # noqa: B017
+            registry.new_attribute = "test"  # type: ignore
+
+    def test_cannot_reassign_registry_field(self):
+        """Test that registry field cannot be reassigned."""
+        registry = Registry()
+
+        with pytest.raises(Exception):  # FrozenInstanceError  # noqa: B017
+            registry.registry = {}  # type: ignore
+
+    def test_frozen_prevents_attribute_addition(self):
+        """Test that frozen dataclass prevents adding new attributes."""
+        registry = Registry()
+        registry.register("key", "value")
+
+        with pytest.raises(Exception):  # FrozenInstanceError  # noqa: B017
+            registry.extra = "something"  # type: ignore
+
+    def test_methods_modify_internal_state(self):
+        """Test that methods can modify internal frozen state."""
+        registry = Registry()
+
+        # Methods should work despite being frozen
+        registry.register("key", "value")
+        assert registry.get("key") == "value"
+
+        registry.unregister("key")
+        assert registry.get("key") is None
+
+        registry.clear()
+        assert len(list(registry.items())) == 0
+
+
+class TestRegistryRepresentation:
+    """Tests for Registry string representation."""
+
+    def test_repr_does_not_include_registry_field(self):
+        """Test that repr doesn't include registry field (repr=False)."""
+        registry = Registry()
+        registry.register("key1", "value1")
+        registry.register("key2", "value2")
+
+        repr_str = repr(registry)
+
+        # repr should have class name but not include registry field
+        assert "Registry" in repr_str
+        assert "registry=" not in repr_str
+
+    def test_repr_is_not_empty(self):
+        """Test that registry has a repr."""
+        registry = Registry()
+        repr_str = repr(registry)
+
+        assert len(repr_str) > 0
+        assert isinstance(repr_str, str)
+
+
+class TestRegistryContains:
+    """Tests for checking if a key is registered."""
+
+    def test_check_key_existence_via_get(self):
+        """Test checking key existence by comparing get result to None."""
+        registry = Registry()
+        registry.register("existing", "value")
+
+        # Method to check existence
+        assert registry.get("existing") is not None
+        assert registry.get("non_existing") is None
+
+    def test_key_not_in_registry_initially(self):
+        """Test that new key is not in registry initially."""
+        registry = Registry()
+
+        assert registry.get("new_key") is None
+
+    def test_multiple_keys_independent_existence(self):
+        """Test that each key's existence is independent."""
+        registry = Registry()
+        registry.register("key1", "value1")
+
+        assert registry.get("key1") is not None
+        assert registry.get("key2") is None
+        assert registry.get("key3") is None
+
+
+class TestRegistrySize:
+    """Tests for determining registry size."""
+
+    def test_items_count_empty_registry(self):
+        """Test counting items in empty registry."""
+        registry = Registry()
+        count = len(list(registry.items()))
+
+        assert count == 0
+
+    def test_items_count_after_register(self):
+        """Test counting items after registration."""
+        registry = Registry()
+        registry.register("key1", "value1")
+        registry.register("key2", "value2")
+
+        count = len(list(registry.items()))
+        assert count == 2
+
+    def test_items_count_after_unregister(self):
+        """Test counting items after unregistering."""
+        registry = Registry()
+        registry.register("key1", "value1")
+        registry.register("key2", "value2")
+        registry.register("key3", "value3")
+
+        registry.unregister("key2")
+
+        count = len(list(registry.items()))
+        assert count == 2
+
+    def test_items_count_after_clear(self):
+        """Test counting items after clear."""
+        registry = Registry()
+        registry.register("key1", "value1")
+        registry.register("key2", "value2")
+
+        registry.clear()
+
+        count = len(list(registry.items()))
+        assert count == 0
+
+
+class TestRegistryCallables:
+    """Tests for registering callable objects."""
+
+    def test_register_function(self):
+        """Test registering a function."""
+
+        def my_function():
+            return "result"
+
+        registry = Registry()
+        registry.register("func", my_function)
+
+        retrieved = registry.get("func")
+        assert retrieved is not None
+        assert retrieved is my_function
+        assert retrieved() == "result"
+
+    def test_register_lambda(self):
+        """Test registering a lambda function."""
+        registry = Registry()
+
+        def my_lambda(x):
+            return x * 2
+
+        registry.register("double", my_lambda)
+
+        retrieved = registry.get("double")
+        assert retrieved is not None
+        assert retrieved is my_lambda
+        assert retrieved(5) == 10
+
+    def test_register_class(self):
+        """Test registering a class (not instance)."""
+
+        class MyClass:
+            attr = "class_attr"
+
+        registry = Registry()
+        registry.register("MyClass", MyClass)
+
+        retrieved = registry.get("MyClass")
+        assert retrieved is MyClass
+        assert retrieved.attr == "class_attr"
+
+    def test_register_builtin_function(self):
+        """Test registering built-in functions."""
+        registry = Registry()
+        registry.register("len", len)
+        registry.register("str", str)
+
+        assert registry.get("len") is len
+        assert registry.get("str") is str
+
+    def test_callable_not_invoked_on_register(self):
+        """Test that registering a callable doesn't invoke it."""
+        call_count = [0]
+
+        def tracked_function():
+            call_count[0] += 1
+            return "result"
+
+        registry = Registry()
+        registry.register("func", tracked_function)
+
+        # Function should not be called during registration
+        assert call_count[0] == 0
+
+        # Only call when explicitly invoked
+        func = registry.get("func")
+        assert func is not None
+        func()
+        assert call_count[0] == 1
+
+    def test_register_method(self):
+        """Test registering methods."""
+
+        class MyClass:
+            def my_method(self):
+                return "method_result"
+
+        instance = MyClass()
+        registry = Registry()
+
+        registry.register("method", instance.my_method)
+
+        retrieved = registry.get("method")
+        assert callable(retrieved)
+        assert retrieved() == "method_result"
+
+
+class TestRegistryTypes:
+    """Tests for various type registrations."""
+
+    def test_register_tuple(self):
+        """Test registering tuple values."""
+        registry = Registry()
+        my_tuple = (1, 2, 3)
+
+        registry.register("tuple", my_tuple)
+
+        assert registry.get("tuple") == my_tuple
+
+    def test_register_set(self):
+        """Test registering set values."""
+        registry = Registry()
+        my_set = {1, 2, 3}
+
+        registry.register("set", my_set)
+
+        assert registry.get("set") == my_set
+
+    def test_register_custom_object(self):
+        """Test registering custom objects."""
+
+        class CustomObject:
+            def __init__(self, value):
+                self.value = value
+
+        obj = CustomObject(42)
+        registry = Registry()
+
+        registry.register("obj", obj)
+
+        retrieved = registry.get("obj")
+        assert retrieved is not None
+        assert retrieved is obj
+        assert retrieved.value == 42
+
+    def test_register_nested_container(self):
+        """Test registering nested containers."""
+        registry = Registry()
+        nested = {"list": [1, 2, 3], "dict": {"a": 1}, "tuple": (4, 5)}
+
+        registry.register("nested", nested)
+
+        retrieved = registry.get("nested")
+        assert retrieved is not None
+        assert retrieved == nested
+        assert retrieved["list"] == [1, 2, 3]
+
+    def test_register_exception_class(self):
+        """Test registering exception classes."""
+        registry = Registry()
+
+        registry.register("ValueError", ValueError)
+        registry.register("TypeError", TypeError)
+
+        assert registry.get("ValueError") is ValueError
+        assert registry.get("TypeError") is TypeError
+
+
+class TestRegistryInitialization:
+    """Tests for Registry initialization."""
+
+    def test_registry_field_cannot_be_passed_as_init_parameter(self):
+        """Test that registry field cannot be initialized via __init__."""
+        # Registry should have init=False for the registry field
+        # This test verifies that even if we try, it will fail
+
+        try:
+            # This should fail because registry is init=False
+            registry = Registry(registry={"key": "value"})  # type: ignore
+            # If it doesn't raise, the field should still be empty
+            # (Python 3.13+ allows this syntax but ignores the parameter)
+            assert list(registry.items()) == []
+        except TypeError:
+            # Expected if init=False is properly enforced
+            pass
+
+    def test_registry_starts_with_empty_dict(self):
+        """Test that registry starts as empty dict."""
+        registry = Registry()
+        items = list(registry.items())
+
+        assert items == []
+
+    def test_registry_uses_default_factory(self):
+        """Test that registry field uses default_factory."""
+        registry1 = Registry()
+        registry2 = Registry()
+
+        # Each should have its own dict instance
+        registry1.register("key", "value")
+
+        assert registry1.get("key") == "value"
+        assert registry2.get("key") is None
+
+
+class TestRegistryEquality:
+    """Tests for Registry comparison and equality."""
+
+    def test_registry_instances_are_different(self):
+        """Test that Registry instances are different objects."""
+        registry1 = Registry()
+        registry2 = Registry()
+
+        assert registry1 is not registry2
+
+    def test_registry_equality_with_same_items(self):
+        """Test equality of registries with same items."""
+        registry1 = Registry()
+        registry1.register("key1", "value1")
+
+        registry2 = Registry()
+        registry2.register("key1", "value1")
+
+        # By default, dataclass instances compare by value
+        # But registries with same items might not be equal due to
+        # different object identities
+        assert list(registry1.items()) == list(registry2.items())
+
+    def test_registry_identity_unchanged_after_modification(self):
+        """Test that registry identity remains same after modifications."""
+        registry = Registry()
+        id1 = id(registry)
+
+        registry.register("key", "value")
+        id2 = id(registry)
+
+        assert id1 == id2
+
+    def test_registry_internal_dict_identity(self):
+        """Test that internal dict remains the same object."""
+        registry = Registry()
+
+        dict1 = registry.registry
+        registry.register("key", "value")
+        dict2 = registry.registry
+
+        # Same internal dict object
+        assert dict1 is dict2
+
+
+class TestRegistryIterationBehavior:
+    """Tests for iteration and generator behavior."""
+
+    def test_items_generator_not_materialized(self):
+        """Test that items returns a generator, not a list."""
+        registry = Registry()
+        registry.register("key1", "value1")
+
+        gen = registry.items()
+
+        # Should be a generator
+        from collections.abc import Generator
+
+        assert isinstance(gen, Generator)
+
+    def test_items_generator_consumed_once(self):
+        """Test that generator must be consumed."""
+        registry = Registry()
+        registry.register("key1", "value1")
+        registry.register("key2", "value2")
+
+        gen = registry.items()
+
+        # First iteration
+        list1 = list(gen)
+        assert len(list1) == 2
+
+        # Generator is exhausted
+        list2 = list(gen)
+        assert len(list2) == 0
+
+    def test_fresh_generator_each_call(self):
+        """Test that each items() call returns a fresh generator."""
+        registry = Registry()
+        registry.register("key1", "value1")
+        registry.register("key2", "value2")
+
+        list1 = list(registry.items())
+        list2 = list(registry.items())
+
+        assert len(list1) == 2
+        assert len(list2) == 2
+
+    def test_items_yields_correct_types(self):
+        """Test that items yields tuples of (str, object)."""
+        registry = Registry()
+        registry.register("key", "value")
+
+        for name, obj in registry.items():
+            assert isinstance(name, str)
+            assert obj == "value"
+
+
+class TestRegistrySequentialOperations:
+    """Tests for sequential and dependent operations."""
+
+    def test_register_get_unregister_cycle(self):
+        """Test register -> get -> unregister cycle."""
+        registry = Registry()
+
+        # Register
+        registry.register("key", "value")
+        assert registry.get("key") == "value"
+
+        # Unregister
+        registry.unregister("key")
+        assert registry.get("key") is None
+
+        # Re-register
+        registry.register("key", "new_value")
+        assert registry.get("key") == "new_value"
+
+    def test_register_overwrite_sequence(self):
+        """Test multiple overwrites in sequence."""
+        registry = Registry()
+
+        values = ["v1", "v2", "v3", "v4", "v5"]
+
+        for value in values:
+            registry.register("key", value)
+            assert registry.get("key") == value
+
+    def test_clear_then_full_workflow(self):
+        """Test clear followed by full workflow."""
+        registry = Registry()
+
+        # Initial registration
+        registry.register("key1", "value1")
+        registry.register("key2", "value2")
+
+        # Clear everything
+        registry.clear()
+
+        # Full new workflow
+        registry.register("key3", "value3")
+        registry.register("key4", "value4")
+
+        assert registry.get("key1") is None
+        assert registry.get("key2") is None
+        assert registry.get("key3") == "value3"
+        assert registry.get("key4") == "value4"
+
+    def test_alternating_register_unregister(self):
+        """Test alternating register and unregister operations."""
+        registry = Registry()
+
+        registry.register("key1", "value1")
+        assert registry.get("key1") == "value1"
+
+        registry.register("key2", "value2")
+        assert registry.get("key2") == "value2"
+
+        registry.unregister("key1")
+        assert registry.get("key1") is None
+        assert registry.get("key2") == "value2"
+
+        registry.unregister("key2")
+        assert registry.get("key2") is None
+
+
+class TestRegistryKeyHandling:
+    """Tests for special key handling scenarios."""
+
+    def test_unicode_keys(self):
+        """Test registering with Unicode keys."""
+        registry = Registry()
+
+        registry.register("日本語", "Japanese")
+        registry.register("中文", "Chinese")
+        registry.register("한글", "Korean")
+
+        assert registry.get("日本語") == "Japanese"
+        assert registry.get("中文") == "Chinese"
+        assert registry.get("한글") == "Korean"
+
+    def test_very_long_keys(self):
+        """Test keys with very long strings."""
+        registry = Registry()
+        long_key = "k" * 10000
+
+        registry.register(long_key, "value")
+
+        assert registry.get(long_key) == "value"
+
+    def test_numeric_string_keys(self):
+        """Test numeric strings as keys (not integers)."""
+        registry = Registry()
+
+        registry.register("123", "numeric string key")
+        registry.register("456", "another numeric key")
+
+        assert registry.get("123") == "numeric string key"
+        assert registry.get("456") == "another numeric key"
+
+    def test_key_with_special_characters(self):
+        """Test keys with various special characters."""
+        registry = Registry()
+
+        special_keys = [
+            "key!@#$%^&*()",
+            "key[with]brackets",
+            "key{with}braces",
+            "key<with>angles",
+            "key|with|pipes",
+            "key:with:colons",
+            "key;with;semicolons",
+        ]
+
+        for key in special_keys:
+            registry.register(key, f"value_for_{key}")
+
+        for key in special_keys:
+            assert registry.get(key) == f"value_for_{key}"
+
+
+class TestRegistryDataPersistence:
+    """Tests for data persistence and integrity."""
+
+    def test_registered_value_not_modified(self):
+        """Test that registered values are not modified by registry."""
+        registry = Registry()
+        original = {"a": 1, "b": 2}
+
+        registry.register("dict", original)
+
+        retrieved = registry.get("dict")
+        assert retrieved == original
+        assert retrieved is original
+
+    def test_multiple_references_to_same_object(self):
+        """Test registering same object with different names."""
+        registry = Registry()
+        obj = object()
+
+        registry.register("name1", obj)
+        registry.register("name2", obj)
+
+        assert registry.get("name1") is registry.get("name2")
+        assert registry.get("name1") is obj
+
+    def test_value_identity_preserved(self):
+        """Test that value identity is preserved through registry."""
+        registry = Registry()
+
+        class TrackedObject:
+            pass
+
+        obj = TrackedObject()
+        registry.register("tracked", obj)
+
+        retrieved = registry.get("tracked")
+
+        assert retrieved is obj
+        assert id(retrieved) == id(obj)
