@@ -63,53 +63,11 @@ class TestShipToInstantiation:
         assert ship_to.state == ""
 
     def test_id_auto_generation(self, valid_ship_to_data):
-        """Test that ID is auto-generated as UUID when not provided."""
+        """Test that ID is auto-generated as UUID."""
         ship_to = ShipTo(**valid_ship_to_data)
 
         assert ship_to.id
-        assert isinstance(ship_to.id, str)
-        # Verify it's a valid UUID string
-        uuid.UUID(ship_to.id)
-
-    def test_id_custom_value(self, valid_ship_to_data):
-        """Test that custom ID is preserved."""
-        custom_id = "custom-id-12345"
-        ship_to = ShipTo(id=custom_id, **valid_ship_to_data)
-
-        assert ship_to.id == custom_id
-
-
-class TestShipToIDValidation:
-    """Tests for ID field validation."""
-
-    @pytest.fixture
-    def minimal_ship_to_data(self):
-        """Provide minimal valid ShipTo data for use in ID tests."""
-        return {
-            "remote_customer_id": "CUST123",
-            "contact_name": "John Doe",
-            "email": "john@example.com",
-            "phone": "555-0123",
-            "street1": "123 Main St",
-            "city": "Chicago",
-            "postal_code": "60601",
-            "country_code": "US",
-        }
-
-    def test_id_empty_string_raises_error(self, minimal_ship_to_data):
-        """Test that empty ID raises ValueError."""
-        with pytest.raises(ValueError, match="ID must be a non-empty string"):
-            ShipTo(id="", **minimal_ship_to_data)
-
-    def test_id_whitespace_only_raises_error(self, minimal_ship_to_data):
-        """Test that whitespace-only ID raises ValueError."""
-        with pytest.raises(ValueError, match="ID must be a non-empty string"):
-            ShipTo(id="   ", **minimal_ship_to_data)
-
-    def test_id_gets_stripped(self, minimal_ship_to_data):
-        """Test that whitespace around ID is stripped."""
-        ship_to = ShipTo(id="  valid-id  ", **minimal_ship_to_data)
-        assert ship_to.id == "valid-id"
+        assert isinstance(ship_to.id, uuid.UUID)
 
 
 class TestShipToRemoteCustomerIDValidation:
@@ -595,7 +553,6 @@ class TestShipToEquality:
     def ship_to_data(self):
         """Provide standard ShipTo data."""
         return {
-            "id": "fixed-id",
             "remote_customer_id": "CUST123",
             "contact_name": "John Doe",
             "email": "john@example.com",
@@ -606,26 +563,22 @@ class TestShipToEquality:
             "country_code": "US",
         }
 
-    def test_equal_ship_to_instances(self, ship_to_data):
-        """Test that ShipTo instances with same data are equal."""
+    def test_same_instance_equals_itself(self, ship_to_data):
+        """Test that a ship_to equals itself."""
+        ship_to = ShipTo(**ship_to_data)
+        assert ship_to == ship_to
+
+    def test_different_instances_same_data_are_not_equal(self, ship_to_data):
+        """Test that two instances with same data are not equal (different auto-generated IDs)."""
         ship_to1 = ShipTo(**ship_to_data)
         ship_to2 = ShipTo(**ship_to_data)
-
-        assert ship_to1 == ship_to2
-
-    def test_different_ids_not_equal(self, ship_to_data):
-        """Test that ShipTo instances with different IDs are not equal."""
-        ship_to1 = ShipTo(id="id1", **{k: v for k, v in ship_to_data.items() if k != "id"})
-        ship_to2 = ShipTo(id="id2", **{k: v for k, v in ship_to_data.items() if k != "id"})
-
+        # Different instances should not be equal due to different auto-generated IDs
         assert ship_to1 != ship_to2
 
-    def test_different_contact_names_not_equal(self, ship_to_data):
-        """Test that ShipTo instances with different contact names are not equal."""
-        data1 = {**ship_to_data, "contact_name": "John Doe"}
-        data2 = {**ship_to_data, "contact_name": "Jane Doe"}
-
-        ship_to1 = ShipTo(**data1)
-        ship_to2 = ShipTo(**data2)
-
+    def test_different_auto_generated_ids_not_equal(self, ship_to_data):
+        """Test that instances with different auto-generated IDs are not equal."""
+        ship_to1 = ShipTo(**ship_to_data)
+        ship_to2 = ShipTo(**ship_to_data)
+        # Even with same data, different auto-generated IDs means not equal
+        assert ship_to1.id != ship_to2.id
         assert ship_to1 != ship_to2

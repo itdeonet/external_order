@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 class ShipTo:
     """A shipping address for an order."""
 
-    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    id: uuid.UUID = field(default_factory=uuid.uuid4, init=False)
     remote_customer_id: str
     company_name: str = ""
     contact_name: str
@@ -23,10 +23,6 @@ class ShipTo:
 
     def __post_init__(self) -> None:
         """Post-initialization processing."""
-        if not (isinstance(self.id, str) and self.id.strip()):
-            raise ValueError("ID must be a non-empty string")
-        object.__setattr__(self, "id", self.id.strip())
-
         if not (isinstance(self.remote_customer_id, str) and self.remote_customer_id.strip()):
             raise ValueError("Remote customer ID must be a non-empty string")
         object.__setattr__(self, "remote_customer_id", self.remote_customer_id.strip())
