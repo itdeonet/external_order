@@ -43,12 +43,12 @@ class TestOdooSaleServiceInstantiation:
     def test_instantiation_raises_on_invalid_auth(self, mock_client):
         """Test that ValueError is raised with invalid auth."""
         with pytest.raises(ValueError, match="authentication information is missing or invalid"):
-            OdooSaleService(auth=None, engine=mock_client)
+            OdooSaleService(auth=None, engine=mock_client)  # type: ignore
 
     def test_instantiation_raises_on_invalid_engine(self, mock_auth):
         """Test that ValueError is raised with invalid engine."""
         with pytest.raises(ValueError, match="engine is missing or invalid"):
-            OdooSaleService(auth=mock_auth, engine=None)
+            OdooSaleService(auth=mock_auth, engine=None)  # type: ignore
 
     def test_instantiation_raises_on_missing_base_url(self, mock_auth):
         """Test that ValueError is raised when base_url is not set."""
@@ -229,11 +229,11 @@ class TestCreateSale:
             return_value=[{"product_id": 1, "quantity": 10}],
         )
         mocker.patch.object(OdooSaleService, "_get_carrier_id", return_value=5)
-        mocker.patch.object(OdooSaleService, "_call", return_value="not_an_int")
+        mocker.patch.object(OdooSaleService, "_call", return_value=100)
 
         result = service.create_sale(order)
 
-        assert result == "not_an_int"
+        assert result == 100
 
     def test_create_sale_returns_existing_sale_id(self, service, mocker, order):
         """Test that create_sale returns existing sale ID if already created."""
@@ -250,7 +250,7 @@ class TestCreateSale:
         mocker.patch.object(OdooSaleService, "_create_contact", return_value=10)
         mocker.patch.object(OdooSaleService, "_convert_order_lines", return_value=[])
         mocker.patch.object(OdooSaleService, "_get_carrier_id", return_value=5)
-        mocker.patch.object(OdooSaleService, "_call", return_value=100)
+        mocker.patch.object(OdooSaleService, "_call", return_value="100")
 
         with pytest.raises(SaleError, match="Failed to create sale"):
             service.create_sale(order)
@@ -958,8 +958,8 @@ class TestGetShippingInfo:
         assert result[0]["carrier_tracking_ref"] == "TRACK123"
         assert result[0]["weight"] == 5.5
 
-    def test_get_shipping_info_returns_empty_list_when_not_found(self, service, mocker, order):
-        """Test that empty list is returned when no shipping info found."""
+    def test_get_shipping_info_raises_error_when_not_found(self, service, mocker, order):
+        """Test that SaleError is raised when no shipping info found."""
         mocker.patch.object(
             OdooSaleService,
             "_get_sale_data",
@@ -967,9 +967,8 @@ class TestGetShippingInfo:
         )
         mocker.patch.object(OdooSaleService, "_call", return_value=[])
 
-        result = service.get_shipping_info(order)
-
-        assert result == []
+        with pytest.raises(SaleError, match="No shipping information found"):
+            service.get_shipping_info(order)
 
 
 class TestGetSerialsByLineItem:
@@ -1024,27 +1023,25 @@ class TestGetSerialsByLineItem:
 
         assert result["LINE001"] == ["SN001", "SN002"]
 
-    def test_get_serials_by_line_item_returns_empty_dict_when_not_found(
-        self, service, mocker, order
-    ):
+    def test_get_serials_by_line_item_returns_dict_when_not_found(self, service, mocker, order):
         """Test that dict with empty lists is returned when no serials found."""
         mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={"id": 100})
         mocker.patch.object(OdooSaleService, "_call", return_value=[])
 
         result = service.get_serials_by_line_item(order)
 
+        assert len(result) == 1
         assert result["LINE001"] == []
 
-    def test_get_serials_by_line_item_returns_empty_dict_on_invalid_result(
-        self, service, mocker, order
-    ):
+    def test_get_serials_by_line_item_returns_dict_on_invalid_result(self, service, mocker, order):
         """Test that empty dict is returned on invalid result."""
         mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={"id": 100})
         mocker.patch.object(OdooSaleService, "_call", return_value="invalid")
 
         result = service.get_serials_by_line_item(order)
 
-        assert result == {}
+        assert len(result) == 1
+        assert result["LINE001"] == []
 
 
 class TestCall:

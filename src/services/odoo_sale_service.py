@@ -1,5 +1,6 @@
 """Odoo service implementation."""
 
+import json
 from collections import defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -48,18 +49,17 @@ class OdooSaleService:
             ],
             query_options={"limit": 1},
         )
-        if result and isinstance(result, list) and isinstance(result[0], dict):
-            return result[0]
-        return {}
+
+        if not (result and isinstance(result, list) and isinstance(result[0], dict)):
+            return {}
+        return result[0]
 
     def is_sale_created(self, order: Order) -> bool:
         """Check if a sale/quote has been created for the given order."""
-        logger.info(
-            "Check if order %s from provider %s has been created in Odoo",
-            order.remote_order_id,
-            order.order_provider,
-        )
-        return bool(self._get_sale_data(order).get("id", 0))
+        logger.info("Is order %s created?", order.remote_order_id)
+        result = bool(self._get_sale_data(order).get("id", 0))
+        logger.info("Sale for order %s created: %s", order.remote_order_id, result)
+        return result
 
     def _get_country_id(self, country_code: str) -> int:
         """Resolve ISO country code to res.country id."""
@@ -67,14 +67,16 @@ class OdooSaleService:
         result = self._call(
             model="res.country",
             method="search_read",
-            query_data=[
-                [["code", "=", country_code.strip().upper()[:2]]],
-            ],
+            query_data=[[["code", "=", country_code.strip().upper()[:2]]]],
             query_options={"fields": ["id"], "limit": 1},
         )
-        if result and isinstance(result, list) and "id" in result[0]:
-            return int(result[0]["id"])
-        raise SaleError(f"Country code '{country_code}' not found in Odoo")
+
+        if not (result and isinstance(result, list) and "id" in result[0]):
+            raise SaleError(f"Country code '{country_code}' not found")
+
+        country_id = int(result[0]["id"])
+        logger.info("Found country ID %d for country code %s", country_id, country_code)
+        return country_id
 
     def _get_state_id(self, country_id: int, state: str) -> int:
         """Resolve a region/state to res.country.state id."""
@@ -88,12 +90,18 @@ class OdooSaleService:
             query_data=[[["country_id", "=", country_id], ["name", "ilike", state]]],
             query_options={"fields": ["id"], "limit": 1},
         )
-        if result and isinstance(result, list) and "id" in result[0]:
-            return int(result[0]["id"])
-        return 0
+
+        if not (result and isinstance(result, list) and "id" in result[0]):
+            logger.warning("State '%s' not found for country_id %d, returning 0", state, country_id)
+            return 0
+
+        state_id = int(result[0]["id"])
+        logger.info("Found state ID %d for country_id=%s region=%s", state_id, country_id, state)
+        return state_id
 
     def _get_contact_data_from_order(self, order: Order) -> dict[str, Any]:
         """Build contact data from the order's ship_to information."""
+        logger.info("Build contact data from order: %s", order.remote_order_id)
         ship_to = order.ship_to
         country_id = self._get_country_id(ship_to.country_code)
         state_id = (
@@ -134,32 +142,19 @@ class OdooSaleService:
             query_data=[[[key, value] for key, value in contact_data.items()]],
             query_options={"fields": ["id"], "limit": 1},
         )
+
         if result and isinstance(result, list) and "id" in result[0]:
             contact_id = int(result[0]["id"])
-            logger.info(
-                "Contact already exists for order %s from provider %s with ID %s",
-                order.remote_order_id,
-                order.order_provider,
-                contact_id,
-            )
+            logger.info("Contact already exists with ID %d", contact_id)
             return contact_id
 
         # create a new contact if it doesn't exist
-        contact_id = self._call(
-            model="res.partner",
-            method="create",
-            query_data=[contact_data],
-        )
-        if isinstance(contact_id, int):
-            logger.info(
-                "Created contact with ID %s for order %s from provider %s",
-                contact_id,
-                order.remote_order_id,
-                order.order_provider,
-            )
-            return contact_id
+        contact_id = self._call(model="res.partner", method="create", query_data=[contact_data])
+        if not (contact_id and isinstance(contact_id, int)):
+            raise SaleError(f"Failed to create contact for order {order.remote_order_id}")
 
-        raise SaleError(f"Failed to create contact for order {order.remote_order_id} in Odoo")
+        logger.info("Created contact with ID %d", contact_id)
+        return contact_id
 
     def _convert_order_lines(self, order: Order) -> list[dict[str, Any]]:
         """Convert the order lines to the format required by Odoo."""
@@ -182,7 +177,7 @@ class OdooSaleService:
                 and "id" in result[0]
                 and "name" in result[0]
             ):
-                raise SaleError(f"Product {line_item.product_code} not found in Odoo")
+                raise SaleError(f"Product {line_item.product_code} not found")
 
             order_lines.append(
                 {
@@ -191,6 +186,8 @@ class OdooSaleService:
                     "product_uom_qty": line_item.quantity,
                 }
             )
+
+        logger.info("Converted order lines: %s", json.dumps(order_lines))
         return order_lines
 
     def _get_carrier_id(self, order: Order) -> int:
@@ -212,22 +209,24 @@ class OdooSaleService:
             query_options={"fields": ["id", "name"], "limit": 1},
         )
 
-        if (
-            isinstance(result, list)
-            and result
+        if not (
+            result
+            and isinstance(result, list)
             and isinstance(result[0], dict)
             and "id" in result[0]
         ):
-            return result[0]["id"]
-        raise SaleError(f"Carrier '{carrier_name}' not found in Odoo")
+            raise SaleError(f"Carrier '{carrier_name}' not found in Odoo")
+
+        carrier_id = int(result[0]["id"])
+        logger.info("Found carrier ID %d for name: %s", carrier_id, carrier_name)
+        return carrier_id
 
     def create_sale(self, order: Order) -> int:
         """Create a sale for the given order and return its ID."""
         if sale_data := self._get_sale_data(order):
             logger.info(
-                "Sale already exists for order %s from provider %s with ID %s",
+                "Sale already exists for order %s from with ID %s",
                 order.remote_order_id,
-                order.order_provider,
                 sale_data["id"],
             )
             return sale_data["id"]
@@ -255,14 +254,15 @@ class OdooSaleService:
         )
 
         if not isinstance(sale_id, int):
-            return sale_id
+            raise SaleError(f"Failed to create sale for order {order.remote_order_id}")
 
-        raise SaleError(f"Failed to create sale for order {order.remote_order_id} in Odoo")
+        logger.info("Created sale with ID %d for order %s", sale_id, order.remote_order_id)
+        return sale_id
 
     def confirm_sale(self, order: Order) -> None:
         """Confirm the sale for the given order."""
         sale_data = self._get_sale_data(order)
-        if not sale_data or "id" not in sale_data or sale_data["id"] == 0:
+        if not (sale_data and "id" in sale_data and sale_data["id"] != 0):
             raise SaleError("Cannot confirm sale that does not exist in Odoo")
 
         sale_id = sale_data["id"]
@@ -274,7 +274,9 @@ class OdooSaleService:
         )
 
         if not bool(result):
-            raise SaleError(f"Failed to confirm sale id {sale_id} in Odoo")
+            raise SaleError(f"Failed to confirm sale id {sale_id}")
+
+        logger.info("Sale with id %d confirmed successfully", sale_id)
 
     def has_expected_order_lines(self, order: Order) -> bool:
         """Verify that the sale has the same order line quantities as the given order."""
@@ -301,22 +303,22 @@ class OdooSaleService:
             (li["product_id"], li["product_uom_qty"]) for li in self._convert_order_lines(order)
         }
 
-        return odoo_lines == order_lines or order_lines.issubset(odoo_lines)
+        result = odoo_lines == order_lines or order_lines.issubset(odoo_lines)
+        logger.info(
+            "Order lines for order %s match expected lines: %s", order.remote_order_id, result
+        )
+        return result
 
     def update_contact(self, order: Order) -> None:
         """Update the contact information for the given order."""
-        logger.info(
-            "Update contact information for order %s from provider %s in Odoo",
-            order.remote_order_id,
-            order.order_provider,
-        )
+        logger.info("Update contact information for order %s", order.remote_order_id)
         sale_data = self._get_sale_data(order)
-        if not sale_data or "id" not in sale_data or sale_data["id"] == 0:
-            raise SaleError("Cannot update contact for sale that does not exist in Odoo")
+        if not (sale_data and "id" in sale_data and sale_data["id"] != 0):
+            raise SaleError("Cannot update contact for sale that does not exist")
 
         contact_id: int = sale_data.get("partner_shipping_id", [0, ""])[0]
         if not contact_id:
-            raise SaleError("Sale does not have a shipping contact to update in Odoo")
+            raise SaleError("Sale does not have a shipping contact to update")
 
         contact_data = self._get_contact_data_from_order(order)
         result = self._call(
@@ -326,8 +328,14 @@ class OdooSaleService:
         )
         if not bool(result):
             raise SaleError(
-                f"Failed to update contact id {contact_id} for order {order.remote_order_id} in Odoo"
+                f"Failed to update contact id {contact_id} for order {order.remote_order_id}"
             )
+
+        logger.info(
+            "Contact with ID %d updated successfully for order %s",
+            contact_id,
+            order.remote_order_id,
+        )
 
     def get_completed_sales(self, order_provider: str) -> list[tuple[int, str]]:
         """Get a list of completed sales for the given order provider."""
@@ -345,11 +353,24 @@ class OdooSaleService:
             ],
             query_options={"fields": ["id", "x_remote_id"]},
         )
-        if isinstance(result, list) and all(
-            isinstance(item, dict) and "id" in item and "x_remote_id" in item for item in result
+
+        if not (
+            result
+            and isinstance(result, list)
+            and all(
+                isinstance(item, dict) and "id" in item and "x_remote_id" in item for item in result
+            )
         ):
-            return [(item["id"], item["x_remote_id"]) for item in result]
-        return []
+            logger.info("No completed sales found for order provider %s", order_provider)
+            return []
+
+        logger.info(
+            "Found %d completed sales for order provider %s: %s",
+            len(result),
+            order_provider,
+            json.dumps(result),
+        )
+        return [(item["id"], item["x_remote_id"]) for item in result]
 
     def get_shipping_info(self, order: Order) -> list[dict[str, Any]]:
         """Get the shipping information for the given order."""
@@ -377,26 +398,37 @@ class OdooSaleService:
             },
         )
 
-        if isinstance(result, list) and all(
-            isinstance(item, dict)
-            and "carrier_id" in item
-            and "carrier_tracking_ref" in item
-            and "carrier_tracking_url" in item
-            and "partner_id" in item
-            and "weight" in item
-            for item in result
-        ):
-            return [
-                {
-                    "carrier": item["carrier_id"][1],
-                    "carrier_tracking_ref": item["carrier_tracking_ref"],
-                    "carrier_tracking_url": item["carrier_tracking_url"],
-                    "ship_to_name": item["partner_id"][1],
-                    "weight": item["weight"],
-                }
+        if not (
+            result
+            and isinstance(result, list)
+            and all(
+                isinstance(item, dict)
+                and "carrier_id" in item
+                and "carrier_tracking_ref" in item
+                and "carrier_tracking_url" in item
+                and "partner_id" in item
+                and "weight" in item
                 for item in result
-            ]
-        return []
+            )
+        ):
+            raise SaleError("No shipping information found", order.remote_order_id)
+
+        shipping_info = [
+            {
+                "carrier": item["carrier_id"][1],
+                "carrier_tracking_ref": item["carrier_tracking_ref"],
+                "carrier_tracking_url": item["carrier_tracking_url"],
+                "ship_to_name": item["partner_id"][1],
+                "weight": item["weight"],
+            }
+            for item in result
+        ]
+        logger.info(
+            "Found shipping information for order %s: %s",
+            order.remote_order_id,
+            json.dumps(shipping_info),
+        )
+        return shipping_info
 
     def get_serials_by_line_item(self, order: Order) -> dict[str, list[str]]:
         """Get the serial numbers for the given order by line item."""
@@ -414,13 +446,14 @@ class OdooSaleService:
         )
 
         if not (
-            isinstance(result, list)
+            result
+            and isinstance(result, list)
             and all(
                 isinstance(item, dict) and "product_id" in item and "serial" in item
                 for item in result
             )
         ):
-            return {}
+            return {li.remote_line_id: [] for li in order.line_items}
 
         serials_by_product = defaultdict(list)
         for item in result:
@@ -438,6 +471,11 @@ class OdooSaleService:
                 li.quantity :
             ]
 
+        logger.info(
+            "Found serial numbers for order %s: %s",
+            order.remote_order_id,
+            json.dumps(serials_by_line_item),
+        )
         return serials_by_line_item
 
     def _call(
@@ -466,9 +504,12 @@ class OdooSaleService:
             },
             "id": next(self._id_counter),
         }
+
+        logger.debug("Making JSON_RPC call with payload: %s", json.dumps(payload))
         response = self.engine.post("/jsonrpc", json=payload)
         response.raise_for_status()
         data = response.json()
+
         if error := data.get("error"):
             message = f"Odoo JSON-RPC error: {error.get('message')}"
             logger.warning(
