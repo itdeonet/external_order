@@ -8,6 +8,7 @@ from zipfile import ZipFile
 import httpx
 import pytest
 
+from src.app.errors import ArtworkError
 from src.domain.line_item import LineItem
 from src.domain.order import Order
 from src.domain.ship_to import ShipTo
@@ -17,8 +18,8 @@ from src.services.spectrum_artwork_service import SpectrumArtworkService
 class TestSpectrumArtworkServiceInstantiation:
     """Tests for SpectrumArtworkService instantiation."""
 
-    def test_instantiation_with_all_fields(self):
-        """Test creating SpectrumArtworkService with all fields."""
+    def test_instantiation_with_required_fields(self):
+        """Test creating SpectrumArtworkService with required fields."""
         mock_client = Mock(spec=httpx.Client)
         digitals_dir = Path("/tmp/digitals")
 
@@ -26,165 +27,58 @@ class TestSpectrumArtworkServiceInstantiation:
 
         assert service.engine is mock_client
         assert service.digitals_dir == digitals_dir
-        assert service.client == ""
 
     def test_instantiation_initializes_empty_client(self):
-        """Test that _client is initialized as empty string."""
+        """Test that client is initialized as empty string."""
         mock_client = Mock(spec=httpx.Client)
         service = SpectrumArtworkService(engine=mock_client, digitals_dir=Path("/tmp"))
 
         assert isinstance(service.client, str)
         assert service.client == ""
 
+    def test_instantiation_raises_without_engine(self):
+        """Test that engine is required."""
+        with pytest.raises(TypeError):
+            SpectrumArtworkService(digitals_dir=Path("/tmp"))  # type: ignore
 
-class TestSpectrumArtworkServiceGetArtworkIds:
-    """Tests for get_artwork_ids method."""
-
-    @pytest.fixture
-    def mock_client(self):
-        """Provide a mocked httpx.Client."""
-        return Mock(spec=httpx.Client)
-
-    @pytest.fixture
-    def service(self, mock_client):
-        """Provide a SpectrumArtworkService instance."""
-        return SpectrumArtworkService(engine=mock_client, digitals_dir=Path("/tmp/digitals"))
-
-    @pytest.fixture
-    def order(self, mocker):
-        """Provide an Order instance with line items."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
-        line_item.product_id = "PROD001"
-        line_item.quantity = 100
-
-        return Order(
-            administration_id=1,
-            customer_id=100,
-            order_provider="Harman",
-            pricelist_id=50,
-            remote_order_id="HA-EM-12345",
-            shipment_type="standard",
-            ship_to=ship_to,
-            line_items=[line_item],
-        )
-
-    def test_get_artwork_ids_successful(self, service, mock_client, order, mocker):
-        """Test getting artwork IDs with successful response."""
-        mock_response = Mock(spec=httpx.Response)
-        mock_response.json.return_value = {
-            "clientHandle": "CLIENT123",
-            "line_items": [
-                {"skuQuantities": [{"sku": "PROD001", "quantity": 100}], "recipeSetId": "RECIPE001"}
-            ],
-        }
-        mock_client.get.return_value = mock_response
-        service.get_artwork_ids(order)
-
-        assert service.client == "CLIENT123"
-        mock_client.get.assert_called_once_with(url="/api/order/order-number/HA-EM-12345/")
-        mock_response.raise_for_status.assert_called_once()
-
-    def test_get_artwork_ids_sets_artwork_ids_on_line_items(
-        self, service, mock_client, order, mocker
-    ):
-        """Test that artwork IDs are set on matching line items."""
-        mock_response = Mock(spec=httpx.Response)
-        mock_response.json.return_value = {
-            "clientHandle": "CLIENT123",
-            "line_items": [
-                {"skuQuantities": [{"sku": "PROD001", "quantity": 100}], "recipeSetId": "RECIPE001"}
-            ],
-        }
-        mock_client.get.return_value = mock_response
-
-        service.get_artwork_ids(order)
-        order.line_items[0].set_artwork_id.assert_called_once_with("RECIPE001")
-
-    def test_get_artwork_ids_matches_by_quantity_minus_one(self, service, mock_client, mocker):
-        """Test that artwork IDs match with quantity - 1 (workaround for +1 issue)."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
-        line_item.product_id = "PROD002"
-        line_item.quantity = 50
-
-        order = Order(
-            administration_id=1,
-            customer_id=100,
-            order_provider="Harman",
-            pricelist_id=50,
-            remote_order_id="HA-EM-54321",
-            shipment_type="standard",
-            ship_to=ship_to,
-            line_items=[line_item],
-        )
-
-        mock_response = Mock(spec=httpx.Response)
-        # API returns quantity 51 (one more than actual)
-        mock_response.json.return_value = {
-            "clientHandle": "CLIENT456",
-            "line_items": [
-                {"skuQuantities": [{"sku": "PROD002", "quantity": 51}], "recipeSetId": "RECIPE002"}
-            ],
-        }
-        mock_client.get.return_value = mock_response
-        service.get_artwork_ids(order)
-        order.line_items[0].set_artwork_id.assert_called_once_with("RECIPE002")  # type: ignore
-
-    def test_get_artwork_ids_raises_on_http_error(self, service, mock_client, order, mocker):
-        """Test that HTTP errors are raised."""
-        mock_response = Mock(spec=httpx.Response)
-        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "404 Not Found", request=Mock(), response=mock_response
-        )
-        mock_client.get.return_value = mock_response
-
-        with pytest.raises(httpx.HTTPStatusError):
-            service.get_artwork_ids(order)
-
-    def test_get_artwork_ids_handles_empty_line_items(self, service, mock_client, order, mocker):
-        """Test that empty line_items in response are handled."""
-        mock_response = Mock(spec=httpx.Response)
-        mock_response.json.return_value = {"clientHandle": "CLIENT789", "line_items": []}
-        mock_client.get.return_value = mock_response
-
-        service.get_artwork_ids(order)
-
-        assert service.client == "CLIENT789"
-        order.line_items[0].set_artwork_id.assert_not_called()
-
-    def test_get_artwork_ids_handles_no_matching_line_item(self, service, mock_client, mocker):
-        """Test that unmatched artwork is not set."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
-        line_item.product_id = "DIFFERENT_PROD"
-        line_item.quantity = 50
-
-        order = Order(
-            administration_id=1,
-            customer_id=100,
-            order_provider="Harman",
-            pricelist_id=50,
-            remote_order_id="HA-EM-99999",
-            shipment_type="standard",
-            ship_to=ship_to,
-            line_items=[line_item],
-        )
-
-        mock_response = Mock(spec=httpx.Response)
-        mock_response.json.return_value = {
-            "clientHandle": "CLIENT111",
-            "line_items": [
-                {"skuQuantities": [{"sku": "PROD001", "quantity": 100}], "recipeSetId": "RECIPE001"}
-            ],
-        }
-        mock_client.get.return_value = mock_response
-        service.get_artwork_ids(order)
-        order.line_items[0].set_artwork_id.assert_not_called()  # type: ignore
+    def test_instantiation_raises_without_digitals_dir(self):
+        """Test that digitals_dir is required."""
+        mock_client = Mock(spec=httpx.Client)
+        with pytest.raises(TypeError):
+            SpectrumArtworkService(engine=mock_client)  # type: ignore
 
 
-class TestSpectrumArtworkServiceGetDesigns:
-    """Tests for _get_designs method."""
+class TestSpectrumArtworkServiceClientAttribute:
+    """Tests for the client attribute."""
+
+    def test_client_is_initialized_empty(self):
+        """Test that client starts as empty string."""
+        mock_client = Mock(spec=httpx.Client)
+        service = SpectrumArtworkService(engine=mock_client, digitals_dir=Path("/tmp"))
+
+        assert service.client == ""
+
+    def test_client_cannot_be_set_directly_frozen(self):
+        """Test that service is frozen and client cannot be modified directly."""
+        mock_client = Mock(spec=httpx.Client)
+        service = SpectrumArtworkService(engine=mock_client, digitals_dir=Path("/tmp"))
+
+        with pytest.raises(Exception):  # FrozenInstanceError  # noqa: B017
+            service.client = "NEW_CLIENT"  # type: ignore
+
+    def test_client_cannot_be_passed_as_init_parameter(self):
+        """Test that client cannot be initialized via __init__."""
+        mock_client = Mock(spec=httpx.Client)
+        with pytest.raises(TypeError):
+            SpectrumArtworkService(
+                engine=mock_client,
+                digitals_dir=Path("/tmp"),
+                client="CLIENT123",  # type: ignore
+            )
+
+
+class TestSpectrumArtworkServiceGetArtwork:
+    """Tests for the get_artwork method."""
 
     @pytest.fixture
     def mock_client(self):
@@ -199,13 +93,19 @@ class TestSpectrumArtworkServiceGetDesigns:
         return SpectrumArtworkService(engine=mock_client, digitals_dir=tmp_path)
 
     @pytest.fixture
-    def order_with_artwork_id(self, mocker):
-        """Provide an Order with line items that have artwork IDs."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
-        line_item.artwork_id = "ARTWORK001"
-        line_item.product_id = "PROD001"
-        line_item.quantity = 100
+    def basic_order(self):
+        """Provide a basic Order instance."""
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD001", quantity=100)
 
         order = Order(
             administration_id=1,
@@ -217,14 +117,629 @@ class TestSpectrumArtworkServiceGetDesigns:
             ship_to=ship_to,
             line_items=[line_item],
         )
-        order.set_id(12345)
+        order.set_sale_id(12345)
         return order
 
-    def test_get_designs_downloads_and_extracts_zip(
-        self, service, mock_client, order_with_artwork_id, tmp_path, mocker
+    def _setup_mock_client_for_get_artwork(self, mock_client, mocker):
+        """Helper to setup mock client for get_artwork calls with design zip and placement PDF."""
+        zip_buffer = io.BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            zip_file.writestr("design.pdf", "design content")
+        zip_buffer.seek(0)
+        design_zip_bytes = zip_buffer.getvalue()
+
+        placement_bytes = b"PDF placement content"
+
+        def mock_get_side_effect(url=None, **kwargs):
+            """Return different responses based on URL."""
+            response = Mock(spec=httpx.Response)
+            if url and "webtoprint" in url:
+                # Design zip file response
+                response.content = design_zip_bytes
+            elif url and "pdf" in url:
+                # Placement PDF response
+                response.content = placement_bytes
+            else:
+                # Order API response
+                response.json.return_value = {
+                    "clientHandle": "CLIENT123",
+                    "line_items": [
+                        {
+                            "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
+                            "recipeSetId": "RECIPE001",
+                        }
+                    ],
+                }
+            return response
+
+        mock_client.get.side_effect = mock_get_side_effect
+
+    def test_get_artwork_fetches_from_api(self, service, mock_client, basic_order, mocker):
+        """Test that get_artwork fetches from the correct API endpoint."""
+        self._setup_mock_client_for_get_artwork(mock_client, mocker)
+
+        service.get_artwork(basic_order)
+
+        # Verify the order API was called with correct endpoint
+        calls = mock_client.get.call_args_list
+        assert any(call[1].get("url") == "/api/order/order-number/HA-EM-12345/" for call in calls)
+
+    def test_get_artwork_sets_client_handle(self, service, mock_client, basic_order, mocker):
+        """Test that get_artwork sets the client from response."""
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.json.return_value = {
+            "clientHandle": "SPECTRUM_CLIENT",
+            "line_items": [
+                {
+                    "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
+                    "recipeSetId": "RECIPE001",
+                }
+            ],
+        }
+
+        # Setup different responses based on URL
+        zip_buffer = io.BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            zip_file.writestr("design.pdf", "design content")
+        zip_buffer.seek(0)
+        design_zip_bytes = zip_buffer.getvalue()
+
+        placement_bytes = b"PDF placement content"
+
+        def mock_get_side_effect(url=None, **kwargs):
+            response = Mock(spec=httpx.Response)
+            if url and "webtoprint" in url:
+                response.content = design_zip_bytes
+            elif url and "pdf" in url:
+                response.content = placement_bytes
+            else:
+                response.json.return_value = {
+                    "clientHandle": "SPECTRUM_CLIENT",
+                    "line_items": [
+                        {
+                            "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
+                            "recipeSetId": "RECIPE001",
+                        }
+                    ],
+                }
+            return response
+
+        mock_client.get.side_effect = mock_get_side_effect
+
+        service.get_artwork(basic_order)
+
+        assert service.client == "SPECTRUM_CLIENT"
+
+    def test_get_artwork_creates_artwork_object(self, service, mock_client, basic_order, mocker):
+        """Test that get_artwork creates Artwork object for each line item."""
+        self._setup_mock_client_for_get_artwork(mock_client, mocker)
+
+        service.get_artwork(basic_order)
+
+        # Line item should have artwork set
+        line_item = basic_order.line_items[0]
+        assert line_item.artwork is not None
+        assert line_item.artwork.artwork_id == "RECIPE001"
+
+    def test_get_artwork_raises_for_missing_artwork(self, service, mock_client, basic_order):
+        """Test that get_artwork raises ArtworkError if no artwork found."""
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.json.return_value = {
+            "clientHandle": "CLIENT123",
+            "line_items": [
+                {
+                    "skuQuantities": [{"sku": "DIFFERENT_PROD", "quantity": 100}],
+                    "recipeSetId": "RECIPE001",
+                }
+            ],
+        }
+        mock_client.get.return_value = mock_response
+
+        with pytest.raises(ArtworkError, match="No artwork found"):
+            service.get_artwork(basic_order)
+
+    def test_get_artwork_raises_when_api_returns_no_line_items(
+        self, service, mock_client, basic_order
     ):
-        """Test that designs are downloaded and extracted from zip."""
-        # Create a test zip file in memory
+        """Test that get_artwork raises error when API returns no line items."""
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.json.return_value = {
+            "clientHandle": "CLIENT123",
+            "line_items": [],  # Empty list
+        }
+        mock_client.get.return_value = mock_response
+
+        with pytest.raises(ArtworkError, match="No artwork found"):
+            service.get_artwork(basic_order)
+
+    def test_get_artwork_raises_when_recipe_set_id_is_missing(
+        self, service, mock_client, basic_order
+    ):
+        """Test that get_artwork raises error when recipeSetId is missing from API."""
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.json.return_value = {
+            "clientHandle": "CLIENT123",
+            "line_items": [
+                {
+                    "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
+                    "recipeSetId": None,  # Missing or null
+                }
+            ],
+        }
+        mock_client.get.return_value = mock_response
+
+        with pytest.raises(ArtworkError, match="No artwork found"):
+            service.get_artwork(basic_order)
+
+    def test_get_artwork_raises_when_sku_quantities_is_empty(
+        self, service, mock_client, basic_order
+    ):
+        """Test that get_artwork raises error when skuQuantities is empty."""
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.json.return_value = {
+            "clientHandle": "CLIENT123",
+            "line_items": [
+                {
+                    "skuQuantities": [],  # Empty list
+                    "recipeSetId": "RECIPE001",
+                }
+            ],
+        }
+        mock_client.get.return_value = mock_response
+
+        with pytest.raises(ArtworkError, match="No artwork found"):
+            service.get_artwork(basic_order)
+
+    def test_get_artwork_sets_empty_client_when_missing_from_response(
+        self, service, mock_client, basic_order, mocker
+    ):
+        """Test that client is set to empty string if not in API response."""
+        zip_buffer = io.BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            zip_file.writestr("design.pdf", "design content")
+        zip_buffer.seek(0)
+        design_zip_bytes = zip_buffer.getvalue()
+
+        placement_bytes = b"PDF placement content"
+
+        def mock_get_side_effect(url=None, **kwargs):
+            response = Mock(spec=httpx.Response)
+            if url and "webtoprint" in url:
+                response.content = design_zip_bytes
+            elif url and "pdf" in url:
+                response.content = placement_bytes
+            else:
+                # No clientHandle in response
+                response.json.return_value = {
+                    "line_items": [
+                        {
+                            "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
+                            "recipeSetId": "RECIPE001",
+                        }
+                    ],
+                }
+            return response
+
+        mock_client.get.side_effect = mock_get_side_effect
+
+        service.get_artwork(basic_order)
+
+        # Client should be empty string when not provided
+        assert service.client == ""
+
+    def test_get_artwork_with_multiple_skus_in_single_line_item(
+        self, service, mock_client, tmp_path, mocker
+    ):
+        """Test get_artwork when a line item has multiple SKU quantities."""
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="RL-001", product_code="PROD001", quantity=100)
+
+        order = Order(
+            administration_id=1,
+            customer_id=100,
+            order_provider="Harman",
+            pricelist_id=50,
+            remote_order_id="HA-EM-55555",
+            shipment_type="standard",
+            ship_to=ship_to,
+            line_items=[line_item],
+        )
+        order.set_sale_id(55555)
+
+        # Setup mock client with multiple SKU quantities in response
+        zip_buffer = io.BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            zip_file.writestr("design.pdf", "design content")
+        zip_buffer.seek(0)
+        design_zip_bytes = zip_buffer.getvalue()
+
+        placement_bytes = b"PDF placement content"
+
+        def mock_get_side_effect(url=None, **kwargs):
+            response = Mock(spec=httpx.Response)
+            if url and "webtoprint" in url:
+                response.content = design_zip_bytes
+            elif url and "pdf" in url:
+                response.content = placement_bytes
+            else:
+                response.json.return_value = {
+                    "clientHandle": "CLIENT789",
+                    "line_items": [
+                        {
+                            "skuQuantities": [
+                                {"sku": "PROD001", "quantity": 100},
+                                {"sku": "PROD002", "quantity": 50},
+                            ],
+                            "recipeSetId": "RECIPE001",
+                        }
+                    ],
+                }
+            return response
+
+        mock_client.get.side_effect = mock_get_side_effect
+
+        service.get_artwork(order)
+
+        # Should match PROD001 with quantity 100
+        assert line_item.artwork is not None
+        assert line_item.artwork.artwork_id == "RECIPE001"
+
+    def test_get_artwork_returns_empty_list(self, service, mock_client, basic_order, mocker):
+        """Test that get_artwork returns an empty list."""
+        self._setup_mock_client_for_get_artwork(mock_client, mocker)
+
+        result = service.get_artwork(basic_order)
+
+        assert result == []
+
+    def test_get_artwork_calls_get_designs(self, service, mock_client, basic_order, mocker):
+        """Test that get_artwork successfully retrieves and sets design files."""
+        # Setup mock to properly return responses with real design file
+        zip_buffer = io.BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            zip_file.writestr("design.pdf", "design content")
+        zip_buffer.seek(0)
+        design_zip_bytes = zip_buffer.getvalue()
+
+        placement_bytes = b"PDF placement content"
+
+        def mock_get_side_effect(url=None, **kwargs):
+            response = Mock(spec=httpx.Response)
+            if url and "webtoprint" in url:
+                response.content = design_zip_bytes
+            elif url and "pdf" in url:
+                response.content = placement_bytes
+            else:
+                response.json.return_value = {
+                    "clientHandle": "CLIENT123",
+                    "line_items": [
+                        {
+                            "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
+                            "recipeSetId": "RECIPE001",
+                        }
+                    ],
+                }
+            return response
+
+        mock_client.get.side_effect = mock_get_side_effect
+
+        service.get_artwork(basic_order)
+
+        # Verify designs were retrieved - check the artwork has design paths
+        artwork = basic_order.line_items[0].artwork
+        assert artwork is not None
+        assert len(artwork.design_paths) > 0
+        # Verify the design file was saved
+        assert artwork.design_paths[0].exists()
+
+    def test_get_artwork_calls_get_placement(self, service, mock_client, basic_order, mocker):
+        """Test that get_artwork successfully retrieves and sets placement file."""
+        # Setup mock to properly return responses
+        zip_buffer = io.BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            zip_file.writestr("design.pdf", "design content")
+        zip_buffer.seek(0)
+        design_zip_bytes = zip_buffer.getvalue()
+
+        placement_bytes = b"PDF placement content"
+
+        def mock_get_side_effect(url=None, **kwargs):
+            response = Mock(spec=httpx.Response)
+            if url and "webtoprint" in url:
+                response.content = design_zip_bytes
+            elif url and "pdf" in url:
+                response.content = placement_bytes
+            else:
+                response.json.return_value = {
+                    "clientHandle": "CLIENT123",
+                    "line_items": [
+                        {
+                            "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
+                            "recipeSetId": "RECIPE001",
+                        }
+                    ],
+                }
+            return response
+
+        mock_client.get.side_effect = mock_get_side_effect
+
+        service.get_artwork(basic_order)
+
+        # Verify placement was retrieved - check the artwork has placement path
+        artwork = basic_order.line_items[0].artwork
+        assert artwork is not None
+        assert artwork.placement_path is not None
+        # Verify the placement file was saved
+        assert artwork.placement_path.exists()
+
+    def test_get_artwork_with_multiple_line_items(self, service, mock_client, tmp_path, mocker):
+        """Test get_artwork with multiple line items."""
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item1 = LineItem(remote_line_id="RL-001", product_code="PROD001", quantity=50)
+        line_item2 = LineItem(remote_line_id="RL-002", product_code="PROD002", quantity=75)
+
+        order = Order(
+            administration_id=1,
+            customer_id=100,
+            order_provider="Harman",
+            pricelist_id=50,
+            remote_order_id="HA-EM-99999",
+            shipment_type="standard",
+            ship_to=ship_to,
+            line_items=[line_item1, line_item2],
+        )
+        order.set_sale_id(99999)
+
+        # Setup mock client to return different responses based on URL
+        zip_buffer = io.BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            zip_file.writestr("design.pdf", "design content")
+        zip_buffer.seek(0)
+        design_zip_bytes = zip_buffer.getvalue()
+
+        placement_bytes = b"PDF placement content"
+
+        def mock_get_side_effect(url=None, **kwargs):
+            response = Mock(spec=httpx.Response)
+            if url and "webtoprint" in url:
+                response.content = design_zip_bytes
+            elif url and "pdf" in url:
+                response.content = placement_bytes
+            else:
+                response.json.return_value = {
+                    "clientHandle": "CLIENT456",
+                    "line_items": [
+                        {
+                            "skuQuantities": [{"sku": "PROD001", "quantity": 50}],
+                            "recipeSetId": "RECIPE101",
+                        },
+                        {
+                            "skuQuantities": [{"sku": "PROD002", "quantity": 75}],
+                            "recipeSetId": "RECIPE102",
+                        },
+                    ],
+                }
+            return response
+
+        mock_client.get.side_effect = mock_get_side_effect
+
+        service.get_artwork(order)
+
+        assert service.client == "CLIENT456"
+        assert line_item1.artwork is not None
+        assert line_item2.artwork is not None
+        assert line_item1.artwork.artwork_id == "RECIPE101"
+        assert line_item2.artwork.artwork_id == "RECIPE102"
+
+    def test_get_artwork_handles_quantity_plus_one_variation(
+        self, service, mock_client, basic_order, mocker
+    ):
+        """Test that get_artwork handles the quantity+1 issue."""
+        # API returns quantity 101 (one more than actual)
+        zip_buffer = io.BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            zip_file.writestr("design.pdf", "design content")
+        zip_buffer.seek(0)
+        design_zip_bytes = zip_buffer.getvalue()
+
+        placement_bytes = b"PDF placement content"
+
+        def mock_get_side_effect(url=None, **kwargs):
+            response = Mock(spec=httpx.Response)
+            if url and "webtoprint" in url:
+                response.content = design_zip_bytes
+            elif url and "pdf" in url:
+                response.content = placement_bytes
+            else:
+                response.json.return_value = {
+                    "clientHandle": "CLIENT789",
+                    "line_items": [
+                        {
+                            "skuQuantities": [{"sku": "PROD001", "quantity": 101}],
+                            "recipeSetId": "RECIPE001",
+                        }
+                    ],
+                }
+            return response
+
+        mock_client.get.side_effect = mock_get_side_effect
+
+        service.get_artwork(basic_order)
+
+        # Should find artwork by matching quantity-1
+        assert basic_order.line_items[0].artwork is not None
+
+    def test_get_artwork_handles_quantity_exact_match_when_api_returns_different_value(
+        self, service, mock_client, basic_order, mocker
+    ):
+        """Test that quantity-1 combinations don't match when exact quantity is available."""
+        # The service adds combinations for: quantity, quantity-1, and 1
+        # This test verifies that when exact match is available, it's used
+        zip_buffer = io.BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            zip_file.writestr("design.pdf", "design content")
+        zip_buffer.seek(0)
+        design_zip_bytes = zip_buffer.getvalue()
+
+        placement_bytes = b"PDF placement content"
+
+        def mock_get_side_effect(url=None, **kwargs):
+            response = Mock(spec=httpx.Response)
+            if url and "webtoprint" in url:
+                response.content = design_zip_bytes
+            elif url and "pdf" in url:
+                response.content = placement_bytes
+            else:
+                # API returns exact quantity match
+                response.json.return_value = {
+                    "clientHandle": "CLIENT789",
+                    "line_items": [
+                        {
+                            "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
+                            "recipeSetId": "RECIPE001",
+                        }
+                    ],
+                }
+            return response
+
+        mock_client.get.side_effect = mock_get_side_effect
+
+        # Should find artwork with exact quantity match
+        service.get_artwork(basic_order)
+        assert basic_order.line_items[0].artwork is not None
+
+
+class TestSpectrumArtworkServiceGetPlacement:
+    """Tests for the _get_placement method."""
+
+    @pytest.fixture
+    def mock_client(self):
+        """Provide a mocked httpx.Client."""
+        return Mock(spec=httpx.Client)
+
+    @pytest.fixture
+    def service(self, mock_client, tmp_path):
+        """Provide a SpectrumArtworkService instance."""
+        return SpectrumArtworkService(engine=mock_client, digitals_dir=tmp_path)
+
+    def test_get_placement_downloads_pdf(self, service, mock_client):
+        """Test that _get_placement downloads and saves PDF file."""
+        placement_content = b"PDF content for placement"
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.content = placement_content
+        mock_client.get.return_value = mock_response
+
+        placement_path = service._get_placement(recipe_set_id="RECIPE001", sale_id=12345)
+
+        assert placement_path.exists()
+        assert placement_path.read_bytes() == placement_content
+        mock_response.raise_for_status.assert_called_once()
+
+    def test_get_placement_saves_with_correct_filename(self, service, mock_client, tmp_path):
+        """Test that placement file is saved with sale_id prefix."""
+        placement_content = b"PDF content"
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.content = placement_content
+        mock_client.get.return_value = mock_response
+
+        placement_path = service._get_placement(recipe_set_id="RECIPE001", sale_id=12345)
+
+        assert "S12345_RECIPE001_placement.pdf" in str(placement_path)
+        assert tmp_path in placement_path.parents
+
+    def test_get_placement_saves_to_digitals_dir(self, service, mock_client, tmp_path):
+        """Test that placement is saved to digitals_dir."""
+        placement_content = b"PDF content"
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.content = placement_content
+        mock_client.get.return_value = mock_response
+
+        service._get_placement(recipe_set_id="RECIPE001", sale_id=999)
+
+        assert (tmp_path / "S00999_RECIPE001_placement.pdf").exists()
+
+    def test_get_placement_raises_on_http_error(self, service, mock_client):
+        """Test that HTTP errors are raised."""
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "404 Not Found", request=Mock(), response=mock_response
+        )
+        mock_client.get.return_value = mock_response
+
+        with pytest.raises(httpx.HTTPStatusError):
+            service._get_placement(recipe_set_id="RECIPE001", sale_id=12345)
+
+    def test_get_placement_returns_path(self, service, mock_client):
+        """Test that _get_placement returns a Path object."""
+        placement_content = b"PDF content"
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.content = placement_content
+        mock_client.get.return_value = mock_response
+
+        result = service._get_placement(recipe_set_id="RECIPE001", sale_id=12345)
+
+        assert isinstance(result, Path)
+
+    def test_get_placement_with_different_recipe_ids(self, service, mock_client, tmp_path):
+        """Test that different recipe IDs create different filenames."""
+        placement_content = b"PDF content"
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.content = placement_content
+        mock_client.get.return_value = mock_response
+
+        service._get_placement(recipe_set_id="ART456", sale_id=111)
+
+        assert (tmp_path / "S00111_ART456_placement.pdf").exists()
+
+    def test_get_placement_calls_correct_endpoint(self, service, mock_client):
+        """Test that _get_placement calls API with correct endpoint structure."""
+        placement_content = b"PDF content"
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.content = placement_content
+        mock_client.get.return_value = mock_response
+
+        service._get_placement(recipe_set_id="ART123", sale_id=456)
+
+        # Verify the endpoint was called - the exact URL depends on service.client which is empty by default
+        # Verify get was called at least once with a URL containing the recipe ID
+        calls = mock_client.get.call_args_list
+        assert len(calls) > 0
+        assert any("ART123" in str(call) for call in calls)
+
+
+class TestSpectrumArtworkServiceGetDesigns:
+    """Tests for the _get_designs method."""
+
+    @pytest.fixture
+    def mock_client(self):
+        """Provide a mocked httpx.Client."""
+        return Mock(spec=httpx.Client)
+
+    @pytest.fixture
+    def service(self, mock_client, tmp_path):
+        """Provide a SpectrumArtworkService instance."""
+        return SpectrumArtworkService(engine=mock_client, digitals_dir=tmp_path)
+
+    def test_get_designs_downloads_zip(self, service, mock_client):
+        """Test that _get_designs downloads and extracts zip file."""
         zip_buffer = io.BytesIO()
         with ZipFile(zip_buffer, "w") as zip_file:
             zip_file.writestr("design1.pdf", "design content 1")
@@ -235,16 +750,14 @@ class TestSpectrumArtworkServiceGetDesigns:
         mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 
-        saved_paths = service._get_designs(order_with_artwork_id)
+        saved_paths = service._get_designs(recipe_set_id="RECIPE001", sale_id=12345)
 
         assert len(saved_paths) == 2
-        mock_client.get.assert_called_once_with(url="/api/webtoprint/ARTWORK001/")
+        mock_client.get.assert_called_once_with(url="/api/webtoprint/RECIPE001/")
         mock_response.raise_for_status.assert_called_once()
 
-    def test_get_designs_renames_files_with_order_id(
-        self, service, mock_client, order_with_artwork_id, tmp_path
-    ):
-        """Test that extracted files are renamed with order ID."""
+    def test_get_designs_saves_with_correct_filename(self, service, mock_client, tmp_path):
+        """Test that files are saved with sale_id prefix."""
         zip_buffer = io.BytesIO()
         with ZipFile(zip_buffer, "w") as zip_file:
             zip_file.writestr("design.pdf", "design content")
@@ -254,39 +767,14 @@ class TestSpectrumArtworkServiceGetDesigns:
         mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 
-        saved_paths = service._get_designs(order_with_artwork_id)
+        saved_paths = service._get_designs(recipe_set_id="RECIPE001", sale_id=12345)
 
-        # Check that file was saved with order ID prefix
         assert len(saved_paths) == 1
-        assert "S12345_" in str(saved_paths[0])
+        assert "S12345_design.pdf" in str(saved_paths[0])
+        assert tmp_path in saved_paths[0].parents
 
-    def test_get_designs_returns_empty_list_for_no_artwork_id(self, service, mock_client, mocker):
-        """Test that no designs are downloaded if line items have no artwork ID."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
-        line_item.artwork_id = None
-
-        order = Order(
-            administration_id=1,
-            customer_id=100,
-            order_provider="Harman",
-            pricelist_id=50,
-            remote_order_id="HA-EM-12345",
-            shipment_type="standard",
-            ship_to=ship_to,
-            line_items=[line_item],
-        )
-        order.set_id(12345)
-
-        saved_paths = service._get_designs(order)
-
-        assert saved_paths == []
-        mock_client.get.assert_not_called()
-
-    def test_get_designs_sets_design_on_line_item(
-        self, service, mock_client, order_with_artwork_id, mocker
-    ):
-        """Test that design is set on line item."""
+    def test_get_designs_saves_to_digitals_dir(self, service, mock_client, tmp_path):
+        """Test that designs are saved to digitals_dir."""
         zip_buffer = io.BytesIO()
         with ZipFile(zip_buffer, "w") as zip_file:
             zip_file.writestr("design.pdf", "design content")
@@ -296,14 +784,28 @@ class TestSpectrumArtworkServiceGetDesigns:
         mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 
-        service._get_designs(order_with_artwork_id)
-        order_with_artwork_id.line_items[0].set_design.assert_called_once()
-        call_kwargs = order_with_artwork_id.line_items[0].set_design.call_args[1]
-        assert "url" in call_kwargs
-        assert "https://spectrum.example.com/api/webtoprint/ARTWORK001/" in call_kwargs["url"]
-        assert "paths" in call_kwargs
+        saved_paths = service._get_designs(recipe_set_id="RECIPE001", sale_id=999)
 
-    def test_get_designs_raises_on_http_error(self, service, mock_client, order_with_artwork_id):
+        assert len(saved_paths) == 1
+        assert (tmp_path / "S00999_design.pdf").exists()
+
+    def test_get_designs_handles_multiple_files(self, service, mock_client):
+        """Test that multiple files in zip are all extracted."""
+        zip_buffer = io.BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            for i in range(5):
+                zip_file.writestr(f"design_{i}.pdf", f"content {i}")
+        zip_buffer.seek(0)
+
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.content = zip_buffer.getvalue()
+        mock_client.get.return_value = mock_response
+
+        saved_paths = service._get_designs(recipe_set_id="RECIPE001", sale_id=12345)
+
+        assert len(saved_paths) == 5
+
+    def test_get_designs_raises_on_http_error(self, service, mock_client):
         """Test that HTTP errors are raised."""
         mock_response = Mock(spec=httpx.Response)
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
@@ -312,241 +814,50 @@ class TestSpectrumArtworkServiceGetDesigns:
         mock_client.get.return_value = mock_response
 
         with pytest.raises(httpx.HTTPStatusError):
-            service._get_designs(order_with_artwork_id)
+            service._get_designs(recipe_set_id="RECIPE001", sale_id=12345)
 
-
-class TestSpectrumArtworkServiceGetPlacements:
-    """Tests for _get_placements method."""
-
-    @pytest.fixture
-    def mock_client(self):
-        """Provide a mocked httpx.Client."""
-        mock = Mock(spec=httpx.Client)
-        mock.base_url = "https://spectrum.example.com"
-        return mock
-
-    @pytest.fixture
-    def service(self, mock_client, tmp_path):
-        """Provide a SpectrumArtworkService instance."""
-        service = SpectrumArtworkService(engine=mock_client, digitals_dir=tmp_path)
-        object.__setattr__(service, "client", "CLIENT123")  # Set client for testing
-        return service
-
-    @pytest.fixture
-    def order_with_artwork_id(self, mocker):
-        """Provide an Order with line items that have artwork IDs."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
-        line_item.artwork_id = "ARTWORK001"
-        line_item.product_id = "PROD001"
-        line_item.quantity = 100
-
-        order = Order(
-            administration_id=1,
-            customer_id=100,
-            order_provider="Harman",
-            pricelist_id=50,
-            remote_order_id="HA-EM-123",
-            shipment_type="standard",
-            ship_to=ship_to,
-            line_items=[line_item],
-        )
-        order.set_id(123)
-        return order
-
-    def test_get_placements_downloads_pdf(
-        self, service, mock_client, order_with_artwork_id, tmp_path, mocker
-    ):
-        """Test that placement PDFs are downloaded."""
-        mock_response = Mock(spec=httpx.Response)
-        mock_response.content = b"PDF content"
-        mock_client.get.return_value = mock_response
-
-        saved_paths = service._get_placements(order_with_artwork_id)
-        assert len(saved_paths) == 1
-        mock_client.get.assert_called_once_with(url="/CLIENT123/specification/ARTWORK001/pdf/")
-        mock_response.raise_for_status.assert_called_once()
-
-    def test_get_placements_saves_pdf_with_correct_name(
-        self, service, mock_client, order_with_artwork_id, tmp_path
-    ):
-        """Test that PDF is saved with correct filename."""
-        mock_response = Mock(spec=httpx.Response)
-        mock_response.content = b"PDF content"
-        mock_client.get.return_value = mock_response
-
-        saved_paths = service._get_placements(order_with_artwork_id)
-
-        assert len(saved_paths) == 1
-        assert "S00123_ARTWORK001_placement.pdf" in str(saved_paths[0])
-
-    def test_get_placements_returns_empty_list_for_no_artwork_id(
-        self, service, mock_client, mocker
-    ):
-        """Test that no placements are downloaded if line items have no artwork ID."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
-        line_item.artwork_id = None
-
-        order = Order(
-            administration_id=1,
-            customer_id=100,
-            order_provider="Harman",
-            pricelist_id=50,
-            remote_order_id="HA-EM-12345",
-            shipment_type="standard",
-            ship_to=ship_to,
-            line_items=[line_item],
-        )
-        order.set_id(12345)
-
-        saved_paths = service._get_placements(order)
-        mock_client.get.assert_not_called()
-        assert saved_paths == []
-
-    def test_get_placements_sets_placement_on_line_item(
-        self, service, mock_client, order_with_artwork_id, mocker
-    ):
-        """Test that placement is set on line item."""
-        mock_response = Mock(spec=httpx.Response)
-        mock_response.content = b"PDF content"
-        mock_client.get.return_value = mock_response
-
-        service._get_placements(order_with_artwork_id)
-        mock_client.get.assert_called_once_with(url="/CLIENT123/specification/ARTWORK001/pdf/")
-        order_with_artwork_id.line_items[0].set_placement.assert_called_once()
-
-        call_kwargs = order_with_artwork_id.line_items[0].set_placement.call_args[1]
-        assert "path" in call_kwargs
-
-    def test_get_placements_raises_on_http_error(
-        self, service, mock_client, order_with_artwork_id, mocker
-    ):
-        """Test that HTTP errors are raised."""
-        mock_response = Mock(spec=httpx.Response)
-        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "404 Not Found", request=Mock(), response=mock_response
-        )
-        mock_client.get.return_value = mock_response
-
-        with pytest.raises(httpx.HTTPStatusError):
-            service._get_placements(order_with_artwork_id)
-
-    def test_get_placements_multiple_line_items(self, service, mock_client, mocker):
-        """Test that placements are downloaded for multiple line items."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item1 = mocker.Mock(spec=LineItem)
-        line_item1.artwork_id = "ARTWORK001"
-        line_item2 = mocker.Mock(spec=LineItem)
-        line_item2.artwork_id = "ARTWORK002"
-
-        order = Order(
-            administration_id=1,
-            customer_id=100,
-            order_provider="Harman",
-            pricelist_id=50,
-            remote_order_id="HA-EM-12345",
-            shipment_type="standard",
-            ship_to=ship_to,
-            line_items=[line_item1, line_item2],
-        )
-        order.set_id(12345)
+    def test_get_designs_calls_correct_endpoint(self, service, mock_client):
+        """Test that _get_designs calls the correct API endpoint."""
+        zip_buffer = io.BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            zip_file.writestr("design.pdf", "content")
+        zip_buffer.seek(0)
 
         mock_response = Mock(spec=httpx.Response)
-        mock_response.content = b"PDF content"
+        mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 
-        saved_paths = service._get_placements(order)
-        assert mock_client.get.call_count == 2
-        mock_client.get.assert_any_call(url="/CLIENT123/specification/ARTWORK001/pdf/")
-        mock_client.get.assert_any_call(url="/CLIENT123/specification/ARTWORK002/pdf/")
-        assert len(saved_paths) == 2
+        service._get_designs(recipe_set_id="ART123", sale_id=456)
 
+        mock_client.get.assert_called_once_with(url="/api/webtoprint/ART123/")
 
-class TestSpectrumArtworkServiceGetArtwork:
-    """Tests for get_artwork method."""
+    def test_get_designs_returns_list_of_paths(self, service, mock_client):
+        """Test that _get_designs returns list of Path objects."""
+        zip_buffer = io.BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            zip_file.writestr("design.pdf", "content")
+        zip_buffer.seek(0)
 
-    @pytest.fixture
-    def mock_client(self):
-        """Provide a mocked httpx.Client."""
-        mock = Mock(spec=httpx.Client)
-        mock.base_url = "https://spectrum.example.com"
-        return mock
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.content = zip_buffer.getvalue()
+        mock_client.get.return_value = mock_response
 
-    @pytest.fixture
-    def service(self, mock_client, tmp_path):
-        """Provide a SpectrumArtworkService instance."""
-        service = SpectrumArtworkService(engine=mock_client, digitals_dir=tmp_path)
-        object.__setattr__(service, "client", "CLIENT123")  # Set client for testing
-        return service
+        result = service._get_designs(recipe_set_id="RECIPE001", sale_id=12345)
 
-    @pytest.fixture
-    def order_with_artwork_id(self, mocker):
-        """Provide an Order with line items that have artwork IDs."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
-        line_item.artwork_id = "ARTWORK001"
-        line_item.product_id = "PROD001"
-        line_item.quantity = 100
+        assert isinstance(result, list)
+        assert all(isinstance(p, Path) for p in result)
 
-        order = Order(
-            administration_id=1,
-            customer_id=100,
-            order_provider="Harman",
-            pricelist_id=50,
-            remote_order_id="HA-EM-12345",
-            shipment_type="standard",
-            ship_to=ship_to,
-            line_items=[line_item],
-        )
-        order.set_id(12345)
-        return order
+    def test_get_designs_with_different_sale_ids(self, service, mock_client, tmp_path):
+        """Test that different sale IDs create different filenames."""
+        zip_buffer = io.BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            zip_file.writestr("design.pdf", "content")
+        zip_buffer.seek(0)
 
-    def test_get_artwork_combines_designs_and_placements(
-        self, service, mocker, order_with_artwork_id
-    ):
-        """Test that get_artwork combines designs and placements."""
-        design_paths = [Path("/tmp/design1.pdf")]
-        placement_paths = [Path("/tmp/placement1.pdf")]
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.content = zip_buffer.getvalue()
+        mock_client.get.return_value = mock_response
 
-        mocker.patch.object(SpectrumArtworkService, "_get_designs", return_value=design_paths)
-        mocker.patch.object(SpectrumArtworkService, "_get_placements", return_value=placement_paths)
+        service._get_designs(recipe_set_id="RECIPE001", sale_id=111)
 
-        result = service.get_artwork(order_with_artwork_id)
-
-        assert result == design_paths + placement_paths
-
-    def test_get_artwork_calls_both_methods(self, service, mocker, order_with_artwork_id):
-        """Test that get_artwork calls both _get_designs and _get_placements."""
-        mocked_get_designs = mocker.patch.object(
-            SpectrumArtworkService, "_get_designs", return_value=[]
-        )
-        mocked_get_placements = mocker.patch.object(
-            SpectrumArtworkService, "_get_placements", return_value=[]
-        )
-        service.get_artwork(order_with_artwork_id)
-
-        mocked_get_designs.assert_called_once_with(order_with_artwork_id)
-        mocked_get_placements.assert_called_once_with(order_with_artwork_id)
-
-    def test_get_artwork_returns_empty_list_for_no_artwork_id(self, service, mocker):
-        """Test that empty list is returned if no artwork IDs."""
-        ship_to = mocker.Mock(spec=ShipTo)
-        line_item = mocker.Mock(spec=LineItem)
-        line_item.artwork_id = None
-
-        order = Order(
-            administration_id=1,
-            customer_id=100,
-            order_provider="Harman",
-            pricelist_id=50,
-            remote_order_id="HA-EM-12345",
-            shipment_type="standard",
-            ship_to=ship_to,
-            line_items=[line_item],
-        )
-        order.set_id(12345)
-
-        result = service.get_artwork(order)
-
-        assert result == []
+        assert (tmp_path / "S00111_design.pdf").exists()

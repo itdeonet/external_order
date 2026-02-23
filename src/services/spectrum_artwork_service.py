@@ -8,6 +8,8 @@ from zipfile import ZipFile
 
 import httpx
 
+from src.app.errors import ArtworkError
+from src.domain.artwork import Artwork
 from src.domain.order import Order
 
 logger = getLogger(__name__)
@@ -22,82 +24,74 @@ class SpectrumArtworkService:
     client: str = field(default="", init=False)
 
     def get_artwork(self, order: Order) -> list[Path]:
-        """Get artwork data for the given remote ID."""
-        return self._get_designs(order) + self._get_placements(order)
-
-    def get_artwork_ids(self, order: Order) -> None:
-        """Get artwork IDs for the given remote ID."""
+        """Get artwork for the given order."""
         logger.info(f"Getting artwork IDs for order {order.remote_order_id}")
         endpoint = f"/api/order/order-number/{order.remote_order_id}/"
         response = self.engine.get(url=endpoint)
         response.raise_for_status()
         object.__setattr__(self, "client", response.json().get("clientHandle", ""))
 
-        artwork_data = {
-            (sku_qty["sku"], sku_qty["quantity"]): item.get("recipeSetId")
-            for item in response.json().get("line_items", [])
-            for sku_qty in item.get("skuQuantities", [])
-        }
+        artwork_data: set[tuple[str, int, str]] = set()
+        for li in response.json().get("line_items", []):
+            for sku_qty in li.get("skuQuantities", []):
+                artwork_data.add((sku_qty["sku"], sku_qty["quantity"], li.get("recipeSetId")))
+                # add combinations for the +1 quantity issue in the Harman orders
+                artwork_data.add((sku_qty["sku"], sku_qty["quantity"] - 1, li.get("recipeSetId")))
+                artwork_data.add((sku_qty["sku"], 1, li.get("recipeSetId")))
 
-        # Match artwork IDs to line items based on product ID and quantity
-        # The additional quantities are a workaround for the +1 quantity issue in the Harman orders
-        for key, value in artwork_data.items():
-            if li := next(
-                (
-                    li
-                    for li in order.line_items
-                    if li.product_id == key[0] and li.quantity in (key[1], key[1] - 1, 1)
+        for li in order.line_items:
+            # get the artwork ID for the line item based on product code and quantity
+            found = [
+                item
+                for item in artwork_data
+                if item[0] == li.product_code and item[1] == li.quantity
+            ]
+            if not (found and found[0][2]):
+                raise ArtworkError(
+                    message=f"No artwork found for line item ({li.product_code}, {li.quantity})",
+                    order_id=order.remote_order_id,
+                )
+
+            recipe_set_id = found[0][2]
+            artwork = Artwork(
+                artwork_id=recipe_set_id,
+                line_item_id=li.remote_line_id,
+                design_url=f"{str(self.engine.base_url).rstrip('/')}/api/webtoprint/{recipe_set_id}/",
+                design_paths=self._get_designs(recipe_set_id=recipe_set_id, sale_id=order.sale_id),
+                placement_url=f"{str(self.engine.base_url).rstrip('/')}/{self.client}/specification/{recipe_set_id}/pdf/",
+                placement_path=self._get_placement(
+                    recipe_set_id=recipe_set_id, sale_id=order.sale_id
                 ),
-                None,
-            ):
-                li.set_artwork_id(value)
-
-    def _get_designs(self, order: Order) -> list[Path]:
-        """Get designs for the given remote ID."""
-        logger.info(f"Get designs for order {order.remote_order_id}")
-        saved_paths: list[Path] = []
-
-        for line_item in order.line_items:
-            if not line_item.artwork_id:
-                continue
-
-            endpoint = f"/api/webtoprint/{line_item.artwork_id}/"
-            response = self.engine.get(url=endpoint)
-            response.raise_for_status()
-
-            saved_as: list[Path] = []
-            with ZipFile(io.BytesIO(response.content)) as zip_file:
-                for member in zip_file.infolist():
-                    # Set filename to include order ID and extract to self.digitals_dir
-                    member.filename = f"S{order.id:05}_{member.filename}"
-                    zip_file.extract(member, path=self.digitals_dir)
-                    saved_as.append(self.digitals_dir / member.filename)
-
-            line_item.set_design(
-                url=f"{str(self.engine.base_url).rstrip('/')}{endpoint}", paths=saved_as
             )
-            saved_paths.extend(saved_as)
+            li.set_artwork(artwork)
 
-        return saved_paths
+        return []
 
-    def _get_placements(self, order: Order) -> list[Path]:
-        """Get placements for the given remote ID."""
-        logger.info(f"Get placements for order {order.remote_order_id}")
-        saved_paths: list[Path] = []
+    def _get_designs(self, recipe_set_id: str, sale_id: int) -> list[Path]:
+        """Get designs for the given endpoint and order ID."""
+        logger.info("Get designs for artwork %s and order %d", recipe_set_id, sale_id)
+        endpoint = f"/api/webtoprint/{recipe_set_id}/"
+        response = self.engine.get(url=endpoint)
+        response.raise_for_status()
 
-        for line_item in order.line_items:
-            if not line_item.artwork_id:
-                continue
+        saved_as: list[Path] = []
+        with ZipFile(io.BytesIO(response.content)) as zip_file:
+            for member in zip_file.infolist():
+                # Set filename to include order ID and extract to self.digitals_dir
+                member.filename = f"S{sale_id:05}_{member.filename}"
+                zip_file.extract(member, path=self.digitals_dir)
+                saved_as.append(self.digitals_dir / member.filename)
+                logger.debug(f"Extracted {member.filename} to {saved_as[-1]}")
 
-            endpoint = f"/{self.client}/specification/{line_item.artwork_id}/pdf/"
-            response = self.engine.get(url=endpoint)
-            response.raise_for_status()
-            saved_as = self.digitals_dir / f"S{order.id:05}_{line_item.artwork_id}_placement.pdf"
-            saved_as.write_bytes(response.content)
+        return saved_as
 
-            line_item.set_placement(
-                url=f"{str(self.engine.base_url).rstrip('/')}{endpoint}", path=saved_as
-            )
-            saved_paths.append(saved_as)
-
-        return saved_paths
+    def _get_placement(self, recipe_set_id: str, sale_id: int) -> Path:
+        """Get placement for the given endpoint and order ID."""
+        logger.info("Get placement for artwork %s and order %d", recipe_set_id, sale_id)
+        endpoint = f"/{self.client}/specification/{recipe_set_id}/pdf/"
+        response = self.engine.get(url=endpoint)
+        response.raise_for_status()
+        save_as = self.digitals_dir / f"S{sale_id:05}_{recipe_set_id}_placement.pdf"
+        save_as.write_bytes(response.content)
+        logger.debug(f"Saved placement PDF to {save_as}")
+        return save_as
