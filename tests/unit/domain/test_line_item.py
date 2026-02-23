@@ -1,10 +1,11 @@
 """Unit tests for the LineItem domain model."""
 
+import uuid
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 
+from src.domain.artwork import Artwork
 from src.domain.line_item import LineItem
 
 
@@ -12,7 +13,8 @@ from src.domain.line_item import LineItem
 def valid_line_item_data():
     """Provide valid LineItem initialization data."""
     return {
-        "product_id": "PROD-123",
+        "remote_line_id": "RL-001",
+        "product_code": "PROD-123",
         "quantity": 5,
     }
 
@@ -26,7 +28,7 @@ def line_item(valid_line_item_data):
 @pytest.fixture
 def mock_file_path(mocker):
     """Create a mocked Path object that is_file() returns True."""
-    mock_path = MagicMock(spec=Path)
+    mock_path = mocker.Mock(spec=Path)
     mock_path.is_file.return_value = True
     return mock_path
 
@@ -38,351 +40,383 @@ class TestLineItemInitialization:
         """Test that LineItem is created with auto-generated ID."""
         item = LineItem(**valid_line_item_data)
 
-        assert item.product_id == "PROD-123"
+        assert item.remote_line_id == "RL-001"
+        assert item.product_code == "PROD-123"
         assert item.quantity == 5
-        assert item.artwork_id == ""
-        assert item.design_url == ""
-        assert item.design_paths == []
-        assert item.placement_url == ""
-        assert item.placement_path == Path("")
+        assert item.artwork is None
         # Verify ID is generated as UUID
-        assert isinstance(item.id, str)
-        assert len(item.id) > 0
+        assert isinstance(item.id, uuid.UUID)
 
-    def test_line_item_creation_with_custom_id(self, valid_line_item_data):
-        """Test that LineItem can be created with a custom ID."""
-        custom_id = "custom-id-123"
-        item = LineItem(id=custom_id, **valid_line_item_data)
-
-        assert item.id == custom_id
-
-    def test_line_item_id_is_trimmed(self):
+    def test_line_item_id_is_trimmed(self, valid_line_item_data):
         """Test that LineItem ID is trimmed of whitespace."""
-        item = LineItem(id="  custom-id-123  ", product_id="PROD-123", quantity=5)
+        valid_line_item_data["remote_line_id"] = "  custom-id-123  "
+        item = LineItem(**valid_line_item_data)
 
-        assert item.id == "custom-id-123"
+        assert item.remote_line_id == "custom-id-123"
 
-    def test_line_item_product_id_is_trimmed(self):
-        """Test that product_id is trimmed of whitespace."""
-        item = LineItem(product_id="  PROD-123  ", quantity=5)
+    def test_line_item_product_code_is_trimmed(self, valid_line_item_data):
+        """Test that product_code is trimmed of whitespace."""
+        valid_line_item_data["product_code"] = "  PROD-123  "
+        item = LineItem(**valid_line_item_data)
 
-        assert item.product_id == "PROD-123"
+        assert item.product_code == "PROD-123"
 
-    def test_line_item_artwork_id_is_trimmed(self):
-        """Test that artwork_id is trimmed of whitespace."""
-        item = LineItem(product_id="PROD-123", quantity=5, artwork_id="  ART-456  ")
+    def test_line_item_artwork_is_set(self, valid_line_item_data, mocker):
+        """Test that artwork is set correctly."""
+        mock_artwork = mocker.Mock(spec=Artwork)
+        valid_line_item_data["artwork"] = mock_artwork
+        item = LineItem(**valid_line_item_data)
 
-        assert item.artwork_id == "ART-456"
+        assert item.artwork == mock_artwork
 
-    def test_line_item_invalid_empty_id(self, valid_line_item_data):
+    def test_line_item_invalid_empty_remote_line_id(self, valid_line_item_data):
         """Test that empty ID raises ValueError."""
+        valid_line_item_data["remote_line_id"] = ""
         with pytest.raises(ValueError, match="ID must be a non-empty string"):
-            LineItem(id="", **valid_line_item_data)
+            LineItem(**valid_line_item_data)
 
     def test_line_item_invalid_whitespace_only_id(self, valid_line_item_data):
         """Test that whitespace-only ID raises ValueError."""
+        valid_line_item_data["remote_line_id"] = "   "
         with pytest.raises(ValueError, match="ID must be a non-empty string"):
-            LineItem(id="   ", **valid_line_item_data)
+            LineItem(**valid_line_item_data)
 
-    def test_line_item_invalid_non_string_id(self, valid_line_item_data):
+    def test_line_item_invalid_non_string_remote_line_id(self, valid_line_item_data):
         """Test that non-string ID raises ValueError."""
+        valid_line_item_data["remote_line_id"] = 123
         with pytest.raises(ValueError, match="ID must be a non-empty string"):
-            LineItem(id=123, **valid_line_item_data)  # type: ignore
+            LineItem(**valid_line_item_data)  # type: ignore
 
-    def test_line_item_invalid_empty_product_id(self):
-        """Test that empty product_id raises ValueError."""
-        with pytest.raises(ValueError, match="Product ID must be a non-empty string"):
-            LineItem(product_id="", quantity=5)
+    def test_line_item_invalid_empty_product_code(self, valid_line_item_data):
+        """Test that empty product_code raises ValueError."""
+        valid_line_item_data["product_code"] = ""
+        with pytest.raises(ValueError, match="Product code must be a non-empty string"):
+            LineItem(**valid_line_item_data)
 
-    def test_line_item_invalid_whitespace_only_product_id(self):
-        """Test that whitespace-only product_id raises ValueError."""
-        with pytest.raises(ValueError, match="Product ID must be a non-empty string"):
-            LineItem(product_id="   ", quantity=5)
+    def test_line_item_invalid_whitespace_only_product_code(self, valid_line_item_data):
+        """Test that whitespace-only product_code raises ValueError."""
+        valid_line_item_data["product_code"] = "   "
+        with pytest.raises(ValueError, match="Product code must be a non-empty string"):
+            LineItem(**valid_line_item_data)
 
-    def test_line_item_invalid_non_string_product_id(self):
-        """Test that non-string product_id raises ValueError."""
-        with pytest.raises(ValueError, match="Product ID must be a non-empty string"):
-            LineItem(product_id=123, quantity=5)  # type: ignore
+    def test_line_item_invalid_non_string_product_code(self, valid_line_item_data):
+        """Test that non-string product_code raises ValueError."""
+        valid_line_item_data["product_code"] = 456
+        with pytest.raises(ValueError, match="Product code must be a non-empty string"):
+            LineItem(**valid_line_item_data)  # type: ignore
 
-    def test_line_item_invalid_non_integer_quantity(self, valid_line_item_data):
-        """Test that non-integer quantity raises ValueError."""
+    def test_line_item_invalid_none_product_code(self, valid_line_item_data):
+        """Test that None product_code raises ValueError."""
+        valid_line_item_data["product_code"] = None
+        with pytest.raises(ValueError, match="Product code must be a non-empty string"):
+            LineItem(**valid_line_item_data)  # type: ignore
+
+    def test_line_item_invalid_none_remote_line_id(self, valid_line_item_data):
+        """Test that None remote_line_id raises ValueError."""
+        valid_line_item_data["remote_line_id"] = None
+        with pytest.raises(ValueError, match="Remote line ID must be a non-empty string"):
+            LineItem(**valid_line_item_data)  # type: ignore
+
+
+class TestLineItemQuantityValidation:
+    """Test cases for LineItem quantity field validation."""
+
+    @pytest.fixture
+    def minimal_line_item_data(self):
+        """Provide minimal valid LineItem data for quantity tests."""
+        return {
+            "remote_line_id": "RL-001",
+            "product_code": "PROD-123",
+        }
+
+    def test_quantity_required(self, minimal_line_item_data):
+        """Test that quantity is required."""
+        with pytest.raises(TypeError):
+            LineItem(**minimal_line_item_data)
+
+    def test_quantity_must_be_positive(self, minimal_line_item_data):
+        """Test that quantity must be positive."""
+        minimal_line_item_data["quantity"] = -1
         with pytest.raises(ValueError, match="Quantity must be a positive integer"):
-            LineItem(
-                quantity="5",  # type: ignore
-                **{k: v for k, v in valid_line_item_data.items() if k != "quantity"},
-            )
+            LineItem(**minimal_line_item_data)
 
-    def test_line_item_invalid_zero_quantity(self, valid_line_item_data):
-        """Test that zero quantity raises ValueError."""
+    def test_quantity_zero_is_invalid(self, minimal_line_item_data):
+        """Test that quantity of 0 is invalid."""
+        minimal_line_item_data["quantity"] = 0
         with pytest.raises(ValueError, match="Quantity must be a positive integer"):
-            LineItem(
-                quantity=0,
-                **{k: v for k, v in valid_line_item_data.items() if k != "quantity"},
-            )
+            LineItem(**minimal_line_item_data)
 
-    def test_line_item_invalid_negative_quantity(self, valid_line_item_data):
-        """Test that negative quantity raises ValueError."""
+    def test_quantity_must_be_integer(self, minimal_line_item_data):
+        """Test that quantity must be an integer."""
+        minimal_line_item_data["quantity"] = 5.5
         with pytest.raises(ValueError, match="Quantity must be a positive integer"):
-            LineItem(
-                quantity=-5,
-                **{k: v for k, v in valid_line_item_data.items() if k != "quantity"},
-            )
-
-    def test_line_item_empty_artwork_id_remains_empty(self, valid_line_item_data):
-        """Test that empty artwork_id stays empty."""
-        item = LineItem(artwork_id="", **valid_line_item_data)
-
-        assert item.artwork_id == ""
-
-    def test_line_item_is_frozen(self, line_item):
-        """Test that LineItem is frozen (immutable)."""
-        with pytest.raises(AttributeError):
-            line_item.product_id = "NEW-PROD"
-
-
-class TestLineItemSetId:
-    """Test cases for the set_id method."""
-
-    def test_set_id_valid(self, line_item):
-        """Test setting a valid ID."""
-        new_id = "new-id-456"
-        line_item.set_id(new_id)
-
-        assert line_item.id == new_id
-
-    def test_set_id_with_whitespace(self, line_item):
-        """Test that set_id trims whitespace."""
-        line_item.set_id("  new-id-456  ")
-
-        assert line_item.id == "new-id-456"
-
-    def test_set_id_empty_raises_error(self, line_item):
-        """Test that empty ID raises ValueError."""
-        with pytest.raises(ValueError, match="ID must be a non-empty string"):
-            line_item.set_id("")
-
-    def test_set_id_whitespace_only_raises_error(self, line_item):
-        """Test that whitespace-only ID raises ValueError."""
-        with pytest.raises(ValueError, match="ID must be a non-empty string"):
-            line_item.set_id("   ")
-
-    def test_set_id_non_string_raises_error(self, line_item):
-        """Test that non-string ID raises ValueError."""
-        with pytest.raises(ValueError, match="ID must be a non-empty string"):
-            line_item.set_id(123)
-
-
-class TestLineItemSetArtworkId:
-    """Test cases for the set_artwork_id method."""
-
-    def test_set_artwork_id_valid(self, line_item):
-        """Test setting a valid artwork ID."""
-        artwork_id = "ART-789"
-        line_item.set_artwork_id(artwork_id)
-
-        assert line_item.artwork_id == artwork_id
-
-    def test_set_artwork_id_with_whitespace(self, line_item):
-        """Test that set_artwork_id trims whitespace."""
-        line_item.set_artwork_id("  ART-789  ")
-
-        assert line_item.artwork_id == "ART-789"
-
-    def test_set_artwork_id_empty_raises_error(self, line_item):
-        """Test that empty artwork ID raises ValueError."""
-        with pytest.raises(ValueError, match="Artwork ID must be a non-empty string"):
-            line_item.set_artwork_id("")
-
-    def test_set_artwork_id_whitespace_only_raises_error(self, line_item):
-        """Test that whitespace-only artwork ID raises ValueError."""
-        with pytest.raises(ValueError, match="Artwork ID must be a non-empty string"):
-            line_item.set_artwork_id("   ")
-
-    def test_set_artwork_id_non_string_raises_error(self, line_item):
-        """Test that non-string artwork ID raises ValueError."""
-        with pytest.raises(ValueError, match="Artwork ID must be a non-empty string"):
-            line_item.set_artwork_id(123)
-
-
-class TestLineItemSetDesign:
-    """Test cases for the set_design method."""
-
-    def test_set_design_valid(self, line_item, mock_file_path):
-        """Test setting valid design URL and paths."""
-        design_url = "https://example.com/design.png"
-        paths = [mock_file_path]
-
-        line_item.set_design(design_url, paths)
-
-        assert line_item.design_url == design_url
-        assert line_item.design_paths == paths
-
-    def test_set_design_url_with_whitespace(self, line_item, mock_file_path):
-        """Test that design URL is trimmed of whitespace."""
-        design_url = "  https://example.com/design.png  "
-        paths = [mock_file_path]
-
-        line_item.set_design(design_url, paths)
-
-        assert line_item.design_url == "https://example.com/design.png"
-
-    def test_set_design_multiple_paths(self, line_item, mocker):
-        """Test setting design with multiple file paths."""
-        design_url = "https://example.com/design.png"
-        mock_path1 = MagicMock(spec=Path)
-        mock_path1.is_file.return_value = True
-        mock_path2 = MagicMock(spec=Path)
-        mock_path2.is_file.return_value = True
-        paths = [mock_path1, mock_path2]
-
-        line_item.set_design(design_url, paths)
-
-        assert line_item.design_url == design_url
-        assert len(line_item.design_paths) == 2
-
-    def test_set_design_empty_url_raises_error(self, line_item, mock_file_path):
-        """Test that empty URL raises ValueError."""
-        with pytest.raises(ValueError, match="Design URL must be a non-empty string"):
-            line_item.set_design("", [mock_file_path])
-
-    def test_set_design_whitespace_only_url_raises_error(self, line_item, mock_file_path):
-        """Test that whitespace-only URL raises ValueError."""
-        with pytest.raises(ValueError, match="Design URL must be a non-empty string"):
-            line_item.set_design("   ", [mock_file_path])
-
-    def test_set_design_non_string_url_raises_error(self, line_item, mock_file_path):
-        """Test that non-string URL raises ValueError."""
-        with pytest.raises(ValueError, match="Design URL must be a non-empty string"):
-            line_item.set_design(123, [mock_file_path])
-
-    def test_set_design_non_list_paths_raises_error(self, line_item):
-        """Test that non-list paths raises ValueError."""
-        design_url = "https://example.com/design.png"
-        with pytest.raises(ValueError, match="Design paths must be a list of valid file paths"):
-            line_item.set_design(design_url, "not a list")
-
-    def test_set_design_non_path_objects_raises_error(self, line_item):
-        """Test that non-Path objects in list raises ValueError."""
-        design_url = "https://example.com/design.png"
-        with pytest.raises(ValueError, match="Design paths must be a list of valid file paths"):
-            line_item.set_design(design_url, ["not a path"])
-
-    def test_set_design_non_existent_file_raises_error(self, line_item, mocker):
-        """Test that non-existent file path raises ValueError."""
-        design_url = "https://example.com/design.png"
-        mock_path = MagicMock(spec=Path)
-        mock_path.is_file.return_value = False
-
-        with pytest.raises(ValueError, match="Design paths must be a list of valid file paths"):
-            line_item.set_design(design_url, [mock_path])
-
-
-class TestLineItemSetPlacement:
-    """Test cases for the set_placement method."""
-
-    def test_set_placement_valid(self, line_item, mock_file_path):
-        """Test setting valid placement URL and path."""
-        placement_url = "https://example.com/placement.png"
-
-        line_item.set_placement(placement_url, mock_file_path)
-
-        assert line_item.placement_url == placement_url
-        assert line_item.placement_path == mock_file_path
-
-    def test_set_placement_url_with_whitespace(self, line_item, mock_file_path):
-        """Test that placement URL is trimmed of whitespace."""
-        placement_url = "  https://example.com/placement.png  "
-
-        line_item.set_placement(placement_url, mock_file_path)
-
-        assert line_item.placement_url == "https://example.com/placement.png"
-
-    def test_set_placement_empty_url_raises_error(self, line_item, mock_file_path):
-        """Test that empty URL raises ValueError."""
-        with pytest.raises(ValueError, match="Placement URL must be a non-empty string"):
-            line_item.set_placement("", mock_file_path)
-
-    def test_set_placement_whitespace_only_url_raises_error(self, line_item, mock_file_path):
-        """Test that whitespace-only URL raises ValueError."""
-        with pytest.raises(ValueError, match="Placement URL must be a non-empty string"):
-            line_item.set_placement("   ", mock_file_path)
-
-    def test_set_placement_non_string_url_raises_error(self, line_item, mock_file_path):
-        """Test that non-string URL raises ValueError."""
-        with pytest.raises(ValueError, match="Placement URL must be a non-empty string"):
-            line_item.set_placement(123, mock_file_path)
-
-    def test_set_placement_non_path_object_raises_error(self, line_item):
-        """Test that non-Path object raises ValueError."""
-        placement_url = "https://example.com/placement.png"
-        with pytest.raises(ValueError, match="Placement path must be a valid file path"):
-            line_item.set_placement(placement_url, "not a path")
-
-    def test_set_placement_non_existent_file_raises_error(self, line_item):
-        """Test that non-existent file path raises ValueError."""
-        placement_url = "https://example.com/placement.png"
-        mock_path = MagicMock(spec=Path)
-        mock_path.is_file.return_value = False
-
-        with pytest.raises(ValueError, match="Placement path must be a valid file path"):
-            line_item.set_placement(placement_url, mock_path)
-
-
-class TestLineItemHasArtwork:
-    """Test cases for the has_artwork method."""
-
-    def test_has_artwork_false_by_default(self, line_item):
-        """Test that has_artwork returns False for newly created item."""
-        assert line_item.has_artwork() is False
-
-    def test_has_artwork_false_with_only_artwork_id(self, line_item):
-        """Test that has_artwork is False with only artwork_id set."""
-        line_item.set_artwork_id("ART-123")
-
-        assert line_item.has_artwork() is False
-
-    def test_has_artwork_false_missing_design_url(self, line_item, mock_file_path):
-        """Test that has_artwork is False when design_url is missing."""
-        line_item.set_artwork_id("ART-123")
-        line_item.set_design("https://example.com/design.png", [mock_file_path])
-        line_item.set_placement("https://example.com/placement.png", mock_file_path)
-        # Manually set design_url to empty to test the condition
-        object.__setattr__(line_item, "design_url", "")
-
-        assert line_item.has_artwork() is False
-
-    def test_has_artwork_false_missing_design_paths(self, line_item, mock_file_path):
-        """Test that has_artwork is False when design_paths is empty."""
-        line_item.set_artwork_id("ART-123")
-        line_item.set_design("https://example.com/design.png", [mock_file_path])
-        line_item.set_placement("https://example.com/placement.png", mock_file_path)
-        # Manually set design_paths to empty to test the condition
-        object.__setattr__(line_item, "design_paths", [])
-
-        assert line_item.has_artwork() is False
-
-    def test_has_artwork_false_missing_placement_url(self, line_item, mock_file_path):
-        """Test that has_artwork is False when placement_url is missing."""
-        line_item.set_artwork_id("ART-123")
-        line_item.set_design("https://example.com/design.png", [mock_file_path])
-        line_item.set_placement("https://example.com/placement.png", mock_file_path)
-        # Manually set placement_url to empty to test the condition
-        object.__setattr__(line_item, "placement_url", "")
-
-        assert line_item.has_artwork() is False
-
-    def test_has_artwork_true_all_fields_set(self, line_item, mock_file_path):
-        """Test that has_artwork returns True when all artwork fields are set."""
-        line_item.set_artwork_id("ART-123")
-        line_item.set_design("https://example.com/design.png", [mock_file_path])
-        line_item.set_placement("https://example.com/placement.png", mock_file_path)
-
-        assert line_item.has_artwork() is True
-
-    def test_has_artwork_false_missing_artwork_id(self, line_item, mock_file_path):
-        """Test that has_artwork is False without artwork_id."""
-        # Skip setting artwork_id
-        line_item.set_design("https://example.com/design.png", [mock_file_path])
-        line_item.set_placement("https://example.com/placement.png", mock_file_path)
-
-        assert line_item.has_artwork() is False
+            LineItem(**minimal_line_item_data)  # type: ignore
+
+    def test_quantity_must_not_be_string(self, minimal_line_item_data):
+        """Test that quantity cannot be a string."""
+        minimal_line_item_data["quantity"] = "5"
+        with pytest.raises(ValueError, match="Quantity must be a positive integer"):
+            LineItem(**minimal_line_item_data)  # type: ignore
+
+    def test_quantity_must_not_be_none(self, minimal_line_item_data):
+        """Test that quantity cannot be None."""
+        minimal_line_item_data["quantity"] = None
+        with pytest.raises(ValueError, match="Quantity must be a positive integer"):
+            LineItem(**minimal_line_item_data)  # type: ignore
+
+    def test_quantity_large_positive_integer_is_valid(self, minimal_line_item_data):
+        """Test that large positive integers are accepted."""
+        minimal_line_item_data["quantity"] = 1000000
+        item = LineItem(**minimal_line_item_data)
+        assert item.quantity == 1000000
+
+    def test_quantity_one_is_valid(self, minimal_line_item_data):
+        """Test that quantity of 1 is valid."""
+        minimal_line_item_data["quantity"] = 1
+        item = LineItem(**minimal_line_item_data)
+        assert item.quantity == 1
+
+
+class TestLineItemArtworkValidation:
+    """Test cases for LineItem artwork field validation."""
+
+    @pytest.fixture
+    def valid_line_item_data(self):
+        """Provide valid LineItem initialization data."""
+        return {
+            "remote_line_id": "RL-001",
+            "product_code": "PROD-123",
+            "quantity": 5,
+        }
+
+    def test_artwork_none_by_default(self, valid_line_item_data):
+        """Test that artwork defaults to None."""
+        item = LineItem(**valid_line_item_data)
+        assert item.artwork is None
+
+    def test_artwork_must_be_artwork_instance_or_none(self, valid_line_item_data, mocker):
+        """Test that artwork must be Artwork instance or None."""
+        mock_artwork = mocker.Mock(spec=Artwork)
+        valid_line_item_data["artwork"] = mock_artwork
+        item = LineItem(**valid_line_item_data)
+        assert item.artwork == mock_artwork
+
+    def test_artwork_cannot_be_string(self, valid_line_item_data):
+        """Test that artwork cannot be a string."""
+        valid_line_item_data["artwork"] = "not an artwork"
+        with pytest.raises(ValueError, match="Artwork must be an instance of Artwork or None"):
+            LineItem(**valid_line_item_data)
+
+    def test_artwork_cannot_be_dict(self, valid_line_item_data):
+        """Test that artwork cannot be a dict."""
+        valid_line_item_data["artwork"] = {}
+        with pytest.raises(ValueError, match="Artwork must be an instance of Artwork or None"):
+            LineItem(**valid_line_item_data)
+
+    def test_artwork_cannot_be_integer(self, valid_line_item_data):
+        """Test that artwork cannot be an integer."""
+        valid_line_item_data["artwork"] = 123
+        with pytest.raises(ValueError, match="Artwork must be an instance of Artwork or None"):
+            LineItem(**valid_line_item_data)  # type: ignore
+
+
+class TestLineItemSetArtwork:
+    """Test cases for LineItem set_artwork method."""
+
+    @pytest.fixture
+    def line_item(self, valid_line_item_data):
+        """Create a LineItem instance for testing."""
+        return LineItem(**valid_line_item_data)
+
+    @pytest.fixture
+    def valid_line_item_data(self):
+        """Provide valid LineItem data."""
+        return {
+            "remote_line_id": "RL-001",
+            "product_code": "PROD-123",
+            "quantity": 5,
+        }
+
+    def test_set_artwork_with_valid_artwork(self, line_item, mocker):
+        """Test setting artwork with a valid Artwork instance."""
+        mock_artwork = mocker.Mock(spec=Artwork)
+        line_item.set_artwork(mock_artwork)
+        assert line_item.artwork == mock_artwork
+
+    def test_set_artwork_to_none(self, line_item):
+        """Test setting artwork to None."""
+        line_item.set_artwork(None)
+        assert line_item.artwork is None
+
+    def test_set_artwork_with_invalid_type(self, line_item):
+        """Test that set_artwork rejects invalid artwork types."""
+        with pytest.raises(ValueError, match="Artwork must be an instance of Artwork or None"):
+            line_item.set_artwork("not an artwork")  # type: ignore
+
+
+class TestLineItemIDGeneration:
+    """Test cases for LineItem ID auto-generation."""
+
+    @pytest.fixture
+    def valid_line_item_data(self):
+        """Provide valid LineItem data."""
+        return {
+            "remote_line_id": "RL-001",
+            "product_code": "PROD-123",
+            "quantity": 5,
+        }
+
+    def test_id_is_auto_generated_uuid(self, valid_line_item_data):
+        """Test that id is auto-generated as UUID object."""
+        item = LineItem(**valid_line_item_data)
+        assert isinstance(item.id, uuid.UUID)
+
+    def test_id_cannot_be_passed_as_parameter(self, valid_line_item_data):
+        """Test that id parameter is rejected (init=False)."""
+        with pytest.raises(TypeError):
+            LineItem(id=uuid.uuid4(), **valid_line_item_data)  # type: ignore
+
+    def test_id_unique_across_instances(self, valid_line_item_data):
+        """Test that different instances get unique IDs."""
+        item1 = LineItem(**valid_line_item_data)
+        item2 = LineItem(**valid_line_item_data)
+        assert item1.id != item2.id
+        assert isinstance(item1.id, uuid.UUID)
+        assert isinstance(item2.id, uuid.UUID)
+
+
+class TestLineItemImmutability:
+    """Tests for LineItem immutability (frozen dataclass)."""
+
+    @pytest.fixture
+    def line_item(self, valid_line_item_data):
+        """Create a LineItem instance for testing."""
+        return LineItem(**valid_line_item_data)
+
+    @pytest.fixture
+    def valid_line_item_data(self):
+        """Provide valid LineItem data."""
+        return {
+            "remote_line_id": "RL-001",
+            "product_code": "PROD-123",
+            "quantity": 5,
+        }
+
+    def test_cannot_modify_remote_line_id(self, line_item):
+        """Test that remote_line_id cannot be modified."""
+        with pytest.raises((AttributeError, TypeError)):
+            line_item.remote_line_id = "RL-002"  # type: ignore
+
+    def test_cannot_modify_product_code(self, line_item):
+        """Test that product_code cannot be modified."""
+        with pytest.raises((AttributeError, TypeError)):
+            line_item.product_code = "PROD-456"  # type: ignore
+
+    def test_cannot_modify_quantity(self, line_item):
+        """Test that quantity cannot be modified."""
+        with pytest.raises((AttributeError, TypeError)):
+            line_item.quantity = 10  # type: ignore
+
+    def test_can_modify_artwork_via_set_artwork(self, line_item, mocker):
+        """Test that artwork can be modified via set_artwork method."""
+        mock_artwork = mocker.Mock(spec=Artwork)
+        line_item.set_artwork(mock_artwork)
+        assert line_item.artwork == mock_artwork
+
+    def test_cannot_directly_modify_artwork(self, line_item, mocker):
+        """Test that artwork cannot be modified directly (use set_artwork)."""
+        mock_artwork = mocker.Mock(spec=Artwork)
+        with pytest.raises((AttributeError, TypeError)):
+            line_item.artwork = mock_artwork  # type: ignore
+
+
+class TestLineItemEquality:
+    """Tests for LineItem equality comparison."""
+
+    @pytest.fixture
+    def valid_line_item_data(self):
+        """Provide valid LineItem data."""
+        return {
+            "remote_line_id": "RL-001",
+            "product_code": "PROD-123",
+            "quantity": 5,
+        }
+
+    def test_same_instance_equals_itself(self, valid_line_item_data):
+        """Test that a line item equals itself."""
+        item = LineItem(**valid_line_item_data)
+        assert item == item
+
+    def test_different_instances_same_data_are_not_equal(self, valid_line_item_data):
+        """Test that two instances with same data are not equal (different auto-generated IDs)."""
+        item1 = LineItem(**valid_line_item_data)
+        item2 = LineItem(**valid_line_item_data)
+        # Different instances should not be equal due to different auto-generated IDs
+        assert item1 != item2
+
+    def test_different_remote_line_id_not_equal(self, valid_line_item_data):
+        """Test that line items with different remote_line_ids are not equal."""
+        item1 = LineItem(**valid_line_item_data)
+        valid_line_item_data["remote_line_id"] = "RL-002"
+        item2 = LineItem(**valid_line_item_data)
+        assert item1 != item2
+
+    def test_different_product_code_not_equal(self, valid_line_item_data):
+        """Test that line items with different product_codes are not equal."""
+        item1 = LineItem(**valid_line_item_data)
+        valid_line_item_data["product_code"] = "PROD-456"
+        item2 = LineItem(**valid_line_item_data)
+        assert item1 != item2
+
+    def test_different_quantity_not_equal(self, valid_line_item_data):
+        """Test that line items with different quantities are not equal."""
+        item1 = LineItem(**valid_line_item_data)
+        valid_line_item_data["quantity"] = 10
+        item2 = LineItem(**valid_line_item_data)
+        assert item1 != item2
+
+    def test_different_artwork_not_equal(self, valid_line_item_data, mocker):
+        """Test that line items with different artwork are not equal."""
+        item1 = LineItem(**valid_line_item_data)
+        mock_artwork = mocker.Mock(spec=Artwork)
+        valid_line_item_data["artwork"] = mock_artwork
+        item2 = LineItem(**valid_line_item_data)
+        assert item1 != item2
+
+
+class TestLineItemRepresentation:
+    """Tests for LineItem string representation."""
+
+    @pytest.fixture
+    def line_item(self, valid_line_item_data):
+        """Create a LineItem instance for testing."""
+        return LineItem(**valid_line_item_data)
+
+    @pytest.fixture
+    def valid_line_item_data(self):
+        """Provide valid LineItem data."""
+        return {
+            "remote_line_id": "RL-001",
+            "product_code": "PROD-123",
+            "quantity": 5,
+        }
+
+    def test_repr_contains_class_name(self, line_item):
+        """Test that repr contains LineItem class name."""
+        repr_str = repr(line_item)
+        assert "LineItem" in repr_str
+
+    def test_repr_contains_remote_line_id(self, line_item):
+        """Test that repr contains remote_line_id value."""
+        repr_str = repr(line_item)
+        assert "RL-001" in repr_str
+
+    def test_repr_contains_product_code(self, line_item):
+        """Test that repr contains product_code value."""
+        repr_str = repr(line_item)
+        assert "PROD-123" in repr_str
+
+    def test_repr_contains_id(self, line_item):
+        """Test that repr contains the auto-generated id."""
+        repr_str = repr(line_item)
+        assert str(line_item.id) in repr_str
