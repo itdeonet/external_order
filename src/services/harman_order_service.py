@@ -198,12 +198,17 @@ class HarmanOrderService:
 
     def notify_completed_sale(self, order: Order) -> None:
         """Notify the order provider of a completed sale."""
+        # The notification exists of 2 desdav files, one in D96A format and one in D99A format.
         for file in self.renderer.directory.glob("desadv-*.j2"):
             doc_type = "D96A" if "D96A" in file.name.upper() else "D99A"
             notify_data = self._get_notify_data(order, doc_type)
+
+            # build the notification message using the renderer and clean it up
             message = self.renderer.render(file.name, notify_data)
             segments = Parser().parse(message)
             content = Serializer().serialize(list(segments), break_lines=True)
+
+            # write the message
             notify_path = (
                 self.notify_dir / file.stem / f"{order.remote_order_id}.{file.stem}".upper()
             )
@@ -217,7 +222,7 @@ class HarmanOrderService:
 
         segments_d96a = [
             35,  # Header and trailer segments
-            4 * len(order_data["line_items"]),  # Segments per line item
+            4 * len(order_data["line_items"]),  # Segments per line line item
             sum(item.get("quantity", 0) for item in order_data["line_items"]),  # Serial segments
             1
             + sum(item.get("quantity", 0) for item in order_data["line_items"])
@@ -225,7 +230,7 @@ class HarmanOrderService:
         ]
         segments_d99a = [
             9,  # Header and trailer segments
-            4 * len(order_data["line_items"]),  # Segments per item
+            4 * len(order_data["line_items"]),  # Segments per line item
             sum(item.get("quantity", 0) for item in order_data["line_items"]),  # Serial segments
             1,  # FTX segment
         ]
