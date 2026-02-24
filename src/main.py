@@ -5,11 +5,11 @@ from typing import TYPE_CHECKING
 
 import httpx
 
-from src.app.completed_use_case import CompletedUseCase
+from app.completed_sale_use_case import CompletedSaleUseCase
+from app.new_sale_use_case import NewSaleUseCase
 from src.app.errors import ErrorQueue
 from src.app.odoo_auth import OdooAuth
 from src.app.registry import Registry
-from src.app.sale_use_case import SaleUseCase
 from src.config import Config, get_config
 from src.interfaces.iartwork_service import IArtworkService
 from src.interfaces.iorder_service import IOrderService
@@ -54,14 +54,14 @@ def main() -> None:
             auth=OdooAuth.from_config(config=config), engine=sale_engine
         )
         # use cases
-        SaleUseCase(
+        NewSaleUseCase(
             order_services=order_services,
             artwork_services=artwork_services,
             sale_service=sale_service,
             error_queue=error_queue,
             open_orders_dir=config.open_orders_dir,
         ).create_sales()
-        CompletedUseCase(
+        CompletedSaleUseCase(
             order_services=order_services,
             sale_service=sale_service,
             error_queue=error_queue,
