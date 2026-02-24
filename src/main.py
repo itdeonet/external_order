@@ -5,21 +5,22 @@ from typing import TYPE_CHECKING
 
 import httpx
 
-from app.new_sale_use_case import NewSaleUseCase
+from src.app.completed_use_case import CompletedUseCase
 from src.app.errors import ErrorQueue
 from src.app.odoo_auth import OdooAuth
 from src.app.registry import Registry
-from src.domain.interfaces.iartwork_service import IArtworkService
-from src.domain.interfaces.iorder_service import IOrderService
+from src.app.sale_use_case import SaleUseCase
+from src.config import Config, get_config
+from src.interfaces.iartwork_service import IArtworkService
+from src.interfaces.iorder_service import IOrderService
 from src.services.harman_order_service import HarmanOrderService
-from src.services.odoo_sales_service import OdooSalesService
+from src.services.odoo_sale_service import OdooSaleService
 from src.services.spectrum_artwork_service import SpectrumArtworkService
-from src.settings import Settings, get_settings
 
 if TYPE_CHECKING:
-    from src.domain.interfaces.ierror_queue import IErrorQueue
-    from src.domain.interfaces.iregistry import IRegistry
-    from src.domain.interfaces.isales_service import ISalesService
+    from src.interfaces.ierror_queue import IErrorQueue
+    from src.interfaces.iregistry import IRegistry
+    from src.interfaces.isale_service import ISaleService
 
 logger = getLogger(__name__)
 
@@ -28,42 +29,44 @@ def main() -> None:
     """Main function to run the application."""
 
     # make sure directories exist
-    settings: Settings = get_settings()
+    config: Config = get_config()
 
     error_queue: IErrorQueue = ErrorQueue()
     artwork_services: IRegistry[IArtworkService] = Registry[IArtworkService]()
     order_services: IRegistry[IOrderService] = Registry[IOrderService]()
-    order_services.register("Harman", HarmanOrderService.from_settings(settings))
+    order_services.register("Harman", HarmanOrderService.from_config(config=config))
 
-    timeout = httpx.Timeout(connect=10.0, read=1200.0, write=30.0)
+    timeout = httpx.Timeout(connect=10.0, read=120.0, write=30.0)
     with (
         httpx.Client(
-            base_url=settings.odoo_base_url,
-            follow_redirects=True,
-            timeout=timeout,
+            base_url=config.odoo_base_url, follow_redirects=True, timeout=timeout
         ) as sale_engine,
         httpx.Client(
-            base_url=settings.spectrum_base_url,
-            follow_redirects=True,
-            timeout=timeout,
-            headers={"SPECTRUM_API_TOKEN": settings.spectrum_api_key},
+            base_url=config.spectrum_base_url, follow_redirects=True, timeout=timeout
         ) as spectrum_engine,
     ):
+        spectrum_engine.headers["SPECTRUM_API_TOKEN"] = config.spectrum_api_key
         artwork_services.register(
             "Spectrum",
-            SpectrumArtworkService(engine=spectrum_engine, digitals_dir=settings.digitals_dir),
+            SpectrumArtworkService(engine=spectrum_engine, digitals_dir=config.digitals_dir),
         )
-        sales_service: ISalesService = OdooSalesService(
-            auth=OdooAuth.from_settings(settings=settings), engine=sale_engine
+        sale_service: ISaleService = OdooSaleService(
+            auth=OdooAuth.from_config(config=config), engine=sale_engine
         )
         # use cases
-        NewSaleUseCase(
+        SaleUseCase(
             order_services=order_services,
             artwork_services=artwork_services,
-            sales_service=sales_service,
+            sale_service=sale_service,
             error_queue=error_queue,
-            open_orders_dir=settings.open_orders_dir,
+            open_orders_dir=config.open_orders_dir,
         ).create_sales()
+        CompletedUseCase(
+            order_services=order_services,
+            sale_service=sale_service,
+            error_queue=error_queue,
+            notify_dir=config.harman_notify_dir,
+        ).complete_sales()
 
 
 if __name__ == "__main__":
