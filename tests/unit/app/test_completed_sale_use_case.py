@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.app.completed_use_case import CompletedUseCase
+from src.app.completed_sale_use_case import CompletedSaleUseCase
 from src.app.errors import SaleError
 from src.domain.order import Order, OrderStatus
 
@@ -41,7 +41,7 @@ def mock_order():
 def completed_use_case(mock_order_services, mock_sales_service, mock_error_queue):
     """Create a CompletedUseCase instance with mocked dependencies."""
     notify_dir = Path("/tmp/notifications")
-    return CompletedUseCase(
+    return CompletedSaleUseCase(
         order_services=mock_order_services,
         sale_service=mock_sales_service,
         error_queue=mock_error_queue,
@@ -57,7 +57,7 @@ class TestCompletedUseCaseInit:
     ):
         """Test that CompletedUseCase initializes correctly with valid dependencies."""
         notify_dir = Path("/tmp/notifications")
-        use_case = CompletedUseCase(
+        use_case = CompletedSaleUseCase(
             order_services=mock_order_services,
             sale_service=mock_sales_service,
             error_queue=mock_error_queue,
@@ -73,7 +73,7 @@ class TestCompletedUseCaseInit:
         self, mock_order_services, mock_sales_service, mock_error_queue
     ):
         """Test that CompletedUseCase is a frozen dataclass."""
-        use_case = CompletedUseCase(
+        use_case = CompletedSaleUseCase(
             order_services=mock_order_services,
             sale_service=mock_sales_service,
             error_queue=mock_error_queue,
