@@ -17,7 +17,7 @@ logger = getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class SaleUseCase:
+class NewSaleUseCase:
     """Use case for creating new sale orders."""
 
     order_services: IRegistry[IOrderService]

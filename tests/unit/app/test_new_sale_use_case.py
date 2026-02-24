@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, call
 import pytest
 
 from src.app.errors import SaleError
-from src.app.sale_use_case import SaleUseCase
+from src.app.new_sale_use_case import NewSaleUseCase
 from src.domain.line_item import LineItem
 from src.domain.order import Order, OrderStatus
 from src.domain.ship_to import ShipTo
@@ -80,7 +80,7 @@ def use_case(
     mock_order_services, mock_artwork_services, mock_sale_service, mock_error_queue, tmp_path
 ):
     """Create a SaleUseCase instance with mocked dependencies."""
-    return SaleUseCase(
+    return NewSaleUseCase(
         order_services=mock_order_services,
         artwork_services=mock_artwork_services,
         sale_service=mock_sale_service,
@@ -97,7 +97,7 @@ class TestSaleUseCaseInstantiation:
     ):
         """Test creating a SaleUseCase with valid dependencies."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            use_case = SaleUseCase(
+            use_case = NewSaleUseCase(
                 order_services=mock_order_services,
                 artwork_services=mock_artwork_services,
                 sale_service=mock_sale_service,
@@ -121,7 +121,7 @@ class TestSaleUseCaseInstantiation:
     ):
         """Test that order_services is a required parameter."""
         with tempfile.TemporaryDirectory() as tmpdir, pytest.raises(TypeError):
-            SaleUseCase(
+            NewSaleUseCase(
                 artwork_services=mock_artwork_services,
                 sale_service=mock_sale_service,
                 error_queue=mock_error_queue,
@@ -133,7 +133,7 @@ class TestSaleUseCaseInstantiation:
     ):
         """Test that sale_service is a required parameter."""
         with tempfile.TemporaryDirectory() as tmpdir, pytest.raises(TypeError):
-            SaleUseCase(
+            NewSaleUseCase(
                 order_services=mock_order_services,
                 artwork_services=mock_artwork_services,
                 error_queue=mock_error_queue,
@@ -145,7 +145,7 @@ class TestSaleUseCaseInstantiation:
     ):
         """Test that error_queue is a required parameter."""
         with tempfile.TemporaryDirectory() as tmpdir, pytest.raises(TypeError):
-            SaleUseCase(
+            NewSaleUseCase(
                 order_services=mock_order_services,
                 artwork_services=mock_artwork_services,
                 sale_service=mock_sale_service,
@@ -157,7 +157,7 @@ class TestSaleUseCaseInstantiation:
     ):
         """Test that open_orders_dir is a required parameter."""
         with pytest.raises(TypeError):
-            SaleUseCase(
+            NewSaleUseCase(
                 order_services=mock_order_services,
                 artwork_services=mock_artwork_services,
                 sale_service=mock_sale_service,
@@ -184,7 +184,7 @@ class TestCreateSalesWithNoOrders:
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.create_sales()
 
@@ -204,7 +204,7 @@ class TestCreateSalesNewSaleCreation:
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.is_sale_created.return_value = False
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.create_sales()
 
@@ -221,7 +221,7 @@ class TestCreateSalesNewSaleCreation:
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.is_sale_created.return_value = False
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.create_sales()
 
@@ -239,7 +239,7 @@ class TestCreateSalesNewSaleCreation:
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.is_sale_created.return_value = False
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.create_sales()
 
@@ -256,7 +256,7 @@ class TestCreateSalesNewSaleCreation:
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.is_sale_created.return_value = False
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.create_sales()
 
@@ -273,7 +273,7 @@ class TestCreateSalesNewSaleCreation:
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.is_sale_created.return_value = False
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.create_sales()
 
@@ -290,7 +290,7 @@ class TestCreateSalesNewSaleCreation:
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.is_sale_created.return_value = False
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.create_sales()
 
@@ -311,7 +311,7 @@ class TestCreateSalesExistingSaleUpdate:
         use_case.sale_service.is_sale_created.return_value = True
         use_case.sale_service.has_expected_order_lines.return_value = True
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.create_sales()
 
@@ -328,7 +328,7 @@ class TestCreateSalesExistingSaleUpdate:
         use_case.sale_service.is_sale_created.return_value = True
         use_case.sale_service.has_expected_order_lines.return_value = False
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.create_sales()
 
@@ -348,7 +348,7 @@ class TestCreateSalesExistingSaleUpdate:
         use_case.sale_service.is_sale_created.return_value = True
         use_case.sale_service.has_expected_order_lines.return_value = False
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.create_sales()
 
@@ -369,7 +369,7 @@ class TestCreateSalesExceptionHandling:
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.create_sales()
 
@@ -397,7 +397,7 @@ class TestCreateSalesExceptionHandling:
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.is_sale_created.return_value = False
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.create_sales()
 
@@ -415,7 +415,7 @@ class TestCreateSalesExceptionHandling:
         use_case.sale_service.is_sale_created.return_value = False
         use_case.sale_service.create_sale.side_effect = Exception("Sale creation failed")
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.create_sales()
 
@@ -432,7 +432,7 @@ class TestCreateSalesExceptionHandling:
         use_case.sale_service.is_sale_created.return_value = False
         use_case.sale_service.confirm_sale.side_effect = Exception("Confirm failed")
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.create_sales()
 
@@ -461,7 +461,7 @@ class TestCreateSalesWithMultipleServices:
         ]
         use_case.sale_service.is_sale_created.return_value = False
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.create_sales()
 
@@ -487,7 +487,7 @@ class TestCreateSalesWithMultipleServices:
         ]
         use_case.sale_service.is_sale_created.return_value = False
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.create_sales()
 
@@ -512,7 +512,7 @@ class TestCreateSalesWithMultipleServices:
             ("service3", order_service3),
         ]
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.create_sales()
 
@@ -531,7 +531,7 @@ class TestGetArtworkBasic:
         result = use_case.get_artwork(order, None)
 
         assert result == []
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
     def test_get_artwork_with_service_returning_no_files(self, use_case, mocker):
         """Test get_artwork when service returns no files."""
@@ -539,7 +539,7 @@ class TestGetArtworkBasic:
         artwork_service = MagicMock(spec=IArtworkService)
         artwork_service.get_artwork.return_value = []
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         result = use_case.get_artwork(order, artwork_service)
 
@@ -556,7 +556,7 @@ class TestGetArtworkBasic:
             temp_file.write_text("test")
             artwork_service.get_artwork.return_value = [temp_file]
 
-            mocker.patch("src.app.sale_use_case.logger")
+            mocker.patch("src.app.new_sale_use_case.logger")
 
             result = use_case.get_artwork(order, artwork_service)
 
@@ -570,7 +570,7 @@ class TestGetArtworkBasic:
         artwork_service = MagicMock(spec=IArtworkService)
         artwork_service.get_artwork.return_value = []
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.get_artwork(order, artwork_service)
 
@@ -590,7 +590,7 @@ class TestGetArtworkPlacementHandling:
             temp_file.write_text("placement content")
             artwork_service.get_artwork.return_value = [temp_file]
 
-            mocker.patch("src.app.sale_use_case.logger")
+            mocker.patch("src.app.new_sale_use_case.logger")
 
             use_case.get_artwork(order, artwork_service)
 
@@ -610,7 +610,7 @@ class TestGetArtworkPlacementHandling:
             temp_file.write_text("artwork content")
             artwork_service.get_artwork.return_value = [temp_file]
 
-            mocker.patch("src.app.sale_use_case.logger")
+            mocker.patch("src.app.new_sale_use_case.logger")
 
             use_case.get_artwork(order, artwork_service)
 
@@ -636,7 +636,7 @@ class TestGetArtworkPlacementHandling:
                 temp_file.write_text("placement")
                 artwork_service.get_artwork.return_value = [temp_file]
 
-                mocker.patch("src.app.sale_use_case.logger")
+                mocker.patch("src.app.new_sale_use_case.logger")
 
                 use_case.get_artwork(order, artwork_service)
 
@@ -655,7 +655,7 @@ class TestGetArtworkPlacementHandling:
             temp_file.write_text("placement")
             artwork_service.get_artwork.return_value = [temp_file]
 
-            mocker.patch("src.app.sale_use_case.logger")
+            mocker.patch("src.app.new_sale_use_case.logger")
 
             use_case.get_artwork(order, artwork_service)
 
@@ -677,7 +677,7 @@ class TestGetArtworkPlacementHandling:
 
             artwork_service.get_artwork.return_value = [placement_file, artwork_file]
 
-            mocker.patch("src.app.sale_use_case.logger")
+            mocker.patch("src.app.new_sale_use_case.logger")
 
             result = use_case.get_artwork(order, artwork_service)
 
@@ -700,7 +700,7 @@ class TestGetArtworkPlacementHandling:
             temp_file.write_text("placement")
             artwork_service.get_artwork.return_value = [temp_file]
 
-            mocker.patch("src.app.sale_use_case.logger")
+            mocker.patch("src.app.new_sale_use_case.logger")
 
             use_case.get_artwork(order, artwork_service)
 
@@ -721,7 +721,7 @@ class TestGetArtworkPlacementHandling:
 
             artwork_service.get_artwork.return_value = [temp_file]
 
-            mocker.patch("src.app.sale_use_case.logger")
+            mocker.patch("src.app.new_sale_use_case.logger")
 
             use_case.get_artwork(order, artwork_service)
 
@@ -839,7 +839,7 @@ class TestSaleUseCaseIntegration:
             use_case.order_services.items.return_value = [("integration_service", order_service)]
             use_case.sale_service.is_sale_created.return_value = False
 
-            mocker.patch("src.app.sale_use_case.logger")
+            mocker.patch("src.app.new_sale_use_case.logger")
 
             use_case.create_sales()
 
@@ -863,7 +863,7 @@ class TestSaleUseCaseIntegration:
         use_case.sale_service.is_sale_created.return_value = True
         use_case.sale_service.has_expected_order_lines.return_value = True
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.create_sales()
 
@@ -901,7 +901,7 @@ class TestSaleUseCaseIntegration:
             Exception("Processing failed"),  # order3 fails
         ]
 
-        mocker.patch("src.app.sale_use_case.logger")
+        mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.create_sales()
 
