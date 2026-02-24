@@ -19,7 +19,7 @@ class CompletedUseCase:
     """Use case for completing sale orders."""
 
     order_services: IRegistry[IOrderService]
-    sales_service: ISaleService
+    sale_service: ISaleService
     error_queue: IErrorQueue
     notify_dir: Path
 
@@ -27,7 +27,7 @@ class CompletedUseCase:
         """Complete sales for all orders with status 'sale created'."""
         for order_provider, order_service in self.order_services.items():
             try:
-                completed_sales = self.sales_service.get_completed_sales(order_provider)
+                completed_sales = self.sale_service.get_completed_sales(order_provider)
                 for _sale_id, remote_id in completed_sales:
                     if order := order_service.load_order(remote_id):
                         order_service.notify_completed_sale(order)
