@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from logging import getLogger
-from pathlib import Path
 
 from src.app.errors import SaleError
 from src.domain.order import OrderStatus
@@ -21,7 +20,6 @@ class CompletedSaleUseCase:
     order_services: IRegistry[IOrderService]
     sale_service: ISaleService
     error_queue: IErrorQueue
-    notify_dir: Path
 
     def complete_sales(self) -> None:
         """Complete sales for all orders with status 'sale created'."""

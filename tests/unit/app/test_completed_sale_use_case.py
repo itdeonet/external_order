@@ -1,6 +1,5 @@
 """Tests for CompletedUseCase."""
 
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -40,12 +39,10 @@ def mock_order():
 @pytest.fixture
 def completed_use_case(mock_order_services, mock_sales_service, mock_error_queue):
     """Create a CompletedUseCase instance with mocked dependencies."""
-    notify_dir = Path("/tmp/notifications")
     return CompletedSaleUseCase(
         order_services=mock_order_services,
         sale_service=mock_sales_service,
         error_queue=mock_error_queue,
-        notify_dir=notify_dir,
     )
 
 
@@ -56,18 +53,15 @@ class TestCompletedUseCaseInit:
         self, mock_order_services, mock_sales_service, mock_error_queue
     ):
         """Test that CompletedUseCase initializes correctly with valid dependencies."""
-        notify_dir = Path("/tmp/notifications")
         use_case = CompletedSaleUseCase(
             order_services=mock_order_services,
             sale_service=mock_sales_service,
             error_queue=mock_error_queue,
-            notify_dir=notify_dir,
         )
 
         assert use_case.order_services is mock_order_services
         assert use_case.sale_service is mock_sales_service
         assert use_case.error_queue is mock_error_queue
-        assert use_case.notify_dir == notify_dir
 
     def test_initialization_creates_frozen_dataclass(
         self, mock_order_services, mock_sales_service, mock_error_queue
@@ -77,11 +71,10 @@ class TestCompletedUseCaseInit:
             order_services=mock_order_services,
             sale_service=mock_sales_service,
             error_queue=mock_error_queue,
-            notify_dir=Path("/tmp/notifications"),
         )
 
         with pytest.raises(AttributeError):
-            use_case.notify_dir = Path("/tmp/other")  # type: ignore
+            use_case.sale_service = None  # type: ignore
 
 
 class TestCompletedUseCaseCompleteSales:
