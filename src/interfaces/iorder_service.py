@@ -1,7 +1,6 @@
 """Order service interface."""
 
 from collections.abc import Generator
-from pathlib import Path
 from typing import Any, Protocol
 
 from src.domain.order import Order, OrderStatus
@@ -12,11 +11,6 @@ from src.interfaces.iregistry import IRegistry
 
 class IOrderService(Protocol):
     """Interface for order services."""
-
-    @property
-    def json_orders_dir(self) -> Path:
-        """Get the JSON orders directory."""
-        ...
 
     def get_orders(self, error_queue: IErrorQueue) -> Generator[Order, None, None]:
         """Generate orders."""
