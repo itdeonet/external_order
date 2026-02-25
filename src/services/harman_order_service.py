@@ -33,9 +33,8 @@ class HarmanOrderService:
     order_provider: str
     shipment_type: str
     workdays_for_delivery: int
-    input_orders_dir: Path
-    json_orders_dir: Path
-    notify_dir: Path
+    input_dir: Path
+    output_dir: Path
     renderer: RenderService
 
     @classmethod
@@ -48,16 +47,15 @@ class HarmanOrderService:
             order_provider=config.harman_order_provider,
             shipment_type=config.harman_shipment_type,
             workdays_for_delivery=config.harman_workdays_for_delivery,
-            input_orders_dir=config.harman_input_orders_dir,
-            json_orders_dir=config.json_orders_dir,
-            notify_dir=config.harman_notify_dir,
+            input_dir=config.harman_input_dir,
+            output_dir=config.harman_output_dir,
             renderer=RenderService(directory=config.templates_dir),
         )
 
     def get_orders(self, error_queue: IErrorQueue) -> Generator[Order, None, None]:
         """Generate orders."""
         # parse each .insdes file in the directory and yield an Order instance
-        for file in self.input_orders_dir.glob("*.insdes", case_sensitive=False):
+        for file in self.input_dir.glob("*.insdes", case_sensitive=False):
             try:
                 order_data = self._get_order_data(file)
                 yield self._make_order(order_data)
@@ -158,7 +156,7 @@ class HarmanOrderService:
 
     def get_order_data_by_remote_order_id(self, remote_order_id: str) -> dict[str, Any] | None:
         """Get order data by remote ID."""
-        for file in self.input_orders_dir.glob(f"{remote_order_id}.*"):
+        for file in self.input_dir.glob(f"{remote_order_id}.*"):
             return self._get_order_data(file)
         return None
 
@@ -180,16 +178,17 @@ class HarmanOrderService:
 
         order.set_status(status)
         order_data = asdict(order)
-        file_path = self.json_orders_dir / f"{order.remote_order_id}.json"
+        file_path = self.input_dir / f"{order.remote_order_id}.json"
         text = json.dumps(order_data, indent=4, ensure_ascii=False, default=custom_serializer)
         file_path.write_text(text, encoding="utf-8")
 
-        for file in self.input_orders_dir.glob(f"{order.remote_order_id}.*"):
-            file.rename(file.parent / f"{order.remote_order_id}.{order.status.value}".upper())
+        for file in self.input_dir.glob(f"{order.remote_order_id}.*"):
+            if file.suffix.lower() != ".json":
+                file.rename(file.parent / f"{order.remote_order_id}.{order.status.value}".upper())
 
     def load_order(self, remote_order_id: str) -> Order | None:
         """Load an order by remote ID."""
-        file_path = self.json_orders_dir / f"{remote_order_id}.json"
+        file_path = self.input_dir / f"{remote_order_id}.json"
         if not file_path.exists():
             return None
         text = file_path.read_text(encoding="utf-8")
@@ -209,9 +208,7 @@ class HarmanOrderService:
             content = Serializer().serialize(list(segments), break_lines=True)
 
             # write the message
-            notify_path = (
-                self.notify_dir / file.stem / f"{order.remote_order_id}.{file.stem}".upper()
-            )
+            notify_path = self.output_dir / f"{order.remote_order_id}.{file.stem}".upper()
             notify_path.write_text(content, encoding="utf-8")
 
     def _get_notify_data(self, order: Order, doc_type: str) -> dict[str, Any]:

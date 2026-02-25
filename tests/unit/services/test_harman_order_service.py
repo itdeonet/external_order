@@ -1,5 +1,6 @@
 """Unit tests for HarmanOrderService."""
 
+import contextlib
 import datetime as dt
 import json
 import pathlib
@@ -26,8 +27,7 @@ class TestHarmanOrderServiceInstantiation:
     def test_instantiation_with_all_fields(self, tmp_path, mock_renderer):
         """Test creating HarmanOrderService with all fields."""
         input_dir = tmp_path / "input"
-        json_dir = tmp_path / "output"
-        notify_dir = tmp_path / "notify"
+        output_dir = tmp_path / "output"
 
         service = HarmanOrderService(
             administration_id=1,
@@ -36,9 +36,8 @@ class TestHarmanOrderServiceInstantiation:
             order_provider="Harman",
             shipment_type="standard",
             workdays_for_delivery=5,
-            input_orders_dir=input_dir,
-            json_orders_dir=json_dir,
-            notify_dir=notify_dir,
+            input_dir=input_dir,
+            output_dir=output_dir,
             renderer=mock_renderer,
         )
 
@@ -48,9 +47,8 @@ class TestHarmanOrderServiceInstantiation:
         assert service.order_provider == "Harman"
         assert service.shipment_type == "standard"
         assert service.workdays_for_delivery == 5
-        assert service.input_orders_dir == input_dir
-        assert service.json_orders_dir == json_dir
-        assert service.notify_dir == notify_dir
+        assert service.input_dir == input_dir
+        assert service.output_dir == output_dir
         assert service.renderer is mock_renderer
 
     def test_instantiation_required_fields(self):
@@ -76,9 +74,8 @@ class TestHarmanOrderServiceFromConfig:
         mock_config.harman_order_provider = "HarmanProvider"
         mock_config.harman_shipment_type = "express"
         mock_config.harman_workdays_for_delivery = 7
-        mock_config.harman_input_orders_dir = tmp_path / "input"
-        mock_config.json_orders_dir = tmp_path / "output"
-        mock_config.harman_notify_dir = tmp_path / "notify"
+        mock_config.harman_input_dir = tmp_path / "input"
+        mock_config.harman_output_dir = tmp_path / "output"
         mock_config.templates_dir = tmp_path / "templates"
 
         mocker.patch(
@@ -104,9 +101,8 @@ class TestHarmanOrderServiceFromConfig:
         mock_config.harman_order_provider = "Provider"
         mock_config.harman_shipment_type = "type"
         mock_config.harman_workdays_for_delivery = 5
-        mock_config.harman_input_orders_dir = tmp_path / "input"
-        mock_config.json_orders_dir = tmp_path / "output"
-        mock_config.harman_notify_dir = tmp_path / "notify"
+        mock_config.harman_input_dir = tmp_path / "input"
+        mock_config.harman_output_dir = tmp_path / "output"
         mock_config.templates_dir = tmp_path / "templates"
 
         mock_renderer_class = mocker.patch(
@@ -134,9 +130,8 @@ class TestGetOrderData:
             order_provider="Harman",
             shipment_type="standard",
             workdays_for_delivery=5,
-            input_orders_dir=tmp_path / "input",
-            json_orders_dir=tmp_path / "output",
-            notify_dir=tmp_path / "notify",
+            input_dir=tmp_path / "input",
+            output_dir=tmp_path / "output",
             renderer=mock_renderer,
         )
 
@@ -299,9 +294,8 @@ class TestMakeOrder:
             order_provider="Harman",
             shipment_type="standard",
             workdays_for_delivery=5,
-            input_orders_dir=tmp_path / "input",
-            json_orders_dir=tmp_path / "output",
-            notify_dir=tmp_path / "notify",
+            input_dir=tmp_path / "input",
+            output_dir=tmp_path / "output",
             renderer=mock_renderer,
         )
 
@@ -431,9 +425,8 @@ class TestGetArtworkService:
             order_provider="Harman",
             shipment_type="standard",
             workdays_for_delivery=5,
-            input_orders_dir=tmp_path / "input",
-            json_orders_dir=tmp_path / "output",
-            notify_dir=tmp_path / "notify",
+            input_dir=tmp_path / "input",
+            output_dir=tmp_path / "output",
             renderer=mock_renderer,
         )
 
@@ -527,16 +520,15 @@ class TestPersistOrder:
             order_provider="Harman",
             shipment_type="standard",
             workdays_for_delivery=5,
-            input_orders_dir=tmp_path / "input",
-            json_orders_dir=tmp_path / "output",
-            notify_dir=tmp_path / "notify",
+            input_dir=tmp_path / "input",
+            output_dir=tmp_path / "output",
             renderer=mock_renderer,
         )
 
     def test_persist_order_renames_input_files_with_status(self, service, mocker, tmp_path):
         """Test that input files are renamed with the order status value."""
         # Create input files
-        input_file = service.input_orders_dir / "ORD-123.insdes"
+        input_file = service.input_dir / "ORD-123.insdes"
         input_file.write_text("test")
 
         order = mocker.Mock(spec=Order)
@@ -557,14 +549,14 @@ class TestPersistOrder:
         service.persist_order(order, OrderStatus.CONFIRMED)
 
         # Verify file was renamed with the status value
-        expected_file = service.input_orders_dir / "ORD-123.CONFIRMED"
+        expected_file = service.input_dir / "ORD-123.CONFIRMED"
         assert expected_file.exists()
         assert not input_file.exists()
         assert order.status == OrderStatus.CONFIRMED
 
     def test_persist_order_calls_set_status(self, service, mocker):
         """Test that persist_order calls order.set_status."""
-        input_file = service.input_orders_dir / "ORD-456.insdes"
+        input_file = service.input_dir / "ORD-456.insdes"
         input_file.write_text("test")
 
         order = mocker.Mock(spec=Order)
@@ -587,7 +579,7 @@ class TestPersistOrder:
 
     def test_persist_order_writes_json_file(self, service, mocker):
         """Test that persist_order writes JSON file."""
-        input_file = service.input_orders_dir / "ORD-789.insdes"
+        input_file = service.input_dir / "ORD-789.insdes"
         input_file.write_text("test")
 
         order = mocker.Mock(spec=Order)
@@ -606,7 +598,7 @@ class TestPersistOrder:
 
         service.persist_order(order, OrderStatus.CREATED)
 
-        json_file = service.json_orders_dir / "ORD-789.json"
+        json_file = service.input_dir / "ORD-789.json"
         assert json_file.exists()
         content = json_file.read_text(encoding="utf-8")
         data = json.loads(content)
@@ -614,7 +606,7 @@ class TestPersistOrder:
 
     def test_persist_order_datetime_serialization(self, service, mocker):
         """Test that datetime objects are properly serialized."""
-        input_file = service.input_orders_dir / "ORD-999.insdes"
+        input_file = service.input_dir / "ORD-999.insdes"
         input_file.write_text("test")
 
         order = mocker.Mock(spec=Order)
@@ -634,7 +626,7 @@ class TestPersistOrder:
 
         service.persist_order(order, OrderStatus.SHIPPED)
 
-        json_file = service.json_orders_dir / "ORD-999.json"
+        json_file = service.input_dir / "ORD-999.json"
         content = json_file.read_text(encoding="utf-8")
         assert "2025-02-14" in content
 
@@ -654,9 +646,8 @@ class TestGetOrders:
             order_provider="Harman",
             shipment_type="standard",
             workdays_for_delivery=5,
-            input_orders_dir=tmp_path / "input",
-            json_orders_dir=tmp_path / "output",
-            notify_dir=tmp_path / "notify",
+            input_dir=tmp_path / "input",
+            output_dir=tmp_path / "output",
             renderer=mock_renderer,
         )
 
@@ -681,7 +672,7 @@ class TestGetOrders:
     def test_get_orders_puts_exceptions_in_queue_on_error(self, service, mocker):
         """Test that get_orders handles exceptions by putting them in error queue."""
         # Create invalid input file that will cause Parser to fail
-        order_file = service.input_orders_dir / "ORD-001.insdes"
+        order_file = service.input_dir / "ORD-001.insdes"
         order_file.write_text("invalid content")
 
         error_queue = mocker.Mock(spec=IErrorQueue)
@@ -709,9 +700,8 @@ class TestImmutability:
             order_provider="Harman",
             shipment_type="standard",
             workdays_for_delivery=5,
-            input_orders_dir=tmp_path / "input",
-            json_orders_dir=tmp_path / "output",
-            notify_dir=tmp_path / "notify",
+            input_dir=tmp_path / "input",
+            output_dir=tmp_path / "output",
             renderer=mock_renderer,
         )
 
@@ -745,20 +735,15 @@ class TestImmutability:
         with pytest.raises((AttributeError, TypeError)):
             service.workdays_for_delivery = 10
 
-    def test_cannot_modify_input_orders_dir(self, service):
-        """Test that input_orders_dir cannot be modified."""
+    def test_cannot_modify_input_dir(self, service):
+        """Test that input_dir cannot be modified."""
         with pytest.raises((AttributeError, TypeError)):
-            service.input_orders_dir = pathlib.Path("/other/path")
+            service.input_dir = pathlib.Path("/other/path")
 
-    def test_cannot_modify_json_orders_dir(self, service):
-        """Test that json_orders_dir cannot be modified."""
+    def test_cannot_modify_output_dir(self, service):
+        """Test that output_dir cannot be modified."""
         with pytest.raises((AttributeError, TypeError)):
-            service.json_orders_dir = pathlib.Path("/other/path")
-
-    def test_cannot_modify_notify_dir(self, service):
-        """Test that notify_dir cannot be modified."""
-        with pytest.raises((AttributeError, TypeError)):
-            service.notify_dir = pathlib.Path("/other/path")
+            service.output_dir = pathlib.Path("/other/path")
 
     def test_cannot_modify_renderer(self, service):
         """Test that renderer cannot be modified."""
@@ -772,7 +757,7 @@ class TestLoadOrder:
     @pytest.fixture
     def service(self, tmp_path, mocker):
         """Provide a HarmanOrderService instance."""
-        (tmp_path / "output").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "input").mkdir(parents=True, exist_ok=True)
         mock_renderer = mocker.Mock(spec=RenderService)
         return HarmanOrderService(
             administration_id=1,
@@ -781,15 +766,14 @@ class TestLoadOrder:
             order_provider="Harman",
             shipment_type="standard",
             workdays_for_delivery=5,
-            input_orders_dir=tmp_path / "input",
-            json_orders_dir=tmp_path / "output",
-            notify_dir=tmp_path / "notify",
+            input_dir=tmp_path / "input",
+            output_dir=tmp_path / "output",
             renderer=mock_renderer,
         )
 
     def test_load_order_returns_order_when_file_exists(self, service, tmp_path, mocker):
         """Test that load_order returns an Order when JSON file exists."""
-        order_file = service.json_orders_dir / "ORD-123.json"
+        order_file = service.input_dir / "ORD-123.json"
         order_data = {
             "administration_id": 1,
             "customer_id": 100,
@@ -822,7 +806,7 @@ class TestLoadOrder:
 
     def test_load_order_reads_json_file(self, service):
         """Test that load_order correctly reads JSON file."""
-        order_file = service.json_orders_dir / "ORD-456.json"
+        order_file = service.input_dir / "ORD-456.json"
         order_data = {
             "administration_id": 1,
             "customer_id": 100,
@@ -842,7 +826,7 @@ class TestLoadOrder:
 
     def test_load_order_handles_malformed_json(self, service):
         """Test that load_order raises when JSON is malformed."""
-        order_file = service.json_orders_dir / "ORD-789.json"
+        order_file = service.input_dir / "ORD-789.json"
         order_file.write_text("invalid json {", encoding="utf-8")
 
         with pytest.raises(json.JSONDecodeError):
@@ -855,7 +839,7 @@ class TestNotifyCompletedSale:
     @pytest.fixture
     def service(self, tmp_path, mocker):
         """Provide a HarmanOrderService instance."""
-        (tmp_path / "notify").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "output").mkdir(parents=True, exist_ok=True)
         (tmp_path / "templates").mkdir(parents=True, exist_ok=True)
         mock_renderer = mocker.Mock(spec=RenderService)
         mock_renderer.directory = tmp_path / "templates"
@@ -866,9 +850,8 @@ class TestNotifyCompletedSale:
             order_provider="Harman",
             shipment_type="standard",
             workdays_for_delivery=5,
-            input_orders_dir=tmp_path / "input",
-            json_orders_dir=tmp_path / "output",
-            notify_dir=tmp_path / "notify",
+            input_dir=tmp_path / "input",
+            output_dir=tmp_path / "output",
             renderer=mock_renderer,
         )
 
@@ -881,8 +864,8 @@ class TestNotifyCompletedSale:
         service.notify_completed_sale(order)
 
         # Just verify the method completes without error
-        # and that the notify directory still exists
-        assert service.notify_dir.exists()
+        # and that the output directory still exists
+        assert service.output_dir.exists()
 
     def test_notify_completed_sale_creates_subdirectories(self, service, mocker):
         """Test that notify_completed_sale creates required subdirectories."""
@@ -896,14 +879,5 @@ class TestNotifyCompletedSale:
         # Mock the renderer to return valid EDIFACT content
         service.renderer.render.return_value = "UNB+UNOC:3+TEST+TEST+030101:1200+1'+UNH+1+DESADV:D:96A:UN:EAN008+1'+BGM+350+1+'3+9'UNT+4+1'UNZ+1+1'"
 
-        try:
+        with contextlib.suppress(Exception):
             service.notify_completed_sale(order)
-        except Exception:
-            # Some exceptions are okay for this test
-            # We're mainly testing that subdirectories are created
-            pass
-
-        # Verify that the subdirectory for this template would be created
-        service.notify_dir / "desadv-D96A"
-        # Directory might exist if file was written successfully
-        # or might not if there was an error - either is acceptable for this test
