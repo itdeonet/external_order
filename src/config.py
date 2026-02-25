@@ -14,15 +14,15 @@ load_dotenv()
 class Config:
     """Settings for the application."""
 
+    # Application settings
     templates_dir: Path = Path(__file__).parent / "templates"
     work_dir: Path = Path.home() / "projects_data" / "external_order"
-    digitals_dir: Path = field(default=Path.home(), init=False)
-    json_orders_dir: Path = field(default=Path.home(), init=False)
-    open_orders_dir: Path = field(default=Path.home(), init=False)
+    digitals_dir: Path = field(init=False)
+    open_orders_dir: Path = field(init=False)
 
     # Harman settings
-    harman_input_orders_dir: Path = field(default=Path.home(), init=False)
-    harman_notify_dir: Path = field(default=Path.home(), init=False)
+    harman_input_dir: Path = field(init=False)
+    harman_output_dir: Path = field(init=False)
     harman_administration_id: int = 2
     harman_customer_id: int = 5380
     harman_pricelist_id: int = 2
@@ -42,20 +42,14 @@ class Config:
 
     def __post_init__(self):
         """Initialize settings."""
-        object.__setattr__(
-            self, "harman_input_orders_dir", self.work_dir / "harman" / "in" / "insdes"
-        )
-        object.__setattr__(self, "harman_notify_dir", self.work_dir / "harman" / "out")
+        object.__setattr__(self, "harman_input_dir", self.work_dir / "harman" / "in")
+        object.__setattr__(self, "harman_output_dir", self.work_dir / "harman" / "out")
         object.__setattr__(self, "digitals_dir", self.work_dir / "digitals")
-        object.__setattr__(self, "json_orders_dir", self.work_dir / "orders")
         object.__setattr__(self, "open_orders_dir", self.work_dir / "open_orders")
 
-        self.harman_input_orders_dir.mkdir(parents=True, exist_ok=True)
-        self.harman_notify_dir.mkdir(parents=True, exist_ok=True)
-        (self.harman_notify_dir / "desadvd96a").mkdir(parents=True, exist_ok=True)
-        (self.harman_notify_dir / "desadv99a").mkdir(parents=True, exist_ok=True)
+        self.harman_input_dir.mkdir(parents=True, exist_ok=True)
+        self.harman_output_dir.mkdir(parents=True, exist_ok=True)
         self.digitals_dir.mkdir(parents=True, exist_ok=True)
-        self.json_orders_dir.mkdir(parents=True, exist_ok=True)
         self.open_orders_dir.mkdir(parents=True, exist_ok=True)
 
 
