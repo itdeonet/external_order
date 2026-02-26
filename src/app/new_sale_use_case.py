@@ -26,7 +26,7 @@ class NewSaleUseCase:
     error_queue: IErrorQueue
     open_orders_dir: Path
 
-    def create_sales(self) -> None:
+    def execute(self) -> None:
         """Create sales from all order services."""
         for order_service_name, order_service in self.order_services.items():
             logger.info("Create sales from %s service...", order_service_name)

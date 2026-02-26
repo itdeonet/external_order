@@ -166,19 +166,19 @@ class TestSaleUseCaseInstantiation:
 
 
 class TestCreateSalesWithNoOrders:
-    """Tests for create_sales when there are no orders."""
+    """Tests for execute when there are no orders."""
 
     def test_create_sales_with_no_order_services(self, use_case):
-        """Test create_sales when no order services are registered."""
+        """Test execute when no order services are registered."""
         use_case.order_services.items.return_value = []
 
-        use_case.create_sales()
+        use_case.execute()
 
         use_case.order_services.items.assert_called_once()
         use_case.error_queue.put.assert_not_called()
 
     def test_create_sales_with_order_service_but_no_orders(self, use_case, mocker):
-        """Test create_sales when order service returns no orders."""
+        """Test execute when order service returns no orders."""
         order_service = MagicMock(spec=IOrderService)
         order_service.get_orders.return_value = iter([])
 
@@ -186,16 +186,16 @@ class TestCreateSalesWithNoOrders:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
-        use_case.create_sales()
+        use_case.execute()
 
         order_service.get_orders.assert_called_once_with(use_case.error_queue)
 
 
 class TestCreateSalesNewSaleCreation:
-    """Tests for create_sales when creating new sales."""
+    """Tests for execute when creating new sales."""
 
     def test_create_sales_creates_new_sale_when_none_exists(self, use_case, mocker):
-        """Test that create_sales creates a new sale when none exists."""
+        """Test that execute creates a new sale when none exists."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
         order_service.get_orders.return_value = iter([order])
@@ -206,7 +206,7 @@ class TestCreateSalesNewSaleCreation:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
-        use_case.create_sales()
+        use_case.execute()
 
         use_case.sale_service.is_sale_created.assert_called_once_with(order)
         use_case.sale_service.create_sale.assert_called_once_with(order)
@@ -223,7 +223,7 @@ class TestCreateSalesNewSaleCreation:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
-        use_case.create_sales()
+        use_case.execute()
 
         # First persist call should be with NEW status
         calls = order_service.persist_order.call_args_list
@@ -241,7 +241,7 @@ class TestCreateSalesNewSaleCreation:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
-        use_case.create_sales()
+        use_case.execute()
 
         calls = order_service.persist_order.call_args_list
         assert calls[1] == call(order, OrderStatus.CREATED)
@@ -258,7 +258,7 @@ class TestCreateSalesNewSaleCreation:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
-        use_case.create_sales()
+        use_case.execute()
 
         calls = order_service.persist_order.call_args_list
         assert calls[2] == call(order, OrderStatus.ARTWORK)
@@ -275,7 +275,7 @@ class TestCreateSalesNewSaleCreation:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
-        use_case.create_sales()
+        use_case.execute()
 
         calls = order_service.persist_order.call_args_list
         assert calls[3] == call(order, OrderStatus.CONFIRMED)
@@ -292,13 +292,13 @@ class TestCreateSalesNewSaleCreation:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
-        use_case.create_sales()
+        use_case.execute()
 
         use_case.sale_service.confirm_sale.assert_called_once_with(order)
 
 
 class TestCreateSalesExistingSaleUpdate:
-    """Tests for create_sales when updating existing sales."""
+    """Tests for execute when updating existing sales."""
 
     def test_create_sales_updates_contact_when_sale_exists_and_lines_match(self, use_case, mocker):
         """Test that contact is updated when sale exists and order lines match."""
@@ -313,7 +313,7 @@ class TestCreateSalesExistingSaleUpdate:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
-        use_case.create_sales()
+        use_case.execute()
 
         use_case.sale_service.update_contact.assert_called_once_with(order)
         use_case.sale_service.create_sale.assert_not_called()
@@ -330,7 +330,7 @@ class TestCreateSalesExistingSaleUpdate:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
-        use_case.create_sales()
+        use_case.execute()
 
         # The exception is caught and put into the error queue
         use_case.error_queue.put.assert_called_once()
@@ -350,7 +350,7 @@ class TestCreateSalesExistingSaleUpdate:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
-        use_case.create_sales()
+        use_case.execute()
 
         args = use_case.error_queue.put.call_args[0]
         error = args[0]
@@ -358,7 +358,7 @@ class TestCreateSalesExistingSaleUpdate:
 
 
 class TestCreateSalesExceptionHandling:
-    """Tests for exception handling in create_sales."""
+    """Tests for exception handling in execute."""
 
     def test_create_sales_catches_exception_and_queues_error(self, use_case, mocker):
         """Test that exceptions are caught and added to error queue."""
@@ -371,12 +371,12 @@ class TestCreateSalesExceptionHandling:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
-        use_case.create_sales()
+        use_case.execute()
 
         use_case.error_queue.put.assert_called_once()
 
     def test_create_sales_continues_after_exception_from_first_order(self, use_case, mocker):
-        """Test that create_sales continues after exception from first order."""
+        """Test that execute continues after exception from first order."""
         order1 = create_sample_order("ORDER1")
         order2 = create_sample_order("ORDER2")
 
@@ -399,7 +399,7 @@ class TestCreateSalesExceptionHandling:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
-        use_case.create_sales()
+        use_case.execute()
 
         # Both orders should have been attempted (persist called at least for first status)
         assert order_service.get_orders.call_count == 1
@@ -417,7 +417,7 @@ class TestCreateSalesExceptionHandling:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
-        use_case.create_sales()
+        use_case.execute()
 
         use_case.error_queue.put.assert_called_once()
 
@@ -434,16 +434,16 @@ class TestCreateSalesExceptionHandling:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
-        use_case.create_sales()
+        use_case.execute()
 
         use_case.error_queue.put.assert_called_once()
 
 
 class TestCreateSalesWithMultipleServices:
-    """Tests for create_sales with multiple order services."""
+    """Tests for execute with multiple order services."""
 
     def test_create_sales_processes_multiple_order_services(self, use_case, mocker):
-        """Test that create_sales processes all registered order services."""
+        """Test that execute processes all registered order services."""
         order1 = create_sample_order("ORDER1")
         order2 = create_sample_order("ORDER2")
 
@@ -463,7 +463,7 @@ class TestCreateSalesWithMultipleServices:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
-        use_case.create_sales()
+        use_case.execute()
 
         order_service1.get_orders.assert_called_once()
         order_service2.get_orders.assert_called_once()
@@ -489,14 +489,14 @@ class TestCreateSalesWithMultipleServices:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
-        use_case.create_sales()
+        use_case.execute()
 
         # Both services should still be attempted
         order_service1.get_orders.assert_called_once()
         order_service2.get_orders.assert_called_once()
 
     def test_create_sales_with_three_services(self, use_case, mocker):
-        """Test create_sales with three order services."""
+        """Test execute with three order services."""
         order_service1 = MagicMock(spec=IOrderService)
         order_service1.get_orders.return_value = iter([])
 
@@ -514,7 +514,7 @@ class TestCreateSalesWithMultipleServices:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
-        use_case.create_sales()
+        use_case.execute()
 
         order_service1.get_orders.assert_called_once()
         order_service2.get_orders.assert_called_once()
@@ -733,22 +733,22 @@ class TestGetArtworkPlacementHandling:
 
 
 class TestCreateSalesLogging:
-    """Tests for logging in create_sales."""
+    """Tests for logging in execute."""
 
     def test_create_sales_logs_service_processing_start(self, use_case, mocker, caplog):
-        """Test that create_sales logs when starting to process a service."""
+        """Test that execute logs when starting to process a service."""
         order_service = MagicMock(spec=IOrderService)
         order_service.get_orders.return_value = iter([])
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
 
         with caplog.at_level(logging.INFO):
-            use_case.create_sales()
+            use_case.execute()
 
             assert "Create sales from test_service service" in caplog.text
 
     def test_create_sales_logs_order_creation(self, use_case, mocker, caplog):
-        """Test that create_sales logs when creating an order."""
+        """Test that execute logs when creating an order."""
         order = create_sample_order("ORDER123")
         order_service = MagicMock(spec=IOrderService)
         order_service.get_orders.return_value = iter([order])
@@ -758,12 +758,12 @@ class TestCreateSalesLogging:
         use_case.sale_service.is_sale_created.return_value = False
 
         with caplog.at_level(logging.INFO):
-            use_case.create_sales()
+            use_case.execute()
 
             assert "Create sale order ORDER123 from test_service service" in caplog.text
 
     def test_create_sales_logs_error_on_exception(self, use_case, mocker, caplog):
-        """Test that create_sales logs errors when exceptions occur."""
+        """Test that execute logs errors when exceptions occur."""
         order = create_sample_order("ORDER456")
         order_service = MagicMock(spec=IOrderService)
         order_service.get_orders.return_value = iter([order])
@@ -772,13 +772,13 @@ class TestCreateSalesLogging:
         use_case.order_services.items.return_value = [("test_service", order_service)]
 
         with caplog.at_level(logging.ERROR):
-            use_case.create_sales()
+            use_case.execute()
 
             assert "Error processing order ORDER456" in caplog.text
             assert "Test error" in caplog.text
 
     def test_create_sales_logs_mismatched_quantities_warning(self, use_case, mocker, caplog):
-        """Test that create_sales logs warning for mismatched order lines."""
+        """Test that execute logs warning for mismatched order lines."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
         order_service.get_orders.return_value = iter([order])
@@ -788,7 +788,7 @@ class TestCreateSalesLogging:
         use_case.sale_service.has_expected_order_lines.return_value = False
 
         with caplog.at_level(logging.WARNING):
-            use_case.create_sales()
+            use_case.execute()
 
             assert "Sale order line quantities do not match" in caplog.text
 
@@ -841,7 +841,7 @@ class TestSaleUseCaseIntegration:
 
             mocker.patch("src.app.new_sale_use_case.logger")
 
-            use_case.create_sales()
+            use_case.execute()
 
             # Verify complete flow
             use_case.sale_service.create_sale.assert_called_once_with(order)
@@ -865,7 +865,7 @@ class TestSaleUseCaseIntegration:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
-        use_case.create_sales()
+        use_case.execute()
 
         # Verify flow
         use_case.sale_service.update_contact.assert_called_once_with(order)
@@ -903,7 +903,7 @@ class TestSaleUseCaseIntegration:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
-        use_case.create_sales()
+        use_case.execute()
 
         # Verify that all orders were attempted and error was queued
         use_case.error_queue.put.assert_called_once()
