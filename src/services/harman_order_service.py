@@ -1,6 +1,7 @@
 """Harman order service implementation."""
 
 import datetime as dt
+import itertools
 import json
 import random
 import re
@@ -55,7 +56,13 @@ class HarmanOrderService:
     def get_orders(self, error_queue: IErrorQueue) -> Generator[Order, None, None]:
         """Generate orders."""
         # parse each .insdes file in the directory and yield an Order instance
-        for file in self.input_dir.glob("*.insdes", case_sensitive=False):
+        chain = itertools.chain.from_iterable(
+            [
+                self.input_dir.glob("*.insdes", case_sensitive=False),
+                self.input_dir.glob("*.created", case_sensitive=False),
+            ]
+        )
+        for file in chain:
             try:
                 order_data = self._get_order_data(file)
                 yield self._make_order(order_data)

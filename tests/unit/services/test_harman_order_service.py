@@ -669,21 +669,204 @@ class TestGetOrders:
         assert len(orders) == 0
         error_queue.put.assert_not_called()
 
-    def test_get_orders_puts_exceptions_in_queue_on_error(self, service, mocker):
-        """Test that get_orders handles exceptions by putting them in error queue."""
-        # Create invalid input file that will cause Parser to fail
-        order_file = service.input_dir / "ORD-001.insdes"
-        order_file.write_text("invalid content")
+    def test_get_orders_yields_order_from_insdes_file(self, service, mocker):
+        """Test that get_orders yields an order from a .insdes file."""
+        # Create a file
+        insdes_file = service.input_dir / "ORD-001.insdes"
+        insdes_file.write_text("fake edi content")
+
+        # Mock _get_order_data at the module level to return valid order data
+        order_data = {
+            "remote_order_id": "ORD-001",
+            "ship_to": {
+                "remote_customer_id": "CUST123",
+                "company_name": "Acme Corp",
+                "contact_name": "John Doe",
+                "email": "john@acme.com",
+                "phone": "1-555-0001",
+                "street1": "123 Main St",
+                "street2": "Suite 100",
+                "city": "Chicago",
+                "state": "IL",
+                "postal_code": "60601",
+                "country_code": "US",
+            },
+            "line_items": [{"id": "1", "product_code": "PROD001", "quantity": 100}],
+        }
+        mocker.patch(
+            "src.services.harman_order_service.HarmanOrderService._get_order_data",
+            return_value=order_data,
+        )
 
         error_queue = mocker.Mock(spec=IErrorQueue)
+        orders = list(service.get_orders(error_queue))
 
-        # The generator should handle exceptions and put them in the queue
-        list(service.get_orders(error_queue))
+        assert len(orders) == 1
+        assert isinstance(orders[0], Order)
+        assert orders[0].remote_order_id == "ORD-001"
+        error_queue.put.assert_not_called()
 
-        # Orders list should  be empty since there was an error
-        # But error_queue.put should have been called
-        # Note: This test might not pass if the actual implementation doesn't raise
-        # on invalid input, so we just verify the error queue parameter is accepted
+    def test_get_orders_yields_order_from_created_file(self, service, mocker):
+        """Test that get_orders yields an order from a .created file."""
+        # Create a file
+        created_file = service.input_dir / "ORD-002.created"
+        created_file.write_text("fake edi content")
+
+        # Mock _get_order_data to return valid order data
+        order_data = {
+            "remote_order_id": "ORD-002",
+            "ship_to": {
+                "remote_customer_id": "CUST456",
+                "company_name": "",
+                "contact_name": "Jane Doe",
+                "email": "jane@beta.com",
+                "phone": "1-555-0002",
+                "street1": "456 Oak Ave",
+                "street2": "",
+                "city": "Boston",
+                "state": "MA",
+                "postal_code": "02101",
+                "country_code": "US",
+            },
+            "line_items": [{"id": "1", "product_code": "PROD002", "quantity": 50}],
+        }
+        mocker.patch(
+            "src.services.harman_order_service.HarmanOrderService._get_order_data",
+            return_value=order_data,
+        )
+
+        error_queue = mocker.Mock(spec=IErrorQueue)
+        orders = list(service.get_orders(error_queue))
+
+        assert len(orders) == 1
+        assert isinstance(orders[0], Order)
+        assert orders[0].remote_order_id == "ORD-002"
+        error_queue.put.assert_not_called()
+
+    def test_get_orders_yields_multiple_orders_from_mixed_files(self, service, mocker):
+        """Test that get_orders yields all orders from both .insdes and .created files."""
+        # Create multiple files with different extensions
+        insdes_file = service.input_dir / "ORD-003.insdes"
+        insdes_file.write_text("fake edi content")
+
+        created_file = service.input_dir / "ORD-004.created"
+        created_file.write_text("fake edi content")
+
+        # Mock _get_order_data to return different data for each call
+        order_data_1 = {
+            "remote_order_id": "ORD-003",
+            "ship_to": {
+                "remote_customer_id": "CUST789",
+                "company_name": "Gamma Inc",
+                "contact_name": "John Smith",
+                "email": "john@gamma.com",
+                "phone": "1-555-0003",
+                "street1": "789 Pine St",
+                "street2": "",
+                "city": "Denver",
+                "state": "CO",
+                "postal_code": "80202",
+                "country_code": "US",
+            },
+            "line_items": [{"id": "1", "product_code": "PROD003", "quantity": 75}],
+        }
+        order_data_2 = {
+            "remote_order_id": "ORD-004",
+            "ship_to": {
+                "remote_customer_id": "CUST000",
+                "company_name": "Delta Ltd",
+                "contact_name": "Jane Smith",
+                "email": "jane@delta.com",
+                "phone": "1-555-0004",
+                "street1": "000 Elm St",
+                "street2": "",
+                "city": "Seattle",
+                "state": "WA",
+                "postal_code": "98101",
+                "country_code": "US",
+            },
+            "line_items": [{"id": "1", "product_code": "PROD004", "quantity": 25}],
+        }
+
+        mocker.patch(
+            "src.services.harman_order_service.HarmanOrderService._get_order_data",
+            side_effect=[order_data_1, order_data_2],
+        )
+
+        error_queue = mocker.Mock(spec=IErrorQueue)
+        orders = list(service.get_orders(error_queue))
+
+        assert len(orders) == 2
+        order_ids = {order.remote_order_id for order in orders}
+        assert "ORD-003" in order_ids
+        assert "ORD-004" in order_ids
+        error_queue.put.assert_not_called()
+
+    def test_get_orders_handles_parsing_exception(self, service, mocker):
+        """Test that get_orders catches exceptions and puts them in error queue."""
+        order_file = service.input_dir / "ORD-010.insdes"
+        order_file.write_text("invalid edi")
+
+        # Mock _get_order_data to raise an exception
+        parsing_error = ValueError("Invalid EDI format")
+        mocker.patch(
+            "src.services.harman_order_service.HarmanOrderService._get_order_data",
+            side_effect=parsing_error,
+        )
+
+        error_queue = mocker.Mock(spec=IErrorQueue)
+        orders = list(service.get_orders(error_queue))
+
+        assert len(orders) == 0
+        error_queue.put.assert_called_once_with(parsing_error)
+
+    def test_get_orders_handles_order_creation_exception(self, service, mocker):
+        """Test that get_orders catches order creation exceptions."""
+        order_file = service.input_dir / "ORD-011.insdes"
+        order_file.write_text("edi content")
+
+        order_data = {
+            "remote_order_id": "ORD-011",
+            "ship_to": {},
+            "line_items": [],
+        }
+        mocker.patch(
+            "src.services.harman_order_service.HarmanOrderService._get_order_data",
+            return_value=order_data,
+        )
+
+        # Mock _make_order to raise an exception
+        creation_error = RuntimeError("Failed to create order")
+        mocker.patch(
+            "src.services.harman_order_service.HarmanOrderService._make_order",
+            side_effect=creation_error,
+        )
+
+        error_queue = mocker.Mock(spec=IErrorQueue)
+        orders = list(service.get_orders(error_queue))
+
+        assert len(orders) == 0
+        error_queue.put.assert_called_once_with(creation_error)
+
+    def test_get_orders_continues_after_exception(self, service, mocker):
+        """Test that get_orders continues processing after encountering an exception."""
+        # Create single file with exception handling
+        order_file = service.input_dir / "ORD-012.insdes"
+        order_file.write_text("bad edi")
+
+        # Make _get_order_data fail on this file
+        parsing_error = ValueError("Invalid EDI")
+        mocker.patch(
+            "src.services.harman_order_service.HarmanOrderService._get_order_data",
+            side_effect=parsing_error,
+        )
+
+        error_queue = mocker.Mock(spec=IErrorQueue)
+        orders = list(service.get_orders(error_queue))
+
+        # Should have no successful orders and one error
+        assert len(orders) == 0
+        error_queue.put.assert_called_once_with(parsing_error)
 
 
 class TestImmutability:
