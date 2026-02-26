@@ -21,7 +21,7 @@ class CompletedSaleUseCase:
     sale_service: ISaleService
     error_queue: IErrorQueue
 
-    def complete_sales(self) -> None:
+    def execute(self) -> None:
         """Complete sales for all orders with status 'sale created'."""
         for order_provider, order_service in self.order_services.items():
             try:
