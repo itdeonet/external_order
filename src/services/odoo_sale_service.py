@@ -107,20 +107,20 @@ class OdooSaleService:
         state_id = (
             self._get_state_id(country_id, ship_to.state)
             if ship_to.state and ship_to.state.strip()
-            else None
+            else 0
         )
         return {
             "company_id": int(order.administration_id),
             "parent_id": int(order.customer_id),
             "ref": ship_to.remote_customer_id,
             "name": ship_to.contact_name,
-            "company_name": ship_to.company_name,
+            "company_name": ship_to.company_name or None,
             "type": "other",
             "is_company": True,
             "street": ship_to.street1,
-            "street2": ship_to.street2,
+            "street2": ship_to.street2 or None,
             "city": ship_to.city,
-            "state_id": state_id,
+            "state_id": state_id or None,
             "zip": ship_to.postal_code,
             "country_id": country_id,
             "phone": ship_to.phone,
@@ -135,7 +135,7 @@ class OdooSaleService:
         # build contact data from the order's ship_to information
         contact_data = self._get_contact_data_from_order(order)
 
-        # check if a contact with the same reference already exists for the parent customer
+        # check if a contact with the same fields already exists
         result = self._call(
             model="res.partner",
             method="search_read",
@@ -254,7 +254,7 @@ class OdooSaleService:
         )
 
         if not isinstance(sale_id, int):
-            raise SaleError(f"Failed to create sale for order {order.remote_order_id}")
+            raise SaleError("Failed to create sale", order.remote_order_id)
 
         logger.info("Created sale with ID %d for order %s", sale_id, order.remote_order_id)
         return sale_id
@@ -263,7 +263,7 @@ class OdooSaleService:
         """Confirm the sale for the given order."""
         sale_data = self._get_sale_data(order)
         if not (sale_data and "id" in sale_data and sale_data["id"] != 0):
-            raise SaleError("Cannot confirm sale that does not exist in Odoo")
+            raise SaleError("Cannot confirm sale that does not exist", order.remote_order_id)
 
         sale_id = sale_data["id"]
         logger.info("Confirm sale with id: %s for order: %s", sale_id, order.remote_order_id)
@@ -274,7 +274,7 @@ class OdooSaleService:
         )
 
         if not bool(result):
-            raise SaleError(f"Failed to confirm sale id {sale_id}")
+            raise SaleError("Failed to confirm sale", order.remote_order_id)
 
         logger.info("Sale with id %d confirmed successfully", sale_id)
 
@@ -303,6 +303,8 @@ class OdooSaleService:
             (li["product_id"], li["product_uom_qty"]) for li in self._convert_order_lines(order)
         }
 
+        # B2B sales are manually created in Odoo and may have more lines than the order confirmation
+        # So we check that all order lines are in the sale, but allow the sale to have extra lines.
         result = odoo_lines == order_lines or order_lines.issubset(odoo_lines)
         logger.info(
             "Order lines for order %s match expected lines: %s", order.remote_order_id, result
@@ -457,6 +459,8 @@ class OdooSaleService:
 
         serials_by_product = defaultdict(list)
         for item in result:
+            # item["product_id"] is a tuple of (id: int, name: str)
+            # extract product code from name, which is in format "[CODE] Product Name"
             product_name = item["product_id"][1].split()[0][1:-1]
             serials_by_product[product_name].append(item["serial"])
 
