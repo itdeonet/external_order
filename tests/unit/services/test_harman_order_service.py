@@ -16,13 +16,14 @@ from src.services.harman_order_service import HarmanOrderService
 from src.services.render_service import RenderService
 
 
+@pytest.fixture
+def mock_renderer(mocker):
+    """Provide a mocked RenderService."""
+    return mocker.Mock(spec=RenderService)
+
+
 class TestHarmanOrderServiceInstantiation:
     """Tests for HarmanOrderService instantiation."""
-
-    @pytest.fixture
-    def mock_renderer(self, mocker):
-        """Provide a mocked RenderService."""
-        return mocker.Mock(spec=RenderService)
 
     def test_instantiation_with_all_fields(self, tmp_path, mock_renderer):
         """Test creating HarmanOrderService with all fields."""
@@ -120,9 +121,8 @@ class TestReadOrderData:
     """Tests for _read_order_data and _get_segment_data methods."""
 
     @pytest.fixture
-    def service(self, tmp_path, mocker):
+    def service(self, tmp_path, mock_renderer):
         """Provide a HarmanOrderService instance."""
-        mock_renderer = mocker.Mock(spec=RenderService)
         return HarmanOrderService(
             administration_id=1,
             customer_id=100,
@@ -284,9 +284,8 @@ class TestMakeOrder:
     """Tests for _make_order method."""
 
     @pytest.fixture
-    def service(self, tmp_path, mocker):
+    def service(self, tmp_path, mock_renderer):
         """Provide a HarmanOrderService instance."""
-        mock_renderer = mocker.Mock(spec=RenderService)
         return HarmanOrderService(
             administration_id=1,
             customer_id=100,
@@ -415,9 +414,8 @@ class TestGetArtworkService:
     """Tests for get_artwork_service method."""
 
     @pytest.fixture
-    def service(self, tmp_path, mocker):
+    def service(self, tmp_path, mock_renderer):
         """Provide a HarmanOrderService instance."""
-        mock_renderer = mocker.Mock(spec=RenderService)
         return HarmanOrderService(
             administration_id=1,
             customer_id=100,
@@ -508,11 +506,10 @@ class TestPersistOrder:
     """Tests for persist_order method."""
 
     @pytest.fixture
-    def service(self, tmp_path, mocker):
+    def service(self, tmp_path, mock_renderer):
         """Provide a HarmanOrderService instance."""
         (tmp_path / "input").mkdir(parents=True, exist_ok=True)
         (tmp_path / "output").mkdir(parents=True, exist_ok=True)
-        mock_renderer = mocker.Mock(spec=RenderService)
         return HarmanOrderService(
             administration_id=1,
             customer_id=100,
@@ -635,10 +632,9 @@ class TestReadOrders:
     """Tests for read_orders generator method."""
 
     @pytest.fixture
-    def service(self, tmp_path, mocker):
+    def service(self, tmp_path, mock_renderer):
         """Provide a HarmanOrderService instance."""
         (tmp_path / "input").mkdir(parents=True, exist_ok=True)
-        mock_renderer = mocker.Mock(spec=RenderService)
         return HarmanOrderService(
             administration_id=1,
             customer_id=100,
@@ -873,9 +869,8 @@ class TestImmutability:
     """Tests for HarmanOrderService immutability (frozen dataclass)."""
 
     @pytest.fixture
-    def service(self, tmp_path, mocker):
+    def service(self, tmp_path, mock_renderer):
         """Provide a HarmanOrderService instance."""
-        mock_renderer = mocker.Mock(spec=RenderService)
         return HarmanOrderService(
             administration_id=1,
             customer_id=100,
@@ -938,10 +933,9 @@ class TestLoadOrder:
     """Tests for load_order method."""
 
     @pytest.fixture
-    def service(self, tmp_path, mocker):
+    def service(self, tmp_path, mock_renderer):
         """Provide a HarmanOrderService instance."""
         (tmp_path / "input").mkdir(parents=True, exist_ok=True)
-        mock_renderer = mocker.Mock(spec=RenderService)
         return HarmanOrderService(
             administration_id=1,
             customer_id=100,
@@ -1020,11 +1014,10 @@ class TestNotifyCompletedSale:
     """Tests for notify_completed_sale method."""
 
     @pytest.fixture
-    def service(self, tmp_path, mocker):
+    def service(self, tmp_path, mock_renderer):
         """Provide a HarmanOrderService instance."""
         (tmp_path / "output").mkdir(parents=True, exist_ok=True)
         (tmp_path / "templates").mkdir(parents=True, exist_ok=True)
-        mock_renderer = mocker.Mock(spec=RenderService)
         mock_renderer.directory = tmp_path / "templates"
         return HarmanOrderService(
             administration_id=1,
