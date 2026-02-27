@@ -5,13 +5,10 @@ from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
 
+from src.app.error_handler import ErrorHandler
 from src.app.errors import SaleError
-from src.domain.order import Order, OrderStatus
-from src.interfaces.iartwork_service import IArtworkService
-from src.interfaces.ierror_queue import IErrorQueue
-from src.interfaces.iorder_service import IOrderService
-from src.interfaces.iregistry import IRegistry
-from src.interfaces.isale_service import ISaleService
+from src.domain import Order, OrderStatus
+from src.interfaces import IArtworkService, IErrorQueue, IOrderService, IRegistry, ISaleService
 
 logger = getLogger(__name__)
 
@@ -28,6 +25,7 @@ class NewSaleUseCase:
 
     def execute(self) -> None:
         """Create sales from all order services."""
+        error_handler = ErrorHandler(self.error_queue)
         for order_service_name, order_service in self.order_services.items():
             logger.info("Create sales from %s service...", order_service_name)
 
@@ -66,20 +64,12 @@ class NewSaleUseCase:
                     order_service.persist_order(order, OrderStatus.CONFIRMED)
 
                 except Exception as exc:
-                    logger.exception(
-                        "Error processing order %s from %s service",
+                    error_handler.handle_order_error(
+                        exc,
                         order.remote_order_id,
                         order_service_name,
+                        "Error processing order",
                     )
-                    if isinstance(exc, SaleError):
-                        self.error_queue.put(exc)
-                    else:
-                        self.error_queue.put(
-                            SaleError(
-                                message=f"{exc!s} (Service: {order_service_name})",
-                                order_id=order.remote_order_id,
-                            )
-                        )
 
     def get_artwork(self, order: Order, artwork_service: IArtworkService | None) -> list[Path]:
         """Get artwork for the given order."""

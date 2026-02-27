@@ -1,14 +1,12 @@
-"""New sale orders use case."""
+"""Completed sale orders use case."""
 
 from dataclasses import dataclass
 from logging import getLogger
 
+from src.app.error_handler import ErrorHandler
 from src.app.errors import SaleError
-from src.domain.order import OrderStatus
-from src.interfaces.ierror_queue import IErrorQueue
-from src.interfaces.iorder_service import IOrderService
-from src.interfaces.iregistry import IRegistry
-from src.interfaces.isale_service import ISaleService
+from src.domain import OrderStatus
+from src.interfaces import IErrorQueue, IOrderService, IRegistry, ISaleService
 
 logger = getLogger(__name__)
 
@@ -24,6 +22,7 @@ class CompletedSaleUseCase:
     def execute(self) -> None:
         """Complete sales for all order services."""
         logger.info("Complete sales for all order services...")
+        error_handler = ErrorHandler(self.error_queue)
         for order_provider, order_service in self.order_services.items():
             try:
                 logger.info("Complete sales for %s service...", order_provider)
@@ -40,24 +39,16 @@ class CompletedSaleUseCase:
                                 order_id=remote_order_id,
                             )
                     except Exception as exc:
-                        logger.exception("Error completing sale for order %s", remote_order_id)
-                        if isinstance(exc, SaleError):
-                            self.error_queue.put(exc)
-                        else:
-                            self.error_queue.put(
-                                SaleError(
-                                    message=f"{exc!s} (Provider: {order_provider})",
-                                    order_id=remote_order_id,
-                                )
-                            )
-            except Exception as exc:
-                logger.exception("Error completing sales for provider %s: %s", order_provider, exc)
-                if isinstance(exc, SaleError):
-                    self.error_queue.put(exc)
-                else:
-                    self.error_queue.put(
-                        SaleError(
-                            message=f"{exc!s} (Provider: {order_provider})",
-                            order_id=None,
+                        error_handler.handle_provider_error(
+                            exc,
+                            order_provider,
+                            remote_order_id,
+                            "Error completing sale",
                         )
-                    )
+            except Exception as exc:
+                error_handler.handle_provider_error(
+                    exc,
+                    order_provider,
+                    None,
+                    "Error completing sales",
+                )

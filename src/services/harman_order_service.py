@@ -16,12 +16,8 @@ from pydifact import Parser, Segment, Serializer  # type: ignore
 
 from src.app.errors import NotifyError
 from src.config import Config, get_config
-from src.domain.line_item import LineItem
-from src.domain.order import Order, OrderStatus
-from src.domain.ship_to import ShipTo
-from src.interfaces.iartwork_service import IArtworkService
-from src.interfaces.ierror_queue import IErrorQueue
-from src.interfaces.iregistry import IRegistry
+from src.domain import LineItem, Order, OrderStatus, ShipTo
+from src.interfaces import IArtworkService, IErrorQueue, IRegistry
 from src.services.render_service import RenderService
 
 logger = getLogger(__name__)

@@ -9,8 +9,7 @@ from zipfile import ZipFile
 import httpx
 
 from src.app.errors import ArtworkError
-from src.domain.artwork import Artwork
-from src.domain.order import Order
+from src.domain import Artwork, Order
 
 logger = getLogger(__name__)
 

@@ -3,9 +3,7 @@
 from dataclasses import dataclass
 from logging import getLogger
 
-from src.interfaces.ierror_queue import IErrorQueue
-from src.interfaces.iregistry import IRegistry
-from src.interfaces.istock_service import IStockService
+from src.interfaces import IErrorQueue, IRegistry, IStockService
 
 logger = getLogger(__name__)
 

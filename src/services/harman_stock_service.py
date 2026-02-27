@@ -10,7 +10,7 @@ from typing import Any, Self
 import xmltodict  # type: ignore
 
 from src.config import Config
-from src.interfaces.ierror_queue import IErrorQueue
+from src.interfaces import IErrorQueue
 
 logger = getLogger(__name__)
 

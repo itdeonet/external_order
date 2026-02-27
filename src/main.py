@@ -12,20 +12,20 @@ from src.app.odoo_auth import OdooAuth
 from src.app.registry import Registry
 from src.app.stock_transfer_use_case import StockTransferUseCase
 from src.config import Config, get_config
-from src.interfaces.iartwork_service import IArtworkService
-from src.interfaces.iorder_service import IOrderService
-from src.interfaces.isale_service import ISaleService
-from src.interfaces.istock_service import IStockService
-from src.interfaces.iuse_case import IUseCase
+from src.interfaces import (
+    IArtworkService,
+    IOrderService,
+    ISaleService,
+    IStockService,
+    IUseCase,
+)
 from src.services.harman_order_service import HarmanOrderService
 from src.services.harman_stock_service import HarmanStockService
 from src.services.odoo_sale_service import OdooSaleService
 from src.services.spectrum_artwork_service import SpectrumArtworkService
 
 if TYPE_CHECKING:
-    from src.interfaces.ierror_queue import IErrorQueue
-    from src.interfaces.iregistry import IRegistry
-    from src.interfaces.isale_service import ISaleService
+    from src.interfaces import IErrorQueue, IRegistry, ISaleService
 
 logger = getLogger(__name__)
 
