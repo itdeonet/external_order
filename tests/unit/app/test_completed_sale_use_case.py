@@ -422,4 +422,8 @@ class TestCompletedUseCaseIntegration:
         # Verify successful orders were processed
         assert mock_order_service.notify_completed_sale.call_count == 2
         assert mock_order_service.persist_order.call_count == 2
-        mock_error_queue.put.assert_not_called()
+        # Verify missing order error was queued
+        mock_error_queue.put.assert_called_once()
+        error_arg = mock_error_queue.put.call_args[0][0]
+        assert isinstance(error_arg, SaleError)
+        assert "missing_order" in str(error_arg)
