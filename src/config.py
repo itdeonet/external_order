@@ -19,6 +19,7 @@ class Config:
     work_dir: Path = Path.home() / "projects_data" / "external_order"
     digitals_dir: Path = field(init=False)
     open_orders_dir: Path = field(init=False)
+    default_box_size: tuple[int, int, int] = (24, 21, 6)  # L, W, H in cm
 
     # Harman settings
     harman_input_dir: Path = field(init=False)
