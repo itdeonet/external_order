@@ -243,14 +243,14 @@ class TestLineItemSetArtwork:
         line_item.set_artwork(mock_artwork)
         assert line_item.artwork == mock_artwork
 
-    def test_set_artwork_to_none(self, line_item):
+    def test_set_artwork_to_none_raises_error(self, line_item):
         """Test setting artwork to None."""
-        line_item.set_artwork(None)
-        assert line_item.artwork is None
+        with pytest.raises(ValueError, match="Artwork must be an instance of Artwork"):
+            line_item.set_artwork(None)
 
     def test_set_artwork_with_invalid_type(self, line_item):
         """Test that set_artwork rejects invalid artwork types."""
-        with pytest.raises(ValueError, match="Artwork must be an instance of Artwork or None"):
+        with pytest.raises(ValueError, match="Artwork must be an instance of Artwork"):
             line_item.set_artwork("not an artwork")  # type: ignore
 
 

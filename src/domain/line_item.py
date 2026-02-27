@@ -34,6 +34,6 @@ class LineItem:
 
     def set_artwork(self, artwork: Artwork) -> None:
         """Set the artwork for the line item."""
-        if not (isinstance(artwork, Artwork) or artwork is None):
-            raise ValueError("Artwork must be an instance of Artwork or None")
+        if not (artwork and (isinstance(artwork, Artwork))):
+            raise ValueError("Artwork must be an instance of Artwork")
         object.__setattr__(self, "artwork", artwork)
