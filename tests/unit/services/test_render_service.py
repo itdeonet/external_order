@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from jinja2 import Environment
+from jinja2 import Environment, TemplateNotFound
 
 from src.services.render_service import RenderService
 
@@ -201,7 +201,7 @@ Line 2"""
 
     def test_render_raises_when_template_not_found(self, service):
         """Test that render raises when template file doesn't exist."""
-        with pytest.raises(FileNotFoundError):
+        with pytest.raises(TemplateNotFound):
             service.render("nonexistent.txt", {})
 
     def test_render_with_filters(self, service, tmp_path):
@@ -236,7 +236,7 @@ Line 2"""
 
         assert result == "First: a, Last: c"
 
-    def test_render_logs_template_path(self, service, tmp_path, mocker, caplog):
+    def test_render_logs_template_name(self, service, tmp_path, mocker, caplog):
         """Test that render logs the template path."""
         import logging
 
@@ -246,7 +246,7 @@ Line 2"""
 
             service.render("logged.txt", {})
 
-            assert f"Rendering template {tmp_path / 'logged.txt'}" in caplog.text
+            assert "Rendering template logged.txt" in caplog.text
 
     def test_render_with_special_characters(self, service, tmp_path):
         """Test rendering with special characters."""

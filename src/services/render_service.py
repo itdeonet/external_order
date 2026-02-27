@@ -3,8 +3,9 @@
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
-from jinja2 import Environment, Template, select_autoescape
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 logger = logging.getLogger(__name__)
 
@@ -23,16 +24,15 @@ class RenderService:
             self,
             "env",
             Environment(
-                autoescape=select_autoescape(["html", "xml"]),
+                loader=FileSystemLoader(str(self.directory)),
+                autoescape=select_autoescape(["html", "xml", "txt"]),
                 trim_blocks=True,
                 lstrip_blocks=True,
             ),
         )
 
-    def render(self, template_name: str, data: dict) -> str:
+    def render(self, template_name: str, data: dict[str, Any]) -> str:
         """Render a template with the provided data."""
-        template_path: Path = self.directory / template_name
-        logger.info("Rendering template %s", template_path)
-        content: str = template_path.read_text()
-        template: Template = self.env.from_string(content)
+        logger.info(f"Rendering template {template_name}")
+        template = self.env.get_template(template_name)
         return template.render(**data)
