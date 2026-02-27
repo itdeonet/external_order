@@ -82,9 +82,9 @@ class TestRegistryRegister:
         assert registry.get("none_key") is None
 
     def test_register_with_empty_string_key(self, registry):
-        """Test registering with empty string as key."""
-        registry.register("", "value")
-        assert registry.get("") == "value"
+        """Test that registering with empty string as key raises ValueError."""
+        with pytest.raises(ValueError, match="Name must be a non-empty string"):
+            registry.register("", "value")
 
     def test_register_with_special_characters_in_key(self, registry):
         """Test registering with special characters in key."""
@@ -622,7 +622,7 @@ class TestRegistryImmutability:
         registry = Registry()
 
         with pytest.raises(Exception):  # FrozenInstanceError  # noqa: B017
-            registry.registry = {}  # type: ignore
+            registry._registry = {}  # type: ignore
 
     def test_frozen_prevents_attribute_addition(self):
         """Test that frozen dataclass prevents adding new attributes."""
@@ -903,7 +903,7 @@ class TestRegistryInitialization:
 
         try:
             # This should fail because registry is init=False
-            registry = Registry(registry={"key": "value"})  # type: ignore
+            registry = Registry(_registry={"key": "value"})  # type: ignore
             # If it doesn't raise, the field should still be empty
             # (Python 3.13+ allows this syntax but ignores the parameter)
             assert list(registry.items()) == []
@@ -967,9 +967,9 @@ class TestRegistryEquality:
         """Test that internal dict remains the same object."""
         registry = Registry()
 
-        dict1 = registry.registry
+        dict1 = registry._registry
         registry.register("key", "value")
-        dict2 = registry.registry
+        dict2 = registry._registry
 
         # Same internal dict object
         assert dict1 is dict2
