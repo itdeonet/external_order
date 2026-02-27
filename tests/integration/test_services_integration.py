@@ -71,12 +71,11 @@ class TestOdooServiceHttpIntegration:
 
     def test_odoo_authentication_validation(self):
         """Test OdooSaleService validates authentication properly."""
-        with httpx.Client(base_url="http://localhost:8069") as client:
-            # Should raise ValueError with invalid auth
-            with pytest.raises(
-                ValueError, match="authentication information is missing or invalid"
-            ):
-                OdooSaleService(auth=None, engine=client)  # type: ignore
+        with (
+            httpx.Client(base_url="http://localhost:8069") as client,
+            pytest.raises(ValueError, match="authentication information is missing or invalid"),
+        ):
+            OdooSaleService(auth=None, engine=client)  # type: ignore
 
     def test_odoo_engine_validation(self, odoo_auth):
         """Test OdooSaleService validates HTTP engine properly."""
