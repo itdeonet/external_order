@@ -1,6 +1,5 @@
 """Error queue interface."""
 
-from traceback import TracebackException
 from typing import Protocol
 
 
@@ -9,10 +8,6 @@ class IErrorQueue(Protocol):
 
     def put(self, exc: Exception) -> None:
         """Add an exception to the queue."""
-        ...
-
-    def all(self) -> list[TracebackException]:
-        """Retrieve all exceptions from the queue."""
         ...
 
     def clear(self) -> None:
