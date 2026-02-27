@@ -9,9 +9,7 @@ import httpx
 import pytest
 
 from src.app.errors import ArtworkError
-from src.domain.line_item import LineItem
-from src.domain.order import Order
-from src.domain.ship_to import ShipTo
+from src.domain import LineItem, Order, ShipTo
 from src.services.spectrum_artwork_service import SpectrumArtworkService
 
 

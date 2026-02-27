@@ -9,9 +9,8 @@ from unittest.mock import patch
 import pytest
 from pydifact import Segment  # type: ignore
 
-from src.domain.order import Order, OrderStatus
-from src.interfaces.iartwork_service import IArtworkService
-from src.interfaces.ierror_queue import IErrorQueue
+from src.domain import Order, OrderStatus
+from src.interfaces import IArtworkService, IErrorQueue
 from src.services.harman_order_service import HarmanOrderService
 from src.services.render_service import RenderService
 

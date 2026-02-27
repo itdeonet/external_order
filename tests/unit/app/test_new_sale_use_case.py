@@ -9,14 +9,8 @@ import pytest
 
 from src.app.errors import SaleError
 from src.app.new_sale_use_case import NewSaleUseCase
-from src.domain.line_item import LineItem
-from src.domain.order import Order, OrderStatus
-from src.domain.ship_to import ShipTo
-from src.interfaces.iartwork_service import IArtworkService
-from src.interfaces.ierror_queue import IErrorQueue
-from src.interfaces.iorder_service import IOrderService
-from src.interfaces.iregistry import IRegistry
-from src.interfaces.isale_service import ISaleService
+from src.domain import LineItem, Order, OrderStatus, ShipTo
+from src.interfaces import IArtworkService, IErrorQueue, IOrderService, IRegistry, ISaleService
 
 
 def create_sample_order(remote_order_id: str = "REMOTE001") -> Order:
