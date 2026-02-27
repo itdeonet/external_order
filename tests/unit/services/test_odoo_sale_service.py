@@ -8,9 +8,7 @@ import pytest
 
 from src.app.errors import SaleError
 from src.app.odoo_auth import OdooAuth
-from src.domain.line_item import LineItem
-from src.domain.order import Order
-from src.domain.ship_to import ShipTo
+from src.domain import LineItem, Order, ShipTo
 from src.services.odoo_sale_service import OdooSaleService
 
 
