@@ -9,6 +9,7 @@ dependencies = [
     "jinja2>=3.1.6",
     "pydifact>=0.1.8",
     "python-dotenv>=1.2.1",
+    "xmltodict>=1.0.4",
 ]
 
 [dependency-groups]
