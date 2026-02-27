@@ -1,7 +1,7 @@
 """Errors module."""
 
-import queue
 from dataclasses import dataclass, field
+from threading import Lock
 from traceback import TracebackException
 
 
@@ -9,35 +9,28 @@ from traceback import TracebackException
 class ErrorQueue:
     """A thread-safe queue to store exceptions."""
 
-    _queue: queue.Queue[TracebackException] = field(
-        default_factory=queue.Queue, init=False, repr=False
-    )
+    _errors: list[TracebackException] = field(default_factory=list, init=False, repr=False)
+    _lock: Lock = field(default_factory=Lock, init=False, repr=False)
 
     def put(self, exc: Exception) -> None:
         """Add an exception to the queue."""
-        self._queue.put(TracebackException.from_exception(exc))
-
-    def all(self) -> list[TracebackException]:
-        """Retrieve all exceptions from the queue."""
-        errors = []
-        while not self._queue.empty():
-            errors.append(self._queue.get())
-        return errors
+        with self._lock:
+            self._errors.append(TracebackException.from_exception(exc))
 
     def clear(self) -> None:
         """Clear all exceptions from the queue."""
-        while not self._queue.empty():
-            self._queue.get()
+        with self._lock:
+            self._errors.clear()
 
     def summarize(self) -> str:
         """Summarize all collected exceptions."""
-        errors = self.all()
-        if not errors:
-            return "No errors collected."
-        summary = []
-        for idx, error in enumerate(errors, 1):
-            summary.append(f"Error {idx}:\n{''.join(error.format())}")
-        return "\n\n".join(summary)
+        with self._lock:
+            if not self._errors:
+                return ""
+            summary = []
+            for idx, error in enumerate(self._errors, 1):
+                summary.append(f"Error {idx}:\n{''.join(error.format())}")
+            return "\n\n".join(summary)
 
 
 class BaseError(Exception):

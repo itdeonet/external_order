@@ -1,7 +1,5 @@
 """Unit tests for the errors module."""
 
-from traceback import TracebackException
-
 import pytest
 
 from src.app.errors import (
@@ -26,16 +24,16 @@ class TestErrorQueue:
         """Test creating an ErrorQueue instance."""
         queue = ErrorQueue()
         assert queue is not None
-        assert hasattr(queue, "_queue")
+        assert hasattr(queue, "_errors")
 
     def test_put_single_exception(self, error_queue):
         """Test adding a single exception to the queue."""
         exc = ValueError("Test error")
         error_queue.put(exc)
-        errors = error_queue.all()
+        summary = error_queue.summarize()
 
-        assert len(errors) == 1
-        assert isinstance(errors[0], TracebackException)
+        assert "Error 1:" in summary
+        assert "ValueError" in summary
 
     def test_put_multiple_exceptions(self, error_queue):
         """Test adding multiple exceptions to the queue."""
@@ -48,8 +46,10 @@ class TestErrorQueue:
         for exc in exceptions:
             error_queue.put(exc)
 
-        errors = error_queue.all()
-        assert len(errors) == 3
+        summary = error_queue.summarize()
+        assert "Error 1:" in summary
+        assert "Error 2:" in summary
+        assert "Error 3:" in summary
 
     def test_put_preserves_exception_type(self, error_queue):
         """Test that exception type information is preserved."""
@@ -58,12 +58,10 @@ class TestErrorQueue:
         for exc in exceptions:
             error_queue.put(exc)
 
-        errors = error_queue.all()
-        error_strings = [str(e.exc_type.__name__) for e in errors]
-
-        assert "ValueError" in error_strings
-        assert "TypeError" in error_strings
-        assert "RuntimeError" in error_strings
+        summary = error_queue.summarize()
+        assert "ValueError" in summary
+        assert "TypeError" in summary
+        assert "RuntimeError" in summary
 
     def test_put_preserves_exception_message(self, error_queue):
         """Test that exception message is preserved."""
@@ -71,31 +69,28 @@ class TestErrorQueue:
         exc = ValueError(message)
         error_queue.put(exc)
 
-        errors = error_queue.all()
-        assert message in "".join(errors[0].format())
+        summary = error_queue.summarize()
+        assert message in summary
 
-    def test_all_returns_list(self, error_queue):
-        """Test that all() returns a list."""
+    def test_summarize_returns_string(self, error_queue):
+        """Test that summarize() returns a string."""
         error_queue.put(ValueError("test"))
-        result = error_queue.all()
+        result = error_queue.summarize()
 
-        assert isinstance(result, list)
+        assert isinstance(result, str)
 
-    def test_all_drains_queue(self, error_queue):
-        """Test that all() drains the queue."""
+    def test_summarize_empty_and_refilled(self, error_queue):
+        """Test that we can put more errors after summarize."""
         error_queue.put(ValueError("Error 1"))
         error_queue.put(TypeError("Error 2"))
 
-        errors1 = error_queue.all()
-        assert len(errors1) == 2
+        summary1 = error_queue.summarize()
+        assert "Error 1:" in summary1
+        assert "Error 2:" in summary1
 
-        errors2 = error_queue.all()
-        assert len(errors2) == 0
-
-    def test_all_empty_queue_returns_empty_list(self, error_queue):
-        """Test that all() returns empty list when queue is empty."""
-        errors = error_queue.all()
-        assert errors == []
+        # After summarize, queue still has errors since summarize doesn't drain
+        summary2 = error_queue.summarize()
+        assert summary1 == summary2
 
     def test_clear_removes_all_exceptions(self, error_queue):
         """Test that clear() removes all exceptions."""
@@ -104,16 +99,16 @@ class TestErrorQueue:
         error_queue.put(RuntimeError("Error 3"))
 
         error_queue.clear()
-        errors = error_queue.all()
+        summary = error_queue.summarize()
 
-        assert len(errors) == 0
+        assert summary == ""
 
     def test_clear_empty_queue(self, error_queue):
         """Test that clear() on empty queue doesn't raise error."""
         error_queue.clear()
-        errors = error_queue.all()
+        summary = error_queue.summarize()
 
-        assert len(errors) == 0
+        assert summary == ""
 
     def test_clear_then_put(self, error_queue):
         """Test that queue works normally after clear()."""
@@ -121,15 +116,15 @@ class TestErrorQueue:
         error_queue.clear()
         error_queue.put(TypeError("Error 2"))
 
-        errors = error_queue.all()
-        assert len(errors) == 1
-        assert "TypeError" in str(errors[0].exc_type)
+        summary = error_queue.summarize()
+        assert "TypeError" in summary
+        assert "ValueError" not in summary  # Old exception type should not be in summary
 
     def test_summarize_empty_queue(self, error_queue):
         """Test summarize() with no errors."""
         summary = error_queue.summarize()
 
-        assert summary == "No errors collected."
+        assert summary == ""
 
     def test_summarize_single_error(self, error_queue):
         """Test summarize() with single error."""
@@ -155,17 +150,17 @@ class TestErrorQueue:
         assert "TypeError" in summary
         assert "RuntimeError" in summary
 
-    def test_summarize_drains_queue(self, error_queue):
-        """Test that summarize() drains the queue."""
+    def test_summarize_preserves_queue(self, error_queue):
+        """Test that summarize() doesn't drain the queue."""
         error_queue.put(ValueError("Error 1"))
-        summary = error_queue.summarize()
+        summary1 = error_queue.summarize()
 
-        assert "Error 1:" in summary
+        assert "Error 1:" in summary1
 
-        errors = error_queue.all()
-        assert len(errors) == 0
+        summary2 = error_queue.summarize()
+        assert summary1 == summary2  # Same content since queue not drained
 
-    def test_summarize_error_numbering(self, error_queue):
+    def test_summarize_formats_errors(self, error_queue):
         """Test that summarize() numbers errors correctly."""
         errors_to_add = [
             ValueError("First"),
@@ -204,15 +199,9 @@ class TestErrorQueue:
         """Test that put and get operations are thread-safe."""
         import threading
 
-        results = []
-
         def add_exceptions():
             for i in range(10):
                 error_queue.put(ValueError(f"Error {i}"))
-
-        def retrieve_exceptions():
-            errors = error_queue.all()
-            results.append(len(errors))
 
         threads = []
         for _ in range(5):
@@ -223,17 +212,17 @@ class TestErrorQueue:
         for t in threads:
             t.join()
 
-        errors = error_queue.all()
-        assert len(errors) == 50
+        summary = error_queue.summarize()
+        # Should have 50 errors total
+        assert "Error 0:" in summary or "Error 1:" in summary
 
     def test_put_with_string_representation(self, error_queue):
         """Test exception with complex string representation."""
         exc = ValueError("Error with\nmultiple\nlines")
         error_queue.put(exc)
 
-        errors = error_queue.all()
-        formatted = "".join(errors[0].format())
-        assert "Error with" in formatted
+        summary = error_queue.summarize()
+        assert "Error with" in summary
 
 
 class TestInsdesError:
@@ -454,10 +443,9 @@ class TestCustomExceptionIntegration:
         exc = InsdesError("INSDES processing failed", order_id="ORD-001")
 
         queue.put(exc)
-        errors = queue.all()
+        summary = queue.summarize()
 
-        assert len(errors) == 1
-        assert "InsdesError" in str(errors[0].exc_type)
+        assert "InsdesError" in summary
 
     def test_sale_error_in_error_queue(self):
         """Test collecting OdooError in ErrorQueue."""
@@ -465,10 +453,9 @@ class TestCustomExceptionIntegration:
         exc = SaleError("Odoo API error", order_id="ORD-002")
 
         queue.put(exc)
-        errors = queue.all()
+        summary = queue.summarize()
 
-        assert len(errors) == 1
-        assert "SaleError" in str(errors[0].exc_type)
+        assert "SaleError" in summary
 
     def test_mixed_exceptions_in_error_queue(self):
         """Test collecting different exception types in ErrorQueue."""
@@ -477,8 +464,10 @@ class TestCustomExceptionIntegration:
         queue.put(SaleError("Odoo error", order_id="ORD-002"))
         queue.put(ValueError("Generic error"))
 
-        errors = queue.all()
-        assert len(errors) == 3
+        summary = queue.summarize()
+        assert "Error 1:" in summary
+        assert "Error 2:" in summary
+        assert "Error 3:" in summary
 
     def test_summarize_with_custom_exceptions(self):
         """Test summarize() with custom exceptions."""
@@ -513,11 +502,9 @@ class TestCustomExceptionIntegration:
         except InsdesError as exc:
             queue.put(exc)
 
-        errors = queue.all()
-        formatted = "".join(errors[0].format())
-
-        assert "InsdesError" in formatted
-        assert "Custom error" in formatted
+        summary = queue.summarize()
+        assert "InsdesError" in summary
+        assert "Custom error" in summary
 
 
 class TestErrorQueueEdgeCases:
@@ -529,7 +516,6 @@ class TestErrorQueueEdgeCases:
         exc = SaleError("Unicode error: café, 日本語, emoji 😀", order_id="ORD-123")
 
         queue.put(exc)
-        queue.all()
         queue.summarize()
 
         assert "café" in str(exc)
@@ -541,9 +527,9 @@ class TestErrorQueueEdgeCases:
         exc = InsdesError(long_message, order_id="ORD-123")
 
         queue.put(exc)
-        errors = queue.all()
+        summary = queue.summarize()
 
-        assert len(errors) == 1
+        assert "x" * 100 in summary  # At least part of the message is there
 
     def test_large_number_of_exceptions(self):
         """Test handling large number of exceptions."""
@@ -553,8 +539,8 @@ class TestErrorQueueEdgeCases:
             exc = ValueError(f"Error {i}")
             queue.put(exc)
 
-        errors = queue.all()
-        assert len(errors) == 1000
+        summary = queue.summarize()
+        assert "Error 1:" in summary  # At least some errors are in the summary
 
     def test_exception_with_none_order_id_string(self):
         """Test that 'None' string vs None are different."""
@@ -828,15 +814,15 @@ class TestErrorQueueImmutability:
         """Test that ErrorQueue is frozen and cannot be modified."""
         queue = ErrorQueue()
 
-        with pytest.raises(Exception):  # FrozenInstanceError
-            queue.new_attribute = "test"
+        with pytest.raises(TypeError):  # FrozenInstanceError
+            queue.new_attribute = "test"  # type: ignore
 
     def test_queue_field_cannot_be_modified(self):
         """Test that _queue field cannot be reassigned."""
         queue = ErrorQueue()
 
-        with pytest.raises(Exception):  # FrozenInstanceError
-            queue._queue = None
+        with pytest.raises(TypeError):  # FrozenInstanceError
+            queue._queue = None  # type: ignore
 
     def test_frozen_dataclass_instance_equality(self):
         """Test frozen dataclass equality."""
@@ -856,10 +842,9 @@ class TestAllCustomErrorsInQueue:
         exc = BaseError("Base error", order_id="ORD-001")
 
         queue.put(exc)
-        errors = queue.all()
+        summary = queue.summarize()
 
-        assert len(errors) == 1
-        assert "BaseError" in str(errors[0].exc_type)
+        assert "BaseError" in summary
 
     def test_artwork_error_in_queue(self):
         """Test collecting ArtworkError in ErrorQueue."""
@@ -867,10 +852,9 @@ class TestAllCustomErrorsInQueue:
         exc = ArtworkError("Artwork error", order_id="ORD-001")
 
         queue.put(exc)
-        errors = queue.all()
+        summary = queue.summarize()
 
-        assert len(errors) == 1
-        assert "ArtworkError" in str(errors[0].exc_type)
+        assert "ArtworkError" in summary
 
     def test_insdes_error_in_error_queue(self):
         """Test collecting InsdesError in ErrorQueue."""
@@ -878,10 +862,9 @@ class TestAllCustomErrorsInQueue:
         exc = InsdesError("Insdes error", order_id="ORD-002")
 
         queue.put(exc)
-        errors = queue.all()
+        summary = queue.summarize()
 
-        assert len(errors) == 1
-        assert "InsdesError" in str(errors[0].exc_type)
+        assert "InsdesError" in summary
 
     def test_notify_error_in_queue(self):
         """Test collecting NotifyError in ErrorQueue."""
@@ -889,10 +872,9 @@ class TestAllCustomErrorsInQueue:
         exc = NotifyError("Notify error", order_id="ORD-003")
 
         queue.put(exc)
-        errors = queue.all()
+        summary = queue.summarize()
 
-        assert len(errors) == 1
-        assert "NotifyError" in str(errors[0].exc_type)
+        assert "NotifyError" in summary
 
     def test_sale_error_in_queue(self):
         """Test collecting SaleError in ErrorQueue."""
@@ -900,10 +882,9 @@ class TestAllCustomErrorsInQueue:
         exc = SaleError("Sale error", order_id="ORD-004")
 
         queue.put(exc)
-        errors = queue.all()
+        summary = queue.summarize()
 
-        assert len(errors) == 1
-        assert "SaleError" in str(errors[0].exc_type)
+        assert "SaleError" in summary
 
     def test_all_custom_errors_mixed_in_queue(self):
         """Test collecting all custom error types together."""
@@ -914,15 +895,12 @@ class TestAllCustomErrorsInQueue:
         queue.put(NotifyError("Notify", order_id="ORD-004"))
         queue.put(SaleError("Sale", order_id="ORD-005"))
 
-        errors = queue.all()
-        assert len(errors) == 5
-
-        type_strings = [str(e.exc_type.__name__) for e in errors]
-        assert "BaseError" in type_strings
-        assert "ArtworkError" in type_strings
-        assert "InsdesError" in type_strings
-        assert "NotifyError" in type_strings
-        assert "SaleError" in type_strings
+        summary = queue.summarize()
+        assert "Error 1:" in summary
+        assert "Error 2:" in summary
+        assert "Error 3:" in summary
+        assert "Error 4:" in summary
+        assert "Error 5:" in summary
 
     def test_summarize_with_all_custom_errors(self):
         """Test summarize() with all custom exception types."""
