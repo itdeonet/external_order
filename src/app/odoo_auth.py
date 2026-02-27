@@ -15,11 +15,11 @@ class OdooAuth:
     password: str
 
     def __post_init__(self) -> None:
-        if not (self.database and isinstance(self.database, str)):
+        if not (self.database and isinstance(self.database, str) and self.database.strip()):
             raise ValueError("Database cannot be empty.")
         if self.user_id <= 0:
             raise ValueError("User ID must be a positive integer.")
-        if not (self.password and isinstance(self.password, str)):
+        if not (self.password and isinstance(self.password, str) and self.password.strip()):
             raise ValueError("Password cannot be empty.")
 
     @classmethod
