@@ -36,12 +36,12 @@ class Order:
     status: OrderStatus = field(default=OrderStatus.NEW, init=False)
     ship_to: ShipTo
     line_items: list[LineItem] = field(default_factory=list)
-    created_at: dt.datetime = field(default_factory=lambda: dt.datetime.now(dt.UTC), init=False)
+    created_at: dt.datetime = field(default_factory=lambda: dt.datetime.now(), init=False)
     ship_at: dt.date = field(
         default_factory=lambda: dt.date.today() + dt.timedelta(days=7), init=False
     )
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate the order data."""
 
         if not (isinstance(self.administration_id, int) and self.administration_id > 0):

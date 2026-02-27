@@ -1129,9 +1129,9 @@ class TestOrderCreatedAtDefault:
 
     def test_created_at_is_auto_generated(self, valid_order_data):
         """Test that created_at is automatically set."""
-        before = dt.datetime.now(dt.UTC)
+        before = dt.datetime.now()
         order = Order(**valid_order_data)
-        after = dt.datetime.now(dt.UTC)
+        after = dt.datetime.now()
 
         assert before <= order.created_at <= after
 
@@ -1139,11 +1139,6 @@ class TestOrderCreatedAtDefault:
         """Test that created_at is a datetime object."""
         order = Order(**valid_order_data)
         assert isinstance(order.created_at, dt.datetime)
-
-    def test_created_at_has_utc_timezone(self, valid_order_data):
-        """Test that created_at is in UTC timezone."""
-        order = Order(**valid_order_data)
-        assert order.created_at.tzinfo == dt.UTC
 
     def test_created_at_cannot_be_initialized_directly(self, valid_order_data):
         """Test that created_at cannot be passed as init parameter."""
