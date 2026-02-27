@@ -3,6 +3,7 @@
 import uuid
 from dataclasses import dataclass, field
 
+import src.domain.validators as validators
 from src.domain.artwork import Artwork
 
 
@@ -18,22 +19,20 @@ class LineItem:
 
     def __post_init__(self) -> None:
         """Post-initialization processing."""
-        if not (isinstance(self.remote_line_id, str) and self.remote_line_id.strip()):
-            raise ValueError("Remote line ID must be a non-empty string")
-        object.__setattr__(self, "remote_line_id", self.remote_line_id.strip())
+        validators.validate_non_empty_string(self.remote_line_id, "Remote line ID")
+        validators.set_normalized_string(self, "remote_line_id", self.remote_line_id)
 
-        if not (isinstance(self.product_code, str) and self.product_code.strip()):
-            raise ValueError("Product code must be a non-empty string")
-        object.__setattr__(self, "product_code", self.product_code.strip())
+        validators.validate_non_empty_string(self.product_code, "Product code")
+        validators.set_normalized_string(self, "product_code", self.product_code)
 
-        if not (isinstance(self.quantity, int) and self.quantity > 0):
-            raise ValueError("Quantity must be a positive integer")
+        validators.validate_positive_int(self.quantity, "Quantity")
 
-        if not (isinstance(self.artwork, Artwork) or self.artwork is None):
+        # artwork is optional, but if provided must be an Artwork instance
+        if self.artwork is not None and not isinstance(self.artwork, Artwork):
             raise ValueError("Artwork must be an instance of Artwork or None")
 
     def set_artwork(self, artwork: Artwork) -> None:
         """Set the artwork for the line item."""
-        if not (artwork and (isinstance(artwork, Artwork))):
+        if not isinstance(artwork, Artwork):
             raise ValueError("Artwork must be an instance of Artwork")
         object.__setattr__(self, "artwork", artwork)

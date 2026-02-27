@@ -5,6 +5,7 @@ import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 
+import src.domain.validators as validators
 from src.domain.line_item import LineItem
 from src.domain.ship_to import ShipTo
 
@@ -43,31 +44,22 @@ class Order:
 
     def __post_init__(self) -> None:
         """Validate the order data."""
+        validators.validate_positive_int(self.administration_id, "Administration ID")
+        validators.validate_positive_int(self.customer_id, "Customer ID")
+        validators.validate_positive_int(self.pricelist_id, "Pricelist ID")
 
-        if not (isinstance(self.administration_id, int) and self.administration_id > 0):
-            raise ValueError("Administration ID must be a positive integer.")
+        validators.validate_non_empty_string(self.order_provider, "Order provider")
+        validators.set_normalized_string(self, "order_provider", self.order_provider)
 
-        if not (isinstance(self.customer_id, int) and self.customer_id > 0):
-            raise ValueError("Customer ID must be a positive integer.")
+        validators.validate_non_empty_string(self.remote_order_id, "Remote order ID")
+        validators.set_normalized_string(self, "remote_order_id", self.remote_order_id)
 
-        if not (isinstance(self.order_provider, str) and self.order_provider.strip()):
-            raise ValueError("Order provider must be a non-empty string.")
-        object.__setattr__(self, "order_provider", self.order_provider.strip())
+        validators.validate_non_empty_string(self.shipment_type, "Shipment type")
+        validators.set_normalized_string(self, "shipment_type", self.shipment_type)
 
-        if not (isinstance(self.pricelist_id, int) and self.pricelist_id > 0):
-            raise ValueError("Pricelist ID must be a positive integer.")
+        validators.validate_instance(self.ship_to, ShipTo, "Ship to")
 
-        if not (isinstance(self.remote_order_id, str) and self.remote_order_id.strip()):
-            raise ValueError("Remote order ID must be a non-empty string.")
-        object.__setattr__(self, "remote_order_id", self.remote_order_id.strip())
-
-        if not (isinstance(self.shipment_type, str) and self.shipment_type.strip()):
-            raise ValueError("Shipment type must be a non-empty string.")
-        object.__setattr__(self, "shipment_type", self.shipment_type.strip())
-
-        if not isinstance(self.ship_to, ShipTo):
-            raise ValueError("Ship to must be an instance of ShipTo.")
-
+        # line_items has a specific error message that covers all cases
         if not (
             isinstance(self.line_items, list)
             and self.line_items
@@ -83,15 +75,13 @@ class Order:
 
     def set_status(self, value: OrderStatus) -> None:
         """Set the order status."""
-        if not isinstance(value, OrderStatus):
-            raise ValueError("Status must be an instance of OrderStatus.")
+        validators.validate_instance(value, OrderStatus, "Status")
         object.__setattr__(self, "status", value)
 
     @staticmethod
     def calculate_delivery_date(workdays: int) -> dt.date:
         """Calculate the delivery date for the order."""
-        if workdays < 0:
-            raise ValueError("Workdays for delivery must be a non-negative integer.")
+        validators.validate_non_negative_int(workdays, "Workdays for delivery")
         delivery_date = dt.date.today()
         while workdays > 0:
             delivery_date += dt.timedelta(days=1)
