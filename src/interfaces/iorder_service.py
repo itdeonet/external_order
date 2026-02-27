@@ -12,11 +12,11 @@ from src.interfaces.iregistry import IRegistry
 class IOrderService(Protocol):
     """Interface for order services."""
 
-    def get_orders(self, error_queue: IErrorQueue) -> Generator[Order, None, None]:
+    def read_orders(self, error_queue: IErrorQueue) -> Generator[Order, None, None]:
         """Generate orders."""
         ...
 
-    def get_order_data_by_remote_order_id(self, remote_order_id: str) -> dict[str, Any] | None:
+    def read_order_data_by_remote_order_id(self, remote_order_id: str) -> dict[str, Any] | None:
         """Get order data by remote ID."""
         ...
 
