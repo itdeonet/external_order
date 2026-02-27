@@ -27,9 +27,10 @@ class ShipTo:
             raise ValueError("Remote customer ID must be a non-empty string")
         object.__setattr__(self, "remote_customer_id", self.remote_customer_id.strip())
 
-        if not (isinstance(self.company_name, str) and self.company_name.strip()):
+        if isinstance(self.company_name, str):
+            object.__setattr__(self, "company_name", self.company_name.strip())
+        else:
             object.__setattr__(self, "company_name", "")
-        object.__setattr__(self, "company_name", self.company_name.strip())
 
         if not (isinstance(self.contact_name, str) and self.contact_name.strip()):
             raise ValueError("Contact name must be a non-empty string")
@@ -51,9 +52,10 @@ class ShipTo:
             raise ValueError("Street1 must be a non-empty string")
         object.__setattr__(self, "street1", self.street1.strip())
 
-        if not (isinstance(self.street2, str)):
+        if isinstance(self.street2, str):
+            object.__setattr__(self, "street2", self.street2.strip())
+        else:
             object.__setattr__(self, "street2", "")
-        object.__setattr__(self, "street2", self.street2.strip())
 
         if not (isinstance(self.city, str) and self.city.strip()):
             raise ValueError("City must be a non-empty string")
