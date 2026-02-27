@@ -5,15 +5,20 @@ from typing import TYPE_CHECKING
 
 import httpx
 
-from app.completed_sale_use_case import CompletedSaleUseCase
-from app.new_sale_use_case import NewSaleUseCase
+from src.app.completed_sale_use_case import CompletedSaleUseCase
 from src.app.errors import ErrorQueue
+from src.app.new_sale_use_case import NewSaleUseCase
 from src.app.odoo_auth import OdooAuth
 from src.app.registry import Registry
+from src.app.stock_transfer_use_case import StockTransferUseCase
 from src.config import Config, get_config
 from src.interfaces.iartwork_service import IArtworkService
 from src.interfaces.iorder_service import IOrderService
+from src.interfaces.isale_service import ISaleService
+from src.interfaces.istock_service import IStockService
+from src.interfaces.iuse_case import IUseCase
 from src.services.harman_order_service import HarmanOrderService
+from src.services.harman_stock_service import HarmanStockService
 from src.services.odoo_sale_service import OdooSaleService
 from src.services.spectrum_artwork_service import SpectrumArtworkService
 
@@ -35,6 +40,9 @@ def main() -> None:
     artwork_services: IRegistry[IArtworkService] = Registry[IArtworkService]()
     order_services: IRegistry[IOrderService] = Registry[IOrderService]()
     order_services.register("Harman", HarmanOrderService.from_config(config=config))
+    stock_services: IRegistry[IStockService] = Registry[IStockService]()
+    stock_services.register("Harman", HarmanStockService.from_config(config=config))
+    use_cases: IRegistry[IUseCase] = Registry[IUseCase]()  # type: ignore[type-arg]
 
     timeout = httpx.Timeout(connect=10.0, read=120.0, write=30.0)
     with (
@@ -54,19 +62,37 @@ def main() -> None:
             auth=OdooAuth.from_config(config=config), engine=sale_engine
         )
         # use cases
-        NewSaleUseCase(
-            order_services=order_services,
-            artwork_services=artwork_services,
-            sale_service=sale_service,
-            error_queue=error_queue,
-            open_orders_dir=config.open_orders_dir,
-        ).create_sales()
-        CompletedSaleUseCase(
-            order_services=order_services,
-            sale_service=sale_service,
-            error_queue=error_queue,
-            notify_dir=config.harman_notify_dir,
-        ).complete_sales()
+        use_cases.register(
+            "NewSale",
+            NewSaleUseCase(
+                order_services=order_services,
+                artwork_services=artwork_services,
+                sale_service=sale_service,
+                error_queue=error_queue,
+                open_orders_dir=config.open_orders_dir,
+            ),
+        )
+        use_cases.register(
+            "CompletedSale",
+            CompletedSaleUseCase(
+                order_services=order_services,
+                sale_service=sale_service,
+                error_queue=error_queue,
+            ),
+        )
+        use_cases.register(
+            "StockTransfer",
+            StockTransferUseCase(
+                stock_services=stock_services,
+                error_queue=error_queue,
+            ),
+        )
+        # execute use cases
+        for _, use_case in use_cases.items():
+            try:
+                use_case.execute()
+            except Exception as e:
+                logger.error(f"Error executing use case {use_case.__class__.__name__}: {e!s}")
 
 
 if __name__ == "__main__":
