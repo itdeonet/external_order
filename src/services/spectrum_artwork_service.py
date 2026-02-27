@@ -31,41 +31,40 @@ class SpectrumArtworkService:
         response.raise_for_status()
         object.__setattr__(self, "client", response.json().get("clientHandle", ""))
 
+        # build a set of tuples containing the product code, quantity, and recipe set ID
         artwork_data: set[tuple[str, int, str]] = set()
         for li in response.json().get("line_items", []):
             for sku_qty in li.get("skuQuantities", []):
                 artwork_data.add((sku_qty["sku"], sku_qty["quantity"], li.get("recipeSetId")))
-                # add combinations for the +1 quantity issue in the Harman orders
-                artwork_data.add((sku_qty["sku"], sku_qty["quantity"] - 1, li.get("recipeSetId")))
-                artwork_data.add((sku_qty["sku"], 1, li.get("recipeSetId")))
 
+        file_paths: list[Path] = []
         for li in order.line_items:
-            # get the artwork ID for the line item based on product code and quantity
-            found = [
-                item
-                for item in artwork_data
-                if item[0] == li.product_code and item[1] == li.quantity
-            ]
-            if not (found and found[0][2]):
+            for sku, qty, recipe_set_id in artwork_data:
+                if li.product_code == sku and li.quantity == qty:
+                    artwork = Artwork(
+                        artwork_id=recipe_set_id,
+                        line_item_id=li.remote_line_id,
+                        design_url=f"{str(self.engine.base_url).rstrip('/')}/api/webtoprint/{recipe_set_id}/",
+                        design_paths=self._get_designs(
+                            recipe_set_id=recipe_set_id, sale_id=order.sale_id
+                        ),
+                        placement_url=f"{str(self.engine.base_url).rstrip('/')}/{self.client}/specification/{recipe_set_id}/pdf/",
+                        placement_path=self._get_placement(
+                            recipe_set_id=recipe_set_id, sale_id=order.sale_id
+                        ),
+                    )
+                    li.set_artwork(artwork)
+                    file_paths.extend(artwork.design_paths)
+                    file_paths.append(artwork.placement_path)
+                    break
+            else:
+                # if no artwork found for the line item, raise an error
                 raise ArtworkError(
                     message=f"No artwork found for line item ({li.product_code}, {li.quantity})",
                     order_id=order.remote_order_id,
                 )
 
-            recipe_set_id = found[0][2]
-            artwork = Artwork(
-                artwork_id=recipe_set_id,
-                line_item_id=li.remote_line_id,
-                design_url=f"{str(self.engine.base_url).rstrip('/')}/api/webtoprint/{recipe_set_id}/",
-                design_paths=self._get_designs(recipe_set_id=recipe_set_id, sale_id=order.sale_id),
-                placement_url=f"{str(self.engine.base_url).rstrip('/')}/{self.client}/specification/{recipe_set_id}/pdf/",
-                placement_path=self._get_placement(
-                    recipe_set_id=recipe_set_id, sale_id=order.sale_id
-                ),
-            )
-            li.set_artwork(artwork)
-
-        return []
+        return file_paths
 
     def _get_designs(self, recipe_set_id: str, sale_id: int) -> list[Path]:
         """Get designs for the given endpoint and order ID."""

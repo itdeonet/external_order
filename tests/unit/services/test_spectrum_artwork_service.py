@@ -253,22 +253,39 @@ class TestSpectrumArtworkServiceGetArtwork:
             service.get_artwork(basic_order)
 
     def test_get_artwork_raises_when_recipe_set_id_is_missing(
-        self, service, mock_client, basic_order
+        self, service, mock_client, basic_order, mocker
     ):
         """Test that get_artwork raises error when recipeSetId is missing from API."""
-        mock_response = Mock(spec=httpx.Response)
-        mock_response.json.return_value = {
-            "clientHandle": "CLIENT123",
-            "line_items": [
-                {
-                    "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
-                    "recipeSetId": None,  # Missing or null
-                }
-            ],
-        }
-        mock_client.get.return_value = mock_response
+        # Setup with different responses based on URL
+        zip_buffer = io.BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            zip_file.writestr("design.pdf", "design content")
+        zip_buffer.seek(0)
+        design_zip_bytes = zip_buffer.getvalue()
 
-        with pytest.raises(ArtworkError, match="No artwork found"):
+        placement_bytes = b"PDF placement content"
+
+        def mock_get_side_effect(url=None, **kwargs):
+            response = Mock(spec=httpx.Response)
+            if url and "webtoprint" in url:
+                response.content = design_zip_bytes
+            elif url and "pdf" in url:
+                response.content = placement_bytes
+            else:
+                response.json.return_value = {
+                    "clientHandle": "CLIENT123",
+                    "line_items": [
+                        {
+                            "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
+                            "recipeSetId": None,  # Missing or null
+                        }
+                    ],
+                }
+            return response
+
+        mock_client.get.side_effect = mock_get_side_effect
+
+        with pytest.raises(ValueError, match="Artwork ID must be a non-empty string"):
             service.get_artwork(basic_order)
 
     def test_get_artwork_raises_when_sku_quantities_is_empty(
@@ -394,12 +411,14 @@ class TestSpectrumArtworkServiceGetArtwork:
         assert line_item.artwork.artwork_id == "RECIPE001"
 
     def test_get_artwork_returns_empty_list(self, service, mock_client, basic_order, mocker):
-        """Test that get_artwork returns an empty list."""
+        """Test that get_artwork returns a list of file paths when artwork is found."""
         self._setup_mock_client_for_get_artwork(mock_client, mocker)
 
         result = service.get_artwork(basic_order)
 
-        assert result == []
+        # Should return file paths for design and placement files
+        assert len(result) > 0
+        assert all(isinstance(p, Path) for p in result)
 
     def test_get_artwork_calls_get_designs(self, service, mock_client, basic_order, mocker):
         """Test that get_artwork successfully retrieves and sets design files."""
@@ -548,44 +567,6 @@ class TestSpectrumArtworkServiceGetArtwork:
         assert line_item2.artwork is not None
         assert line_item1.artwork.artwork_id == "RECIPE101"
         assert line_item2.artwork.artwork_id == "RECIPE102"
-
-    def test_get_artwork_handles_quantity_plus_one_variation(
-        self, service, mock_client, basic_order, mocker
-    ):
-        """Test that get_artwork handles the quantity+1 issue."""
-        # API returns quantity 101 (one more than actual)
-        zip_buffer = io.BytesIO()
-        with ZipFile(zip_buffer, "w") as zip_file:
-            zip_file.writestr("design.pdf", "design content")
-        zip_buffer.seek(0)
-        design_zip_bytes = zip_buffer.getvalue()
-
-        placement_bytes = b"PDF placement content"
-
-        def mock_get_side_effect(url=None, **kwargs):
-            response = Mock(spec=httpx.Response)
-            if url and "webtoprint" in url:
-                response.content = design_zip_bytes
-            elif url and "pdf" in url:
-                response.content = placement_bytes
-            else:
-                response.json.return_value = {
-                    "clientHandle": "CLIENT789",
-                    "line_items": [
-                        {
-                            "skuQuantities": [{"sku": "PROD001", "quantity": 101}],
-                            "recipeSetId": "RECIPE001",
-                        }
-                    ],
-                }
-            return response
-
-        mock_client.get.side_effect = mock_get_side_effect
-
-        service.get_artwork(basic_order)
-
-        # Should find artwork by matching quantity-1
-        assert basic_order.line_items[0].artwork is not None
 
     def test_get_artwork_handles_quantity_exact_match_when_api_returns_different_value(
         self, service, mock_client, basic_order, mocker
