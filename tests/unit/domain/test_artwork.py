@@ -293,10 +293,10 @@ class TestArtworkDesignPathsValidation:
         with pytest.raises(TypeError):
             Artwork(**minimal_artwork_data)
 
-    def test_design_paths_empty_list_is_accepted(self, minimal_artwork_data):
+    def test_design_paths_empty_list_is_not_accepted(self, minimal_artwork_data):
         """Test that empty design_paths list is accepted (all() returns True for empty list)."""
-        artwork = Artwork(design_paths=[], **minimal_artwork_data)
-        assert artwork.design_paths == []
+        with pytest.raises(ValueError, match="Design paths must be a list of Path objects"):
+            Artwork(design_paths=[], **minimal_artwork_data)
 
     def test_design_paths_not_list_raises_error(self, minimal_artwork_data):
         """Test that non-list design_paths raises ValueError."""

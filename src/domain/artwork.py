@@ -32,7 +32,8 @@ class Artwork:
         object.__setattr__(self, "design_url", self.design_url.strip())
 
         if not (
-            isinstance(self.design_paths, list)
+            self.design_paths
+            and isinstance(self.design_paths, list)
             and all(isinstance(p, Path) and p.is_file() for p in self.design_paths)
         ):
             raise ValueError("Design paths must be a list of Path objects")
