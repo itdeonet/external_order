@@ -11,7 +11,7 @@ import httpx
 
 from src.app.errors import SaleError
 from src.app.odoo_auth import OdooAuth
-from src.domain.order import Order
+from src.domain import Order
 
 logger = getLogger(__name__)
 
@@ -61,21 +61,67 @@ class OdooSaleService:
         logger.info("Sale for order %s created: %s", order.remote_order_id, result)
         return result
 
+    def _call_search_single(
+        self,
+        model: str,
+        query_data: list,
+        fields: list[str] | None = None,
+        error_message: str | None = None,
+    ) -> dict[str, Any] | int | None:
+        """Generic method for searching a single record by criteria.
+
+        Wraps _call() with search_read for a single record lookup.
+
+        Args:
+            model: The Odoo model to search.
+            query_data: The search criteria (domain filter).
+            fields: Optional list of fields to return. Defaults to ["id"].
+            error_message: Optional error message to raise if record not found.
+                          If None, returns None instead of raising.
+
+        Returns:
+            The full record dict if multiple fields requested, the id if only id requested,
+            or None if not found and no error_message provided.
+
+        Raises:
+            SaleError: If record not found and error_message is provided.
+        """
+        fields = fields or ["id"]
+        result = self._call(
+            model=model,
+            method="search_read",
+            query_data=[query_data],
+            query_options={"fields": fields, "limit": 1},
+        )
+
+        if not (result and isinstance(result, list) and result[0]):
+            if error_message:
+                raise SaleError(error_message)
+            return None
+
+        record = result[0]
+        # Validate that all requested fields are present in the record
+        if not all(field in record for field in fields):
+            if error_message:
+                raise SaleError(error_message)
+            return None
+
+        # If only id field requested, return just the id as int
+        if fields == ["id"]:
+            return int(record["id"])
+        # Otherwise return the full record dict
+        return record
+
     def _get_country_id(self, country_code: str) -> int:
         """Resolve ISO country code to res.country id."""
         logger.info("Get country ID for country code: %s", country_code)
-        result = self._call(
+        country_id = self._call_search_single(
             model="res.country",
-            method="search_read",
-            query_data=[[["code", "=", country_code.strip().upper()[:2]]]],
-            query_options={"fields": ["id"], "limit": 1},
+            query_data=[["code", "=", country_code.strip().upper()[:2]]],
+            error_message=f"Country code '{country_code}' not found",
         )
-
-        if not (result and isinstance(result, list) and "id" in result[0]):
-            raise SaleError(f"Country code '{country_code}' not found")
-
-        country_id = int(result[0]["id"])
         logger.info("Found country ID %d for country code %s", country_id, country_code)
+        assert isinstance(country_id, int), "Country search did not return an ID"
         return country_id
 
     def _get_state_id(self, country_id: int, state: str) -> int:
@@ -84,19 +130,18 @@ class OdooSaleService:
         if not (state := state.strip()):
             return 0
 
-        result = self._call(
+        state_id = self._call_search_single(
             model="res.country.state",
-            method="search_read",
-            query_data=[[["country_id", "=", country_id], ["name", "ilike", state]]],
-            query_options={"fields": ["id"], "limit": 1},
+            query_data=[["country_id", "=", country_id], ["name", "ilike", state]],
+            fields=["id"],
         )
 
-        if not (result and isinstance(result, list) and "id" in result[0]):
+        if state_id is None:
             logger.warning("State '%s' not found for country_id %d, returning 0", state, country_id)
             return 0
 
-        state_id = int(result[0]["id"])
         logger.info("Found state ID %d for country_id=%s region=%s", state_id, country_id, state)
+        assert isinstance(state_id, int), "State search did not return an ID"
         return state_id
 
     def _get_contact_data_from_order(self, order: Order) -> dict[str, Any]:
@@ -163,26 +208,20 @@ class OdooSaleService:
 
         for line_item in order.line_items:
             # resolve line item product code to product ID and name in Odoo
-            result = self._call(
+            product = self._call_search_single(
                 model="product.product",
-                method="search_read",
-                query_data=[[["default_code", "=", line_item.product_code]]],
-                query_options={"fields": ["id", "name"], "limit": 1},
+                query_data=[["default_code", "=", line_item.product_code]],
+                fields=["id", "name"],
+                error_message=f"Product {line_item.product_code} not found",
             )
 
-            if not (
-                result
-                and isinstance(result, list)
-                and isinstance(result[0], dict)
-                and "id" in result[0]
-                and "name" in result[0]
-            ):
-                raise SaleError(f"Product {line_item.product_code} not found")
-
+            assert isinstance(product, dict) and "id" in product and "name" in product, (
+                "Product search did not return expected fields"
+            )
             order_lines.append(
                 {
-                    "product_id": result[0]["id"],
-                    "name": result[0]["name"],
+                    "product_id": product["id"],
+                    "name": product["name"],
                     "product_uom_qty": line_item.quantity,
                 }
             )
@@ -197,28 +236,20 @@ class OdooSaleService:
             raise ValueError("Carrier name is empty")
 
         logger.info("Get carrier ID for name: %s", carrier_name)
-        result = self._call(
+        carrier_id = self._call_search_single(
             model="delivery.carrier",
-            method="search_read",
             query_data=[
                 [
                     ["company_id", "=", order.administration_id],
                     ["name", "=ilike", carrier_name],
                 ]
             ],
-            query_options={"fields": ["id", "name"], "limit": 1},
+            fields=["id"],
+            error_message=f"Carrier '{carrier_name}' not found in Odoo",
         )
 
-        if not (
-            result
-            and isinstance(result, list)
-            and isinstance(result[0], dict)
-            and "id" in result[0]
-        ):
-            raise SaleError(f"Carrier '{carrier_name}' not found in Odoo")
-
-        carrier_id = int(result[0]["id"])
         logger.info("Found carrier ID %d for name: %s", carrier_id, carrier_name)
+        assert isinstance(carrier_id, int), "Carrier search did not return an ID"
         return carrier_id
 
     def create_sale(self, order: Order) -> int:
