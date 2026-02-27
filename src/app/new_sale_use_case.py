@@ -32,7 +32,7 @@ class NewSaleUseCase:
             logger.info("Create sales from %s service...", order_service_name)
 
             # process orders
-            for order in order_service.get_orders(self.error_queue):
+            for order in order_service.read_orders(self.error_queue):
                 try:
                     logger.info(
                         "Create sale order %s from %s service.",
@@ -66,13 +66,20 @@ class NewSaleUseCase:
                     order_service.persist_order(order, OrderStatus.CONFIRMED)
 
                 except Exception as exc:
-                    logger.error(
-                        "Error processing order %s from %s service: %s",
+                    logger.exception(
+                        "Error processing order %s from %s service",
                         order.remote_order_id,
                         order_service_name,
-                        str(exc),
                     )
-                    self.error_queue.put(exc)
+                    if isinstance(exc, SaleError):
+                        self.error_queue.put(exc)
+                    else:
+                        self.error_queue.put(
+                            SaleError(
+                                message=f"{exc!s} (Service: {order_service_name})",
+                                order_id=order.remote_order_id,
+                            )
+                        )
 
     def get_artwork(self, order: Order, artwork_service: IArtworkService | None) -> list[Path]:
         """Get artwork for the given order."""

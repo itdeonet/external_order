@@ -180,7 +180,7 @@ class TestCreateSalesWithNoOrders:
     def test_create_sales_with_order_service_but_no_orders(self, use_case, mocker):
         """Test execute when order service returns no orders."""
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([])
+        order_service.read_orders.return_value = iter([])
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
 
@@ -188,7 +188,7 @@ class TestCreateSalesWithNoOrders:
 
         use_case.execute()
 
-        order_service.get_orders.assert_called_once_with(use_case.error_queue)
+        order_service.read_orders.assert_called_once_with(use_case.error_queue)
 
 
 class TestCreateSalesNewSaleCreation:
@@ -198,7 +198,7 @@ class TestCreateSalesNewSaleCreation:
         """Test that execute creates a new sale when none exists."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([order])
+        order_service.read_orders.return_value = iter([order])
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
@@ -215,7 +215,7 @@ class TestCreateSalesNewSaleCreation:
         """Test that order is persisted with NEW status."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([order])
+        order_service.read_orders.return_value = iter([order])
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
@@ -233,7 +233,7 @@ class TestCreateSalesNewSaleCreation:
         """Test that order is persisted with CREATED status after creating sale."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([order])
+        order_service.read_orders.return_value = iter([order])
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
@@ -250,7 +250,7 @@ class TestCreateSalesNewSaleCreation:
         """Test that order is persisted with ARTWORK status after getting artwork."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([order])
+        order_service.read_orders.return_value = iter([order])
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
@@ -267,7 +267,7 @@ class TestCreateSalesNewSaleCreation:
         """Test that order is persisted with CONFIRMED status after confirming sale."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([order])
+        order_service.read_orders.return_value = iter([order])
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
@@ -284,7 +284,7 @@ class TestCreateSalesNewSaleCreation:
         """Test that sale is confirmed after getting artwork."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([order])
+        order_service.read_orders.return_value = iter([order])
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
@@ -304,7 +304,7 @@ class TestCreateSalesExistingSaleUpdate:
         """Test that contact is updated when sale exists and order lines match."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([order])
+        order_service.read_orders.return_value = iter([order])
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
@@ -322,7 +322,7 @@ class TestCreateSalesExistingSaleUpdate:
         """Test that SaleError is raised when order lines don't match."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([order])
+        order_service.read_orders.return_value = iter([order])
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.is_sale_created.return_value = True
@@ -342,7 +342,7 @@ class TestCreateSalesExistingSaleUpdate:
         """Test that SaleError contains the order ID."""
         order = create_sample_order("ORDER123")
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([order])
+        order_service.read_orders.return_value = iter([order])
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.is_sale_created.return_value = True
@@ -364,7 +364,7 @@ class TestCreateSalesExceptionHandling:
         """Test that exceptions are caught and added to error queue."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([order])
+        order_service.read_orders.return_value = iter([order])
         order_service.persist_order.side_effect = Exception("Persist failed")
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
@@ -381,7 +381,7 @@ class TestCreateSalesExceptionHandling:
         order2 = create_sample_order("ORDER2")
 
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([order1, order2])
+        order_service.read_orders.return_value = iter([order1, order2])
         order_service.persist_order.side_effect = [
             Exception("Fail"),
             None,
@@ -402,14 +402,14 @@ class TestCreateSalesExceptionHandling:
         use_case.execute()
 
         # Both orders should have been attempted (persist called at least for first status)
-        assert order_service.get_orders.call_count == 1
+        assert order_service.read_orders.call_count == 1
         use_case.error_queue.put.assert_called_once()
 
     def test_create_sales_exception_during_create_sale(self, use_case, mocker):
         """Test exception handling when create_sale fails."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([order])
+        order_service.read_orders.return_value = iter([order])
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.is_sale_created.return_value = False
@@ -425,7 +425,7 @@ class TestCreateSalesExceptionHandling:
         """Test exception handling when confirm_sale fails."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([order])
+        order_service.read_orders.return_value = iter([order])
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
@@ -448,11 +448,11 @@ class TestCreateSalesWithMultipleServices:
         order2 = create_sample_order("ORDER2")
 
         order_service1 = MagicMock(spec=IOrderService)
-        order_service1.get_orders.return_value = iter([order1])
+        order_service1.read_orders.return_value = iter([order1])
         order_service1.get_artwork_service.return_value = None
 
         order_service2 = MagicMock(spec=IOrderService)
-        order_service2.get_orders.return_value = iter([order2])
+        order_service2.read_orders.return_value = iter([order2])
         order_service2.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [
@@ -465,8 +465,8 @@ class TestCreateSalesWithMultipleServices:
 
         use_case.execute()
 
-        order_service1.get_orders.assert_called_once()
-        order_service2.get_orders.assert_called_once()
+        order_service1.read_orders.assert_called_once()
+        order_service2.read_orders.assert_called_once()
 
     def test_create_sales_handles_exception_in_one_service(self, use_case, mocker):
         """Test that exception in one service doesn't affect others."""
@@ -474,11 +474,11 @@ class TestCreateSalesWithMultipleServices:
         order2 = create_sample_order("ORDER2")
 
         order_service1 = MagicMock(spec=IOrderService)
-        order_service1.get_orders.return_value = iter([order1])
+        order_service1.read_orders.return_value = iter([order1])
         order_service1.persist_order.side_effect = Exception("Service 1 failed")
 
         order_service2 = MagicMock(spec=IOrderService)
-        order_service2.get_orders.return_value = iter([order2])
+        order_service2.read_orders.return_value = iter([order2])
         order_service2.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [
@@ -492,19 +492,19 @@ class TestCreateSalesWithMultipleServices:
         use_case.execute()
 
         # Both services should still be attempted
-        order_service1.get_orders.assert_called_once()
-        order_service2.get_orders.assert_called_once()
+        order_service1.read_orders.assert_called_once()
+        order_service2.read_orders.assert_called_once()
 
     def test_create_sales_with_three_services(self, use_case, mocker):
         """Test execute with three order services."""
         order_service1 = MagicMock(spec=IOrderService)
-        order_service1.get_orders.return_value = iter([])
+        order_service1.read_orders.return_value = iter([])
 
         order_service2 = MagicMock(spec=IOrderService)
-        order_service2.get_orders.return_value = iter([])
+        order_service2.read_orders.return_value = iter([])
 
         order_service3 = MagicMock(spec=IOrderService)
-        order_service3.get_orders.return_value = iter([])
+        order_service3.read_orders.return_value = iter([])
 
         use_case.order_services.items.return_value = [
             ("service1", order_service1),
@@ -516,9 +516,9 @@ class TestCreateSalesWithMultipleServices:
 
         use_case.execute()
 
-        order_service1.get_orders.assert_called_once()
-        order_service2.get_orders.assert_called_once()
-        order_service3.get_orders.assert_called_once()
+        order_service1.read_orders.assert_called_once()
+        order_service2.read_orders.assert_called_once()
+        order_service3.read_orders.assert_called_once()
 
 
 class TestGetArtworkBasic:
@@ -738,7 +738,7 @@ class TestCreateSalesLogging:
     def test_create_sales_logs_service_processing_start(self, use_case, mocker, caplog):
         """Test that execute logs when starting to process a service."""
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([])
+        order_service.read_orders.return_value = iter([])
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
 
@@ -751,7 +751,7 @@ class TestCreateSalesLogging:
         """Test that execute logs when creating an order."""
         order = create_sample_order("ORDER123")
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([order])
+        order_service.read_orders.return_value = iter([order])
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
@@ -766,7 +766,7 @@ class TestCreateSalesLogging:
         """Test that execute logs errors when exceptions occur."""
         order = create_sample_order("ORDER456")
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([order])
+        order_service.read_orders.return_value = iter([order])
         order_service.persist_order.side_effect = Exception("Test error")
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
@@ -781,7 +781,7 @@ class TestCreateSalesLogging:
         """Test that execute logs warning for mismatched order lines."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([order])
+        order_service.read_orders.return_value = iter([order])
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.is_sale_created.return_value = True
@@ -833,7 +833,7 @@ class TestSaleUseCaseIntegration:
             placement_file.write_text("placement")
             artwork_service.get_artwork.return_value = [placement_file]
 
-            order_service.get_orders.return_value = iter([order])
+            order_service.read_orders.return_value = iter([order])
             order_service.get_artwork_service.return_value = artwork_service
 
             use_case.order_services.items.return_value = [("integration_service", order_service)]
@@ -856,7 +856,7 @@ class TestSaleUseCaseIntegration:
         """Test complete workflow for updating existing sale."""
         order = create_sample_order("UPDATE_ORDER_001")
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([order])
+        order_service.read_orders.return_value = iter([order])
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("update_service", order_service)]
@@ -879,7 +879,7 @@ class TestSaleUseCaseIntegration:
         order3 = create_sample_order("ORDER_ERROR")
 
         order_service = MagicMock(spec=IOrderService)
-        order_service.get_orders.return_value = iter([order1, order2, order3])
+        order_service.read_orders.return_value = iter([order1, order2, order3])
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("multi_service", order_service)]
