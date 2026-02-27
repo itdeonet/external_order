@@ -1135,3 +1135,95 @@ class TestCall:
         id_1 = calls[0][1]["json"]["id"]
         id_2 = calls[1][1]["json"]["id"]
         assert id_2 > id_1
+
+
+class TestOdooSaleServiceCallSearchSingle:
+    """Tests for _call_search_single method."""
+
+    @pytest.fixture
+    def mock_auth(self):
+        """Provide a mocked OdooAuth."""
+        auth = Mock(spec=OdooAuth)
+        auth.database = "test_db"
+        auth.user_id = 1
+        auth.password = "test_password"
+        return auth
+
+    @pytest.fixture
+    def mock_client(self):
+        """Provide a mocked httpx.Client with base_url."""
+        client = Mock(spec=httpx.Client)
+        client.base_url = "http://test.example.com"
+        return client
+
+    @pytest.fixture
+    def service(self, mock_auth, mock_client):
+        """Provide a configured OdooSaleService."""
+        return OdooSaleService(auth=mock_auth, engine=mock_client)
+
+    def test_call_search_single_with_missing_fields(self, service, mock_client):
+        """Test _call_search_single raises when requested fields are missing."""
+        # Mock response missing a requested field
+        mock_client.post.return_value = Mock(
+            json=lambda: {
+                "jsonrpc": "2.0",
+                "result": [{"id": 100, "name": "Test"}],  # missing 'state' field
+            }
+        )
+
+        with pytest.raises(SaleError, match="Partner not found"):
+            service._call_search_single(
+                model="res.partner",
+                query_data=[["id", "=", 100]],
+                fields=["id", "name", "state"],
+                error_message="Partner not found",
+            )
+
+    def test_call_search_single_with_all_fields_present(self, service, mock_client):
+        """Test _call_search_single succeeds when all requested fields are present."""
+        mock_client.post.return_value = Mock(
+            json=lambda: {
+                "jsonrpc": "2.0",
+                "result": [{"id": 100, "name": "Test Company", "email": "test@example.com"}],
+            }
+        )
+
+        result = service._call_search_single(
+            model="res.partner",
+            query_data=[["id", "=", 100]],
+            fields=["id", "name", "email"],
+        )
+
+        assert isinstance(result, dict)
+        assert result["id"] == 100
+        assert result["name"] == "Test Company"
+
+    def test_call_search_single_with_empty_result(self, service, mock_client):
+        """Test _call_search_single returns None for empty results when no error message."""
+        mock_client.post.return_value = Mock(json=lambda: {"jsonrpc": "2.0", "result": []})
+
+        result = service._call_search_single(
+            model="res.partner",
+            query_data=[["id", "=", 999]],
+            fields=["id"],
+        )
+
+        assert result is None
+
+    def test_call_search_single_with_id_field_only(self, service, mock_client):
+        """Test _call_search_single returns integer when only id field requested."""
+        mock_client.post.return_value = Mock(
+            json=lambda: {
+                "jsonrpc": "2.0",
+                "result": [{"id": 100}],
+            }
+        )
+
+        result = service._call_search_single(
+            model="res.partner",
+            query_data=[["id", "=", 100]],
+            fields=["id"],
+        )
+
+        assert isinstance(result, int)
+        assert result == 100
