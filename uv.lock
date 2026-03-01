@@ -127,6 +127,7 @@ dependencies = [
     { name = "pydifact" },
     { name = "pytest-httpx" },
     { name = "python-dotenv" },
+    { name = "redmail" },
     { name = "xmltodict" },
 ]
 
@@ -144,6 +145,7 @@ requires-dist = [
     { name = "pydifact", specifier = ">=0.1.8" },
     { name = "pytest-httpx", specifier = ">=0.36.0" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
+    { name = "redmail", specifier = ">=0.6.0" },
     { name = "xmltodict", specifier = ">=1.0.4" },
 ]
 
@@ -382,6 +384,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f0/26/19cadc79a718c5edbec86fd4919a6b6d3f681039a2f6d66d14be94e75fb9/python_dotenv-1.2.1.tar.gz", hash = "sha256:42667e897e16ab0d66954af0e60a9caa94f0fd4ecf3aaf6d2d260eec1aa36ad6", size = 44221, upload-time = "2025-10-26T15:12:10.434Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/14/1b/a298b06749107c305e1fe0f814c6c74aea7b2f1e10989cb30f544a1b3253/python_dotenv-1.2.1-py3-none-any.whl", hash = "sha256:b81ee9561e9ca4004139c6cbba3a238c32b03e4894671e181b671e8cb8425d61", size = 21230, upload-time = "2025-10-26T15:12:09.109Z" },
+]
+
+[[package]]
+name = "redmail"
+version = "0.6.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jinja2" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e9/96/36c740474cadc1b8a6e735334a0c67c02ea7169d29ffde48eb6c74f3abaa/redmail-0.6.0.tar.gz", hash = "sha256:0447cbd76deb2788b2d831c12e22b513587e99f725071d9951a01b0f2b8d0a72", size = 448832, upload-time = "2023-02-25T10:20:52.31Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/83/67/3e0005b255a9d02448c5529af450b6807403e9af7b82636123273906ea37/redmail-0.6.0-py3-none-any.whl", hash = "sha256:8e64a680ffc8aaf8054312bf8b216da8fed20669181b77b1f1ccbdf4ee064427", size = 46948, upload-time = "2023-02-25T10:20:50.438Z" },
 ]
 
 [[package]]
