@@ -1,0 +1,261 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stock Transfer Notification</title>
+  </head>
+
+  <body
+    style="
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      background-color: #f9f9f9;
+    "
+  >
+    <!-- Email Container -->
+    <div
+      style="
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        border: 1px solid #ddd;
+      "
+    >
+      <!-- Header -->
+      <div
+        style="
+          background-color: #2c3e50;
+          color: #ffffff;
+          padding: 20px;
+          text-align: center;
+        "
+      >
+        <h1 style="margin: 0; font-size: 24px">Stock Transfer Notification</h1>
+        <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9">
+          Delivery #{{ stock_transfer.delivery_number }}
+        </p>
+      </div>
+
+      <!-- Main Content -->
+      <div style="padding: 30px; background-color: #ffffff">
+        <!-- Introduction -->
+        <p style="margin: 0 0 15px 0; font-size: 14px">
+          <strong>{{ supplier_name | default('Harman JBL') }}</strong> has sent
+          an upcoming stock transfer. The attached file contains the expected
+          products and quantities for this shipment.
+        </p>
+
+        {% if expected_delivery_date %}
+        <div
+          style="
+            background-color: #e8f4f8;
+            border-left: 4px solid #0088cc;
+            padding: 12px;
+            margin: 15px 0;
+            font-size: 14px;
+          "
+        >
+          <strong>📦 Expected Delivery:</strong> {{ expected_delivery_date }}
+        </div>
+        {% endif %}
+
+        <p style="margin: 15px 0; font-size: 14px">
+          After receiving and processing the shipment through your normal
+          procedures, please follow these steps to send a response back to {{
+          supplier_name | default('Harman JBL') }}:
+        </p>
+
+        <!-- Instructions -->
+        <ol style="margin: 15px 0; padding-left: 20px; font-size: 14px">
+          <li style="margin-bottom: 10px">
+            <strong>Open the attached file</strong> in a text editor (e.g.,
+            Notepad, VS Code, or similar)
+          </li>
+          <li style="margin-bottom: 10px">
+            <strong>Update the receipt date:</strong> Change the
+            <code
+              style="
+                background-color: #f0f0f0;
+                padding: 2px 5px;
+                border-radius: 3px;
+              "
+              >&lt;CREDAT&gt;</code
+            >
+            field to the date you received the shipment (e.g.,
+            <code
+              style="
+                background-color: #f0f0f0;
+                padding: 2px 5px;
+                border-radius: 3px;
+              "
+              >20260301</code
+            >)
+          </li>
+          <li style="margin-bottom: 10px">
+            <strong>Update the receipt time:</strong> Change the
+            <code
+              style="
+                background-color: #f0f0f0;
+                padding: 2px 5px;
+                border-radius: 3px;
+              "
+              >&lt;CRETIM&gt;</code
+            >
+            field to the approximate time received (e.g.,
+            <code
+              style="
+                background-color: #f0f0f0;
+                padding: 2px 5px;
+                border-radius: 3px;
+              "
+              >143000</code
+            >
+            for 2:30 PM)
+          </li>
+          <li style="margin-bottom: 10px">
+            <strong>Update quantities received:</strong> For each product line,
+            modify the
+            <code
+              style="
+                background-color: #f0f0f0;
+                padding: 2px 5px;
+                border-radius: 3px;
+              "
+              >&lt;DELQTY&gt;</code
+            >
+            field to match the actual quantity received. The
+            <code
+              style="
+                background-color: #f0f0f0;
+                padding: 2px 5px;
+                border-radius: 3px;
+              "
+              >&lt;MATNR&gt;</code
+            >
+            field contains the product code:
+            <div
+              style="
+                background-color: #f5f5f5;
+                padding: 10px;
+                margin: 8px 0;
+                border-radius: 4px;
+                font-size: 13px;
+              "
+            >
+              {% set items = stock_transfer.get("items", []) %} {% if items %}
+              {% for item in items %}
+              <div style="margin: 5px 0">
+                <strong>{{ item.product_code }}:</strong> expected {{
+                item.quantity }} unit(s)
+              </div>
+              {% endfor %} {% else %}
+              <div style="font-style: italic; color: #666">
+                No items listed in transfer data. Please manually verify
+                quantities in the attached file.
+              </div>
+              {% endif %}
+            </div>
+          </li>
+          <li style="margin-bottom: 10px">
+            <strong>Save the file:</strong> Do not rename the file—overwrite it
+            with your updates
+          </li>
+          <li style="margin-bottom: 10px">
+            <strong>Upload the file:</strong> Upload the updated file to
+            <a
+              href="{{ upload_link | default('https://drive.google.com/drive/u/0/folders/1-jWQEY9jrjKxDWNYNYsYqMqonQtZb3cD') }}"
+              style="color: #0088cc; text-decoration: none; font-weight: bold"
+              >the designated upload location</a
+            >
+          </li>
+          <li style="margin-bottom: 10px">
+            <strong>Repeat for all files:</strong> If multiple files are
+            attached, follow the same process for each
+          </li>
+        </ol>
+
+        <p
+          style="
+            margin: 15px 0;
+            font-size: 14px;
+            background-color: #f0f8f0;
+            padding: 12px;
+            border-left: 4px solid #28a745;
+            border-radius: 3px;
+          "
+        >
+          <strong>✓ After upload:</strong> The response will be sent to {{
+          supplier_name | default('Harman JBL') }} EDI automatically.
+        </p>
+
+        <!-- Troubleshooting -->
+        <div
+          style="
+            margin-top: 25px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+          "
+        >
+          <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #2c3e50">
+            Need Help?
+          </h3>
+          <p style="margin: 0; font-size: 13px">
+            If you encounter any issues or have questions:
+          </p>
+          <ul style="margin: 10px 0; padding-left: 20px; font-size: 13px">
+            <li>
+              Check that file fields match the expected format (YYYYMMDD for
+              dates, HHMMSS for times)
+            </li>
+            <li>
+              Verify you're modifying the correct XML/EDI fields (copy the exact
+              field names from the file)
+            </li>
+            <li>
+              Ensure the file encoding remains unchanged when saving (usually
+              UTF-8)
+            </li>
+            <li>
+              Contact {{ support_email | default('support@company.com') }} if
+              you need technical assistance
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div
+        style="
+          background-color: #f5f5f5;
+          padding: 20px;
+          text-align: center;
+          border-top: 1px solid #ddd;
+          font-size: 12px;
+          color: #666;
+        "
+      >
+        <p style="margin: 0 0 8px 0">
+          <strong>{{ company_name | default('Deonet') }}</strong> | Stock
+          Transfer System
+        </p>
+        <p style="margin: 0">
+          This is an automated message. Please do not reply to this email.
+        </p>
+        {% if support_email %}
+        <p style="margin: 8px 0 0 0">
+          For support:
+          <a
+            href="mailto:{{ support_email }}"
+            style="color: #0088cc; text-decoration: none"
+            >{{ support_email }}</a
+          >
+        </p>
+        {% endif %}
+      </div>
+    </div>
+  </body>
+</html>
