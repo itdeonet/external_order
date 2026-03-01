@@ -1,8 +1,10 @@
 """Errors module."""
 
+import datetime as dt
 from dataclasses import dataclass, field
 from threading import Lock
 from traceback import TracebackException
+from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,15 +24,27 @@ class ErrorQueue:
         with self._lock:
             self._errors.clear()
 
-    def summarize(self) -> str:
+    def get_errors(self) -> list[str]:
         """Summarize all collected exceptions."""
         with self._lock:
             if not self._errors:
-                return ""
-            summary = []
+                return []
+            errors = []
             for idx, error in enumerate(self._errors, 1):
-                summary.append(f"Error {idx}:\n{''.join(error.format())}")
-            return "\n\n".join(summary)
+                errors.append(f"Error {idx}:\n{''.join(error.format())}")
+            return errors
+
+    def get_render_email_data(self) -> dict[str, Any]:
+        """Get data for rendering error alert email."""
+        return {
+            "error_count": len(self._errors),
+            "errors": self.get_errors(),
+            "timestamp": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+    def summarize(self) -> str:
+        """Get a summary of all collected exceptions as a single string."""
+        return "\n\n".join(self.get_errors())
 
 
 class BaseError(Exception):
