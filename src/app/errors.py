@@ -67,10 +67,9 @@ class BaseError(Exception):
         self.order_id = order_id
 
     def __str__(self) -> str:
-        base_message = super().__str__()
         if self.order_id:
-            return f"{base_message} (Order ID: {self.order_id})"
-        return base_message
+            return f"Order {self.order_id}: {super().__str__()}"
+        return super().__str__()
 
 
 class ArtworkError(BaseError):

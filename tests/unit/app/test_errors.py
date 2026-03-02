@@ -310,7 +310,7 @@ class TestInsdesError:
         """Test string representation with order_id."""
         exc = InsdesError("Processing failed", order_id="ORD-12345")
 
-        assert str(exc) == "Processing failed (Order ID: ORD-12345)"
+        assert str(exc) == "Order ORD-12345: Processing failed"
 
     def test_inherits_from_exception(self):
         """Test that InsdesError inherits from Exception."""
@@ -343,14 +343,14 @@ class TestInsdesError:
         """Test creating error with empty message."""
         exc = InsdesError("", order_id="ORD-123")
 
-        assert str(exc) == " (Order ID: ORD-123)"
+        assert str(exc) == "Order ORD-123: "
 
     def test_with_numeric_order_id(self):
         """Test with numeric order_id."""
         exc = InsdesError("Error", order_id="12345")
 
         assert exc.order_id == "12345"
-        assert str(exc) == "Error (Order ID: 12345)"
+        assert str(exc) == "Order 12345: Error"
 
     def test_with_special_characters_in_message(self):
         """Test with special characters in message."""
@@ -358,7 +358,7 @@ class TestInsdesError:
         exc = InsdesError(message, order_id="ORD-123")
 
         assert message in str(exc)
-        assert "(Order ID: ORD-123)" in str(exc)
+        assert "Order ORD-123: " in str(exc)
 
     def test_with_newlines_in_message(self):
         """Test with newlines in message."""
@@ -373,8 +373,8 @@ class TestInsdesError:
         exc2 = InsdesError("Error 2", order_id="ORD-2")
         exc3 = InsdesError("Error 3")
 
-        assert str(exc1) == "Error 1 (Order ID: ORD-1)"
-        assert str(exc2) == "Error 2 (Order ID: ORD-2)"
+        assert str(exc1) == "Order ORD-1: Error 1"
+        assert str(exc2) == "Order ORD-2: Error 2"
         assert str(exc3) == "Error 3"
 
     def test_preserves_exception_args(self):
@@ -410,7 +410,7 @@ class TestOdooError:
         """Test string representation with order_id."""
         exc = SaleError("Connection failed", order_id="ORD-12345")
 
-        assert str(exc) == "Connection failed (Order ID: ORD-12345)"
+        assert str(exc) == "Order ORD-12345: Connection failed"
 
     def test_inherits_from_exception(self):
         """Test that OdooError inherits from Exception."""
@@ -443,14 +443,14 @@ class TestOdooError:
         """Test creating error with empty message."""
         exc = SaleError("", order_id="ORD-123")
 
-        assert str(exc) == " (Order ID: ORD-123)"
+        assert str(exc) == "Order ORD-123: "
 
     def test_with_numeric_order_id(self):
         """Test with numeric order_id."""
         exc = SaleError("Error", order_id="12345")
 
         assert exc.order_id == "12345"
-        assert str(exc) == "Error (Order ID: 12345)"
+        assert str(exc) == "Order 12345: Error"
 
     def test_with_special_characters_in_message(self):
         """Test with special characters in message."""
@@ -458,7 +458,7 @@ class TestOdooError:
         exc = SaleError(message, order_id="ORD-123")
 
         assert message in str(exc)
-        assert "(Order ID: ORD-123)" in str(exc)
+        assert "Order ORD-123: " in str(exc)
 
     def test_with_newlines_in_message(self):
         """Test with newlines in message."""
@@ -473,8 +473,8 @@ class TestOdooError:
         exc2 = SaleError("Error 2", order_id="ORD-2")
         exc3 = SaleError("Error 3")
 
-        assert str(exc1) == "Error 1 (Order ID: ORD-1)"
-        assert str(exc2) == "Error 2 (Order ID: ORD-2)"
+        assert str(exc1) == "Order ORD-1: Error 1"
+        assert str(exc2) == "Order ORD-2: Error 2"
         assert str(exc3) == "Error 3"
 
     def test_preserves_exception_args(self):
@@ -554,7 +554,7 @@ class TestCustomExceptionIntegration:
                 raise SaleError("Failed to save order", order_id="ORD-001") from None
         except SaleError as exc:
             assert exc.order_id == "ORD-001"
-            assert str(exc) == "Failed to save order (Order ID: ORD-001)"
+            assert str(exc) == "Order ORD-001: Failed to save order"
 
     def test_custom_errors_with_traceback(self):
         """Test custom errors preserve traceback information."""
@@ -614,7 +614,7 @@ class TestErrorStoreEdgeCases:
         exc2 = InsdesError("Test", order_id="None")
 
         assert str(exc1) == "Test"
-        assert str(exc2) == "Test (Order ID: None)"
+        assert str(exc2) == "Order None: Test"
 
 
 class TestBaseError:
@@ -643,7 +643,7 @@ class TestBaseError:
         """Test string representation with order_id."""
         exc = BaseError("Something went wrong", order_id="ORD-12345")
 
-        assert str(exc) == "Something went wrong (Order ID: ORD-12345)"
+        assert str(exc) == "Order ORD-12345: Something went wrong"
 
     def test_inherits_from_exception(self):
         """Test that BaseError inherits from Exception."""
@@ -664,14 +664,14 @@ class TestBaseError:
         """Test creating error with empty message."""
         exc = BaseError("", order_id="ORD-123")
 
-        assert str(exc) == " (Order ID: ORD-123)"
+        assert str(exc) == "Order ORD-123: "
 
     def test_with_numeric_order_id(self):
         """Test with numeric order_id."""
         exc = BaseError("Error", order_id="12345")
 
         assert exc.order_id == "12345"
-        assert str(exc) == "Error (Order ID: 12345)"
+        assert str(exc) == "Order 12345: Error"
 
     def test_with_special_characters_in_message(self):
         """Test with special characters in message."""
@@ -679,7 +679,7 @@ class TestBaseError:
         exc = BaseError(message, order_id="ORD-123")
 
         assert message in str(exc)
-        assert "(Order ID: ORD-123)" in str(exc)
+        assert "Order ORD-123: " in str(exc)
 
     def test_with_newlines_in_message(self):
         """Test with newlines in message."""
@@ -737,7 +737,7 @@ class TestArtworkError:
         """Test string representation with order_id."""
         exc = ArtworkError("Artwork retrieval failed", order_id="ORD-12345")
 
-        assert str(exc) == "Artwork retrieval failed (Order ID: ORD-12345)"
+        assert str(exc) == "Order ORD-12345: Artwork retrieval failed"
 
     def test_inherits_from_base_error(self):
         """Test that ArtworkError inherits from BaseError."""
@@ -764,14 +764,14 @@ class TestArtworkError:
         """Test creating error with empty message."""
         exc = ArtworkError("", order_id="ORD-123")
 
-        assert str(exc) == " (Order ID: ORD-123)"
+        assert str(exc) == "Order ORD-123: "
 
     def test_with_numeric_order_id(self):
         """Test with numeric order_id."""
         exc = ArtworkError("Error", order_id="12345")
 
         assert exc.order_id == "12345"
-        assert str(exc) == "Error (Order ID: 12345)"
+        assert str(exc) == "Order 12345: Error"
 
     def test_difference_from_other_custom_errors(self):
         """Test that ArtworkError is distinct from other custom errors."""
@@ -818,7 +818,7 @@ class TestNotifyError:
         """Test string representation with order_id."""
         exc = NotifyError("Provider notify failed", order_id="ORD-12345")
 
-        assert str(exc) == "Provider notify failed (Order ID: ORD-12345)"
+        assert str(exc) == "Order ORD-12345: Provider notify failed"
 
     def test_inherits_from_base_error(self):
         """Test that NotifyError inherits from BaseError."""
@@ -845,14 +845,14 @@ class TestNotifyError:
         """Test creating error with empty message."""
         exc = NotifyError("", order_id="ORD-123")
 
-        assert str(exc) == " (Order ID: ORD-123)"
+        assert str(exc) == "Order ORD-123: "
 
     def test_with_numeric_order_id(self):
         """Test with numeric order_id."""
         exc = NotifyError("Error", order_id="12345")
 
         assert exc.order_id == "12345"
-        assert str(exc) == "Error (Order ID: 12345)"
+        assert str(exc) == "Order 12345: Error"
 
     def test_difference_from_other_custom_errors(self):
         """Test that NotifyError is distinct from other custom errors."""
@@ -1037,5 +1037,5 @@ class TestErrorInheritanceHierarchy:
         ]
 
         for error in errors:
-            expected = f"{message} (Order ID: {order_id})"
+            expected = f"Order {order_id}: {message}"
             assert str(error) == expected
