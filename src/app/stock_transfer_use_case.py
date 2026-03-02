@@ -3,7 +3,8 @@
 from dataclasses import dataclass
 from logging import getLogger
 
-from src.interfaces import IErrorQueue, IRegistry, IStockService
+from src.app.errors import ErrorStore
+from src.interfaces import IRegistry, IStockService
 
 logger = getLogger(__name__)
 
@@ -13,7 +14,6 @@ class StockTransferUseCase:
     """Use case for transferring stock between locations."""
 
     stock_services: IRegistry[IStockService]
-    error_queue: IErrorQueue
 
     def execute(self) -> None:
         """Execute the stock transfer."""
@@ -22,7 +22,7 @@ class StockTransferUseCase:
             logger.info("Process stock transfer from %s service...", stock_service_name)
 
             # process stock transfer requests
-            for transfer_data in stock_service.read_stock_transfers(self.error_queue):
+            for transfer_data in stock_service.read_stock_transfers():
                 try:
                     logger.info(
                         "Reply to stock transfer request %s from %s service.",
@@ -36,4 +36,4 @@ class StockTransferUseCase:
                         transfer_data.get("id"),
                         stock_service_name,
                     )
-                    self.error_queue.put(exc)
+                    ErrorStore().add(exc)

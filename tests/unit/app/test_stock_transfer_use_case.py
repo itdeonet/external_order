@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, call
 
 import pytest
 
+from src.app.errors import ErrorStore
 from src.app.stock_transfer_use_case import StockTransferUseCase
 
 
@@ -15,53 +16,37 @@ def mock_stock_services():
 
 
 @pytest.fixture
-def mock_error_queue():
-    """Create a mock error queue."""
-    mock_queue = MagicMock()
-    return mock_queue
-
-
-@pytest.fixture
-def stock_transfer_use_case(mock_stock_services, mock_error_queue):
+def stock_transfer_use_case(mock_stock_services):
     """Create a StockTransferUseCase instance with mocked dependencies."""
     return StockTransferUseCase(
         stock_services=mock_stock_services,
-        error_queue=mock_error_queue,
     )
 
 
 class TestStockTransferUseCaseInstantiation:
     """Tests for StockTransferUseCase instantiation."""
 
-    def test_instantiation_with_valid_dependencies(self, mock_stock_services, mock_error_queue):
+    def test_instantiation_with_valid_dependencies(self, mock_stock_services):
         """Test that StockTransferUseCase initializes correctly."""
         use_case = StockTransferUseCase(
             stock_services=mock_stock_services,
-            error_queue=mock_error_queue,
         )
 
         assert use_case.stock_services is mock_stock_services
-        assert use_case.error_queue is mock_error_queue
 
-    def test_instantiation_creates_frozen_dataclass(self, mock_stock_services, mock_error_queue):
+    def test_instantiation_creates_frozen_dataclass(self, mock_stock_services):
         """Test that StockTransferUseCase is a frozen dataclass."""
         use_case = StockTransferUseCase(
             stock_services=mock_stock_services,
-            error_queue=mock_error_queue,
         )
 
         with pytest.raises(AttributeError):
-            use_case.error_queue = None  # type: ignore
+            use_case.stock_services = None  # type: ignore
 
-    def test_instantiation_requires_stock_services(self, mock_error_queue):
+    def test_instantiation_requires_stock_services(self):
         """Test that stock_services parameter is required."""
         with pytest.raises(TypeError):
-            StockTransferUseCase(error_queue=mock_error_queue)  # type: ignore
-
-    def test_instantiation_requires_error_queue(self, mock_stock_services):
-        """Test that error_queue parameter is required."""
-        with pytest.raises(TypeError):
-            StockTransferUseCase(stock_services=mock_stock_services)  # type: ignore
+            StockTransferUseCase()  # type: ignore
 
 
 class TestStockTransferUseCaseExecute:
@@ -76,7 +61,7 @@ class TestStockTransferUseCaseExecute:
         mock_stock_services.items.assert_called_once()
 
     def test_execute_with_single_service_no_transfers(
-        self, stock_transfer_use_case, mock_stock_services, mock_error_queue
+        self, stock_transfer_use_case, mock_stock_services
     ):
         """Test execute with one service that has no transfers."""
         mock_service = MagicMock()
@@ -85,12 +70,10 @@ class TestStockTransferUseCaseExecute:
 
         stock_transfer_use_case.execute()
 
-        mock_service.read_stock_transfers.assert_called_once_with(mock_error_queue)
+        mock_service.read_stock_transfers.assert_called_once()
         mock_service.reply_stock_transfer.assert_not_called()
 
-    def test_execute_with_single_transfer(
-        self, stock_transfer_use_case, mock_stock_services, mock_error_queue
-    ):
+    def test_execute_with_single_transfer(self, stock_transfer_use_case, mock_stock_services):
         """Test execute with one service and one transfer."""
         mock_service = MagicMock()
         transfer_data = {"id": "transfer_001", "delivery_number": "DEL-001"}
@@ -99,11 +82,11 @@ class TestStockTransferUseCaseExecute:
 
         stock_transfer_use_case.execute()
 
-        mock_service.read_stock_transfers.assert_called_once_with(mock_error_queue)
+        mock_service.read_stock_transfers.assert_called_once()
         mock_service.reply_stock_transfer.assert_called_once_with(transfer_data)
 
     def test_execute_with_multiple_transfers_from_one_service(
-        self, stock_transfer_use_case, mock_stock_services, mock_error_queue
+        self, stock_transfer_use_case, mock_stock_services
     ):
         """Test execute with multiple transfers from one service."""
         mock_service = MagicMock()
@@ -124,9 +107,7 @@ class TestStockTransferUseCaseExecute:
             ]
         )
 
-    def test_execute_with_multiple_services(
-        self, stock_transfer_use_case, mock_stock_services, mock_error_queue
-    ):
+    def test_execute_with_multiple_services(self, stock_transfer_use_case, mock_stock_services):
         """Test execute with multiple services."""
         mock_service1 = MagicMock()
         mock_service1.read_stock_transfers.return_value = [{"id": "t1"}]
@@ -148,9 +129,9 @@ class TestStockTransferUseCaseExecute:
         assert mock_service2.reply_stock_transfer.call_count == 2
 
     def test_execute_handles_exception_in_reply(
-        self, stock_transfer_use_case, mock_stock_services, mock_error_queue
+        self, stock_transfer_use_case, mock_stock_services, mocker
     ):
-        """Test that execute catches exceptions during reply and queues them."""
+        """Test that execute catches exceptions during reply."""
         mock_service = MagicMock()
         transfer_data = {"id": "transfer_001"}
         mock_service.read_stock_transfers.return_value = [transfer_data]
@@ -158,12 +139,16 @@ class TestStockTransferUseCaseExecute:
         mock_service.reply_stock_transfer.side_effect = test_exception
         mock_stock_services.items.return_value = [("harman", mock_service)]
 
+        # Mock ErrorStore to verify add() was called
+        mock_error_store = mocker.Mock(spec=ErrorStore)
+        mocker.patch("src.app.stock_transfer_use_case.ErrorStore", return_value=mock_error_store)
+
         stock_transfer_use_case.execute()
 
-        mock_error_queue.put.assert_called_once_with(test_exception)
+        mock_error_store.add.assert_called_once_with(test_exception)
 
     def test_execute_continues_after_exception(
-        self, stock_transfer_use_case, mock_stock_services, mock_error_queue
+        self, stock_transfer_use_case, mock_stock_services, mocker
     ):
         """Test that execute continues processing after an exception."""
         mock_service = MagicMock()
@@ -177,13 +162,17 @@ class TestStockTransferUseCaseExecute:
 
         mock_stock_services.items.return_value = [("harman", mock_service)]
 
+        # Mock ErrorStore to verify it was called
+        mock_error_store = mocker.Mock(spec=ErrorStore)
+        mocker.patch("src.app.stock_transfer_use_case.ErrorStore", return_value=mock_error_store)
+
         stock_transfer_use_case.execute()
 
         assert mock_service.reply_stock_transfer.call_count == 2
-        mock_error_queue.put.assert_called_once_with(test_exception)
+        mock_error_store.add.assert_called_once_with(test_exception)
 
     def test_execute_with_multiple_services_continues_after_error(
-        self, stock_transfer_use_case, mock_stock_services, mock_error_queue
+        self, stock_transfer_use_case, mock_stock_services, mocker
     ):
         """Test that execute continues to next service after an error."""
         mock_service1 = MagicMock()
@@ -199,15 +188,17 @@ class TestStockTransferUseCaseExecute:
             ("service2", mock_service2),
         ]
 
+        # Mock ErrorStore
+        mock_error_store = mocker.Mock(spec=ErrorStore)
+        mocker.patch("src.app.stock_transfer_use_case.ErrorStore", return_value=mock_error_store)
+
         stock_transfer_use_case.execute()
 
         mock_service1.reply_stock_transfer.assert_called_once()
         mock_service2.reply_stock_transfer.assert_called_once()
-        mock_error_queue.put.assert_called_once_with(test_exception)
+        mock_error_store.add.assert_called_once_with(test_exception)
 
-    def test_execute_with_empty_transfer_data(
-        self, stock_transfer_use_case, mock_stock_services, mock_error_queue
-    ):
+    def test_execute_with_empty_transfer_data(self, stock_transfer_use_case, mock_stock_services):
         """Test execute with empty transfer data dict."""
         mock_service = MagicMock()
         transfer_data = {}
@@ -218,14 +209,14 @@ class TestStockTransferUseCaseExecute:
 
         mock_service.reply_stock_transfer.assert_called_once_with(transfer_data)
 
-    def test_execute_calls_read_stock_transfers_with_error_queue(
-        self, stock_transfer_use_case, mock_stock_services, mock_error_queue
+    def test_execute_calls_read_stock_transfers_once(
+        self, stock_transfer_use_case, mock_stock_services
     ):
-        """Test that read_stock_transfers is called with error_queue."""
+        """Test that read_stock_transfers is called once per service."""
         mock_service = MagicMock()
         mock_service.read_stock_transfers.return_value = []
         mock_stock_services.items.return_value = [("harman", mock_service)]
 
         stock_transfer_use_case.execute()
 
-        mock_service.read_stock_transfers.assert_called_once_with(mock_error_queue)
+        mock_service.read_stock_transfers.assert_called_once()
