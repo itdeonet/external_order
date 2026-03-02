@@ -7,6 +7,7 @@ from unittest.mock import Mock
 import httpx
 import pytest
 
+from src.app.errors import ErrorStore
 from src.app.odoo_auth import OdooAuth
 from src.app.registry import Registry
 from src.domain import LineItem, Order, ShipTo
@@ -45,16 +46,14 @@ def spectrum_client(httpx_mock):
 
 
 @pytest.fixture
-def error_queue():
-    """Provide a mock error queue."""
-    queue = Mock()
-    queue.queue = []
-
-    def put_side_effect(item):
-        queue.queue.append(item)
-
-    queue.put = Mock(side_effect=put_side_effect)
-    return queue
+def error_store(mocker):
+    """Provide a mock error store and patch it in modules that use it."""
+    mock_store = Mock(spec=ErrorStore)
+    # Patch ErrorStore in all use case modules
+    mocker.patch("src.app.completed_sale_use_case.ErrorStore", return_value=mock_store)
+    mocker.patch("src.app.new_sale_use_case.ErrorStore", return_value=mock_store)
+    mocker.patch("src.app.stock_transfer_use_case.ErrorStore", return_value=mock_store)
+    return mock_store
 
 
 @pytest.fixture

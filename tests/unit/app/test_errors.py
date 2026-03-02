@@ -5,38 +5,51 @@ import pytest
 from src.app.errors import (
     ArtworkError,
     BaseError,
-    ErrorQueue,
+    ErrorStore,
     InsdesError,
     NotifyError,
     SaleError,
 )
 
 
-class TestErrorQueue:
-    """Tests for the ErrorQueue class."""
+class TestErrorStore:
+    """Tests for the ErrorStore class."""
 
     @pytest.fixture
-    def error_queue(self):
-        """Provide a fresh ErrorQueue instance for each test."""
-        return ErrorQueue()
+    def error_store(self):
+        """Provide the ErrorStore singleton instance, cleared for each test."""
+        error_store = ErrorStore()
+        error_store.clear()  # Ensure clean state for test isolation
+        return error_store
+
+    def test_singleton_pattern(self):
+        """Test that ErrorStore is a singleton."""
+        error_store1 = ErrorStore()
+        error_store2 = ErrorStore()
+        error_store3 = ErrorStore()
+
+        assert error_store1 is error_store2
+        assert error_store2 is error_store3
+        assert id(error_store1) == id(error_store2) == id(error_store3)
 
     def test_instantiation(self):
-        """Test creating an ErrorQueue instance."""
-        queue = ErrorQueue()
-        assert queue is not None
-        assert hasattr(queue, "_errors")
+        """Test creating an ErrorStore instance."""
+        error_store = ErrorStore()
+        error_store.clear()
+        assert error_store is not None
+        assert hasattr(error_store, "_errors")
 
-    def test_put_single_exception(self, error_queue):
-        """Test adding a single exception to the queue."""
+    def test_put_single_exception(self, error_store):
+        """Test adding a single exception to the store."""
         exc = ValueError("Test error")
-        error_queue.put(exc)
-        summary = error_queue.summarize()
+        error_store.add(exc)
+        summary = error_store.summarize()
 
         assert "Error 1:" in summary
         assert "ValueError" in summary
 
-    def test_put_multiple_exceptions(self, error_queue):
-        """Test adding multiple exceptions to the queue."""
+    def test_put_multiple_exceptions(self, error_store):
+        """Test adding multiple exceptions to the store."""
         exceptions = [
             ValueError("Error 1"),
             TypeError("Error 2"),
@@ -44,104 +57,104 @@ class TestErrorQueue:
         ]
 
         for exc in exceptions:
-            error_queue.put(exc)
+            error_store.add(exc)
 
-        summary = error_queue.summarize()
+        summary = error_store.summarize()
         assert "Error 1:" in summary
         assert "Error 2:" in summary
         assert "Error 3:" in summary
 
-    def test_put_preserves_exception_type(self, error_queue):
+    def test_put_preserves_exception_type(self, error_store):
         """Test that exception type information is preserved."""
         exceptions = [ValueError("test"), TypeError("test"), RuntimeError("test")]
 
         for exc in exceptions:
-            error_queue.put(exc)
+            error_store.add(exc)
 
-        summary = error_queue.summarize()
+        summary = error_store.summarize()
         assert "ValueError" in summary
         assert "TypeError" in summary
         assert "RuntimeError" in summary
 
-    def test_put_preserves_exception_message(self, error_queue):
+    def test_put_preserves_exception_message(self, error_store):
         """Test that exception message is preserved."""
         message = "Custom error message"
         exc = ValueError(message)
-        error_queue.put(exc)
+        error_store.add(exc)
 
-        summary = error_queue.summarize()
+        summary = error_store.summarize()
         assert message in summary
 
-    def test_summarize_returns_string(self, error_queue):
+    def test_summarize_returns_string(self, error_store):
         """Test that summarize() returns a string."""
-        error_queue.put(ValueError("test"))
-        result = error_queue.summarize()
+        error_store.add(ValueError("test"))
+        result = error_store.summarize()
 
         assert isinstance(result, str)
 
-    def test_summarize_empty_and_refilled(self, error_queue):
+    def test_summarize_empty_and_refilled(self, error_store):
         """Test that we can put more errors after summarize."""
-        error_queue.put(ValueError("Error 1"))
-        error_queue.put(TypeError("Error 2"))
+        error_store.add(ValueError("Error 1"))
+        error_store.add(TypeError("Error 2"))
 
-        summary1 = error_queue.summarize()
+        summary1 = error_store.summarize()
         assert "Error 1:" in summary1
         assert "Error 2:" in summary1
 
-        # After summarize, queue still has errors since summarize doesn't drain
-        summary2 = error_queue.summarize()
+        # After summarize, store still has errors since summarize doesn't drain
+        summary2 = error_store.summarize()
         assert summary1 == summary2
 
-    def test_clear_removes_all_exceptions(self, error_queue):
+    def test_clear_removes_all_exceptions(self, error_store):
         """Test that clear() removes all exceptions."""
-        error_queue.put(ValueError("Error 1"))
-        error_queue.put(TypeError("Error 2"))
-        error_queue.put(RuntimeError("Error 3"))
+        error_store.add(ValueError("Error 1"))
+        error_store.add(TypeError("Error 2"))
+        error_store.add(RuntimeError("Error 3"))
 
-        error_queue.clear()
-        summary = error_queue.summarize()
-
-        assert summary == ""
-
-    def test_clear_empty_queue(self, error_queue):
-        """Test that clear() on empty queue doesn't raise error."""
-        error_queue.clear()
-        summary = error_queue.summarize()
+        error_store.clear()
+        summary = error_store.summarize()
 
         assert summary == ""
 
-    def test_clear_then_put(self, error_queue):
-        """Test that queue works normally after clear()."""
-        error_queue.put(ValueError("Error 1"))
-        error_queue.clear()
-        error_queue.put(TypeError("Error 2"))
+    def test_clear_empty_store(self, error_store):
+        """Test that clear() on empty store doesn't raise error."""
+        error_store.clear()
+        summary = error_store.summarize()
 
-        summary = error_queue.summarize()
+        assert summary == ""
+
+    def test_clear_then_add(self, error_store):
+        """Test that store works normally after clear()."""
+        error_store.add(ValueError("Error 1"))
+        error_store.clear()
+        error_store.add(TypeError("Error 2"))
+
+        summary = error_store.summarize()
         assert "TypeError" in summary
         assert "ValueError" not in summary  # Old exception type should not be in summary
 
-    def test_summarize_empty_queue(self, error_queue):
+    def test_summarize_empty_store(self, error_store):
         """Test summarize() with no errors."""
-        summary = error_queue.summarize()
+        summary = error_store.summarize()
 
         assert summary == ""
 
-    def test_summarize_single_error(self, error_queue):
+    def test_summarize_single_error(self, error_store):
         """Test summarize() with single error."""
-        error_queue.put(ValueError("Test error"))
-        summary = error_queue.summarize()
+        error_store.add(ValueError("Test error"))
+        summary = error_store.summarize()
 
         assert "Error 1:" in summary
         assert "ValueError" in summary
         assert "Test error" in summary
 
-    def test_summarize_multiple_errors(self, error_queue):
+    def test_summarize_multiple_errors(self, error_store):
         """Test summarize() with multiple errors."""
-        error_queue.put(ValueError("Error 1"))
-        error_queue.put(TypeError("Error 2"))
-        error_queue.put(RuntimeError("Error 3"))
+        error_store.add(ValueError("Error 1"))
+        error_store.add(TypeError("Error 2"))
+        error_store.add(RuntimeError("Error 3"))
 
-        summary = error_queue.summarize()
+        summary = error_store.summarize()
 
         assert "Error 1:" in summary
         assert "Error 2:" in summary
@@ -150,17 +163,17 @@ class TestErrorQueue:
         assert "TypeError" in summary
         assert "RuntimeError" in summary
 
-    def test_summarize_preserves_queue(self, error_queue):
-        """Test that summarize() doesn't drain the queue."""
-        error_queue.put(ValueError("Error 1"))
-        summary1 = error_queue.summarize()
+    def test_summarize_preserves_store(self, error_store):
+        """Test that summarize() doesn't drain the store."""
+        error_store.add(ValueError("Error 1"))
+        summary1 = error_store.summarize()
 
         assert "Error 1:" in summary1
 
-        summary2 = error_queue.summarize()
-        assert summary1 == summary2  # Same content since queue not drained
+        summary2 = error_store.summarize()
+        assert summary1 == summary2  # Same content since store not drained
 
-    def test_summarize_formats_errors(self, error_queue):
+    def test_summarize_formats_errors(self, error_store):
         """Test that summarize() numbers errors correctly."""
         errors_to_add = [
             ValueError("First"),
@@ -171,9 +184,9 @@ class TestErrorQueue:
         ]
 
         for exc in errors_to_add:
-            error_queue.put(exc)
+            error_store.add(exc)
 
-        summary = error_queue.summarize()
+        summary = error_store.summarize()
 
         assert "Error 1:" in summary
         assert "Error 2:" in summary
@@ -181,7 +194,7 @@ class TestErrorQueue:
         assert "Error 4:" in summary
         assert "Error 5:" in summary
 
-    def test_summarize_with_nested_exceptions(self, error_queue):
+    def test_summarize_with_nested_exceptions(self, error_store):
         """Test summarize() with exceptions that have context."""
         try:
             try:
@@ -189,19 +202,19 @@ class TestErrorQueue:
             except ValueError:
                 raise TypeError("Outer error") from None
         except TypeError as exc:
-            error_queue.put(exc)
+            error_store.add(exc)
 
-        summary = error_queue.summarize()
+        summary = error_store.summarize()
         assert "Error 1:" in summary
         assert len(summary) > 0
 
-    def test_thread_safety_put_and_get(self, error_queue):
+    def test_thread_safety_put_and_get(self, error_store):
         """Test that put and get operations are thread-safe."""
         import threading
 
         def add_exceptions():
             for i in range(10):
-                error_queue.put(ValueError(f"Error {i}"))
+                error_store.add(ValueError(f"Error {i}"))
 
         threads = []
         for _ in range(5):
@@ -212,17 +225,63 @@ class TestErrorQueue:
         for t in threads:
             t.join()
 
-        summary = error_queue.summarize()
+        summary = error_store.summarize()
         # Should have 50 errors total
         assert "Error 0:" in summary or "Error 1:" in summary
 
-    def test_put_with_string_representation(self, error_queue):
+    def test_add_with_string_representation(self, error_store):
         """Test exception with complex string representation."""
         exc = ValueError("Error with\nmultiple\nlines")
-        error_queue.put(exc)
+        error_store.add(exc)
 
-        summary = error_queue.summarize()
+        summary = error_store.summarize()
         assert "Error with" in summary
+
+    def test_has_errors_empty_store(self, error_store):
+        """Test has_errors() returns False for empty store."""
+        assert error_store.has_errors() is False
+
+    def test_has_errors_with_single_error(self, error_store):
+        """Test has_errors() returns True when store has one error."""
+        error_store.add(ValueError("Test error"))
+        assert error_store.has_errors() is True
+
+    def test_has_errors_with_multiple_errors(self, error_store):
+        """Test has_errors() returns True with multiple errors."""
+        error_store.add(ValueError("Error 1"))
+        error_store.add(TypeError("Error 2"))
+        error_store.add(RuntimeError("Error 3"))
+
+        assert error_store.has_errors() is True
+
+    def test_has_errors_after_clear(self, error_store):
+        """Test has_errors() returns False after clear()."""
+        error_store.add(ValueError("Error"))
+        assert error_store.has_errors() is True
+
+        error_store.clear()
+        assert error_store.has_errors() is False
+
+    def test_has_errors_thread_safe(self, error_store):
+        """Test that has_errors() is thread-safe."""
+        import threading
+
+        results = []
+
+        def add_and_check():
+            error_store.add(ValueError("Test"))
+            results.append(error_store.has_errors())
+
+        threads = [threading.Thread(target=add_and_check) for _ in range(5)]
+
+        for t in threads:
+            t.start()
+
+        for t in threads:
+            t.join()
+
+        # All checks should have found at least one error
+        assert all(results)
 
 
 class TestInsdesError:
@@ -437,45 +496,49 @@ class TestOdooError:
 class TestCustomExceptionIntegration:
     """Tests for integration between custom exceptions."""
 
-    def test_insdes_error_in_error_queue(self):
-        """Test collecting InsdesError in ErrorQueue."""
-        queue = ErrorQueue()
+    def test_insdes_error_in_error_store(self):
+        """Test collecting InsdesError in ErrorStore."""
+        error_store = ErrorStore()
+        error_store.clear()
         exc = InsdesError("INSDES processing failed", order_id="ORD-001")
 
-        queue.put(exc)
-        summary = queue.summarize()
+        error_store.add(exc)
+        summary = error_store.summarize()
 
         assert "InsdesError" in summary
 
-    def test_sale_error_in_error_queue(self):
-        """Test collecting OdooError in ErrorQueue."""
-        queue = ErrorQueue()
+    def test_sale_error_in_error_store(self):
+        """Test collecting OdooError in ErrorStore."""
+        error_store = ErrorStore()
+        error_store.clear()
         exc = SaleError("Odoo API error", order_id="ORD-002")
 
-        queue.put(exc)
-        summary = queue.summarize()
+        error_store.add(exc)
+        summary = error_store.summarize()
 
         assert "SaleError" in summary
 
-    def test_mixed_exceptions_in_error_queue(self):
-        """Test collecting different exception types in ErrorQueue."""
-        queue = ErrorQueue()
-        queue.put(InsdesError("INSDES error", order_id="ORD-001"))
-        queue.put(SaleError("Odoo error", order_id="ORD-002"))
-        queue.put(ValueError("Generic error"))
+    def test_mixed_exceptions_in_error_store(self):
+        """Test collecting different exception types in ErrorStore."""
+        error_store = ErrorStore()
+        error_store.clear()
+        error_store.add(InsdesError("INSDES error", order_id="ORD-001"))
+        error_store.add(SaleError("Odoo error", order_id="ORD-002"))
+        error_store.add(ValueError("Generic error"))
 
-        summary = queue.summarize()
+        summary = error_store.summarize()
         assert "Error 1:" in summary
         assert "Error 2:" in summary
         assert "Error 3:" in summary
 
     def test_summarize_with_custom_exceptions(self):
         """Test summarize() with custom exceptions."""
-        queue = ErrorQueue()
-        queue.put(InsdesError("INSDES failed", order_id="ORD-001"))
-        queue.put(SaleError("API failed", order_id="ORD-002"))
+        error_store = ErrorStore()
+        error_store.clear()
+        error_store.add(InsdesError("INSDES failed", order_id="ORD-001"))
+        error_store.add(SaleError("API failed", order_id="ORD-002"))
 
-        summary = queue.summarize()
+        summary = error_store.summarize()
 
         assert "Error 1:" in summary
         assert "Error 2:" in summary
@@ -495,51 +558,54 @@ class TestCustomExceptionIntegration:
 
     def test_custom_errors_with_traceback(self):
         """Test custom errors preserve traceback information."""
-        queue = ErrorQueue()
+        error_store = ErrorStore()
 
         try:
             raise InsdesError("Custom error", order_id="ORD-123")
         except InsdesError as exc:
-            queue.put(exc)
+            error_store.add(exc)
 
-        summary = queue.summarize()
+        summary = error_store.summarize()
         assert "InsdesError" in summary
         assert "Custom error" in summary
 
 
-class TestErrorQueueEdgeCases:
+class TestErrorStoreEdgeCases:
     """Tests for edge cases and special scenarios."""
 
     def test_exception_with_unicode_characters(self):
         """Test exception with Unicode characters."""
-        queue = ErrorQueue()
+        error_store = ErrorStore()
+        error_store.clear()
         exc = SaleError("Unicode error: café, 日本語, emoji 😀", order_id="ORD-123")
 
-        queue.put(exc)
-        queue.summarize()
+        error_store.add(exc)
+        error_store.summarize()
 
         assert "café" in str(exc)
 
     def test_exception_with_very_long_message(self):
         """Test exception with very long message."""
-        queue = ErrorQueue()
+        error_store = ErrorStore()
+        error_store.clear()
         long_message = "x" * 10000
         exc = InsdesError(long_message, order_id="ORD-123")
 
-        queue.put(exc)
-        summary = queue.summarize()
+        error_store.add(exc)
+        summary = error_store.summarize()
 
         assert "x" * 100 in summary  # At least part of the message is there
 
     def test_large_number_of_exceptions(self):
         """Test handling large number of exceptions."""
-        queue = ErrorQueue()
+        error_store = ErrorStore()
+        error_store.clear()
 
         for i in range(1000):
             exc = ValueError(f"Error {i}")
-            queue.put(exc)
+            error_store.add(exc)
 
-        summary = queue.summarize()
+        summary = error_store.summarize()
         assert "Error 1:" in summary  # At least some errors are in the summary
 
     def test_exception_with_none_order_id_string(self):
@@ -807,95 +873,101 @@ class TestNotifyError:
         assert "ORD-001" in str(exc)
 
 
-class TestErrorQueueImmutability:
-    """Tests for ErrorQueue immutability (frozen=True)."""
+class TestErrorStoreImmutability:
+    """Tests for ErrorStore immutability (frozen=True)."""
 
-    def test_error_queue_is_frozen(self):
-        """Test that ErrorQueue is frozen and cannot be modified."""
-        queue = ErrorQueue()
-
-        with pytest.raises(TypeError):  # FrozenInstanceError
-            queue.new_attribute = "test"  # type: ignore
-
-    def test_queue_field_cannot_be_modified(self):
-        """Test that _queue field cannot be reassigned."""
-        queue = ErrorQueue()
+    def test_error_store_is_frozen(self):
+        """Test that ErrorStore is frozen and cannot be modified."""
+        error_store = ErrorStore()
 
         with pytest.raises(TypeError):  # FrozenInstanceError
-            queue._queue = None  # type: ignore
+            error_store.new_attribute = "test"  # type: ignore
+
+    def test_store_field_cannot_be_modified(self):
+        """Test that _store field cannot be reassigned."""
+        error_store = ErrorStore()
+
+        with pytest.raises(TypeError):  # FrozenInstanceError
+            error_store._store = None  # type: ignore
 
     def test_frozen_dataclass_instance_equality(self):
-        """Test frozen dataclass equality."""
-        queue1 = ErrorQueue()
-        queue2 = ErrorQueue()
+        """Test frozen dataclass singleton behavior."""
+        error_store1 = ErrorStore()
+        error_store2 = ErrorStore()
 
-        # Different instances even if they're both empty
-        assert queue1 is not queue2
+        # Same instance since ErrorStore is now a singleton
+        assert error_store1 is error_store2
 
 
-class TestAllCustomErrorsInQueue:
-    """Tests for all custom error types in ErrorQueue."""
+class TestAllCustomErrorsInStore:
+    """Tests for all custom error types in ErrorStore."""
 
-    def test_base_error_in_queue(self):
-        """Test collecting BaseError in ErrorQueue."""
-        queue = ErrorQueue()
+    def test_base_error_in_store(self):
+        """Test collecting BaseError in ErrorStore."""
+        error_store = ErrorStore()
+        error_store.clear()
         exc = BaseError("Base error", order_id="ORD-001")
 
-        queue.put(exc)
-        summary = queue.summarize()
+        error_store.add(exc)
+        summary = error_store.summarize()
 
         assert "BaseError" in summary
 
-    def test_artwork_error_in_queue(self):
-        """Test collecting ArtworkError in ErrorQueue."""
-        queue = ErrorQueue()
+    def test_artwork_error_in_store(self):
+        """Test collecting ArtworkError in ErrorStore."""
+        error_store = ErrorStore()
+        error_store.clear()
         exc = ArtworkError("Artwork error", order_id="ORD-001")
 
-        queue.put(exc)
-        summary = queue.summarize()
+        error_store.add(exc)
+        summary = error_store.summarize()
 
         assert "ArtworkError" in summary
 
-    def test_insdes_error_in_error_queue(self):
-        """Test collecting InsdesError in ErrorQueue."""
-        queue = ErrorQueue()
+    def test_insdes_error_in_store(self):
+        """Test collecting InsdesError in ErrorStore."""
+        error_store = ErrorStore()
+        error_store.clear()
         exc = InsdesError("Insdes error", order_id="ORD-002")
 
-        queue.put(exc)
-        summary = queue.summarize()
+        error_store.add(exc)
+        summary = error_store.summarize()
 
         assert "InsdesError" in summary
 
-    def test_notify_error_in_queue(self):
-        """Test collecting NotifyError in ErrorQueue."""
-        queue = ErrorQueue()
+    def test_notify_error_in_store(self):
+        """Test collecting NotifyError in ErrorStore."""
+        error_store = ErrorStore()
+        error_store.clear()
         exc = NotifyError("Notify error", order_id="ORD-003")
 
-        queue.put(exc)
-        summary = queue.summarize()
+        error_store.add(exc)
+        summary = error_store.summarize()
 
         assert "NotifyError" in summary
 
-    def test_sale_error_in_queue(self):
-        """Test collecting SaleError in ErrorQueue."""
-        queue = ErrorQueue()
+    def test_sale_error_in_store(self):
+        """Test collecting SaleError in ErrorStore."""
+        error_store = ErrorStore()
+        error_store.clear()
         exc = SaleError("Sale error", order_id="ORD-004")
 
-        queue.put(exc)
-        summary = queue.summarize()
+        error_store.add(exc)
+        summary = error_store.summarize()
 
         assert "SaleError" in summary
 
-    def test_all_custom_errors_mixed_in_queue(self):
+    def test_all_custom_errors_mixed_in_store(self):
         """Test collecting all custom error types together."""
-        queue = ErrorQueue()
-        queue.put(BaseError("Base", order_id="ORD-001"))
-        queue.put(ArtworkError("Artwork", order_id="ORD-002"))
-        queue.put(InsdesError("Insdes", order_id="ORD-003"))
-        queue.put(NotifyError("Notify", order_id="ORD-004"))
-        queue.put(SaleError("Sale", order_id="ORD-005"))
+        error_store = ErrorStore()
+        error_store.clear()
+        error_store.add(BaseError("Base", order_id="ORD-001"))
+        error_store.add(ArtworkError("Artwork", order_id="ORD-002"))
+        error_store.add(InsdesError("Insdes", order_id="ORD-003"))
+        error_store.add(NotifyError("Notify", order_id="ORD-004"))
+        error_store.add(SaleError("Sale", order_id="ORD-005"))
 
-        summary = queue.summarize()
+        summary = error_store.summarize()
         assert "Error 1:" in summary
         assert "Error 2:" in summary
         assert "Error 3:" in summary
@@ -904,14 +976,15 @@ class TestAllCustomErrorsInQueue:
 
     def test_summarize_with_all_custom_errors(self):
         """Test summarize() with all custom exception types."""
-        queue = ErrorQueue()
-        queue.put(BaseError("Base error", order_id="ORD-001"))
-        queue.put(ArtworkError("Artwork error", order_id="ORD-002"))
-        queue.put(InsdesError("Insdes error", order_id="ORD-003"))
-        queue.put(NotifyError("Notify error", order_id="ORD-004"))
-        queue.put(SaleError("Sale error", order_id="ORD-005"))
+        error_store = ErrorStore()
+        error_store.clear()
+        error_store.add(BaseError("Base error", order_id="ORD-001"))
+        error_store.add(ArtworkError("Artwork error", order_id="ORD-002"))
+        error_store.add(InsdesError("Insdes error", order_id="ORD-003"))
+        error_store.add(NotifyError("Notify error", order_id="ORD-004"))
+        error_store.add(SaleError("Sale error", order_id="ORD-005"))
 
-        summary = queue.summarize()
+        summary = error_store.summarize()
 
         assert "Error 1:" in summary
         assert "Error 5:" in summary
