@@ -6,7 +6,6 @@ All interfaces are centralized in base.py for easy maintenance and import.
 from src.interfaces.base import (
     IArtworkService,
     IArtworkServiceProvider,
-    IErrorQueue,
     IOrderNotifier,
     IOrderReader,
     IOrderService,
@@ -20,7 +19,6 @@ from src.interfaces.base import (
 __all__ = [
     "IArtworkService",
     "IArtworkServiceProvider",
-    "IErrorQueue",
     "IOrderNotifier",
     "IOrderReader",
     "IOrderService",

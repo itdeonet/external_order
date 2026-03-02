@@ -51,27 +51,6 @@ class IRegistry[T](Protocol):
 
 
 # ============================================================================
-# Error Queue Interface
-# ============================================================================
-
-
-class IErrorQueue(Protocol):
-    """Interface for a thread-safe queue to store exceptions."""
-
-    def put(self, exc: Exception) -> None:
-        """Add an exception to the queue."""
-        ...
-
-    def clear(self) -> None:
-        """Clear all exceptions from the queue."""
-        ...
-
-    def summarize(self) -> str:
-        """Summarize all collected exceptions."""
-        ...
-
-
-# ============================================================================
 # Artwork Service Interface
 # ============================================================================
 
@@ -92,7 +71,7 @@ class IArtworkService(Protocol):
 class IOrderReader(Protocol):
     """Interface for reading orders from a provider."""
 
-    def read_orders(self, error_queue: IErrorQueue) -> Generator["Order", None, None]:
+    def read_orders(self) -> Generator["Order", None, None]:
         """Generate orders from the provider."""
         ...
 
@@ -186,9 +165,7 @@ class ISaleService(Protocol):
 class IStockService(Protocol):
     """Interface for stock transfer services."""
 
-    def read_stock_transfers(
-        self, error_queue: IErrorQueue
-    ) -> Generator[dict[str, Any], None, None]:
+    def read_stock_transfers(self) -> Generator[dict[str, Any], None, None]:
         """Read stock transfer requests."""
         ...
 
