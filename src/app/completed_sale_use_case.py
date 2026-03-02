@@ -3,10 +3,9 @@
 from dataclasses import dataclass
 from logging import getLogger
 
-from src.app.error_handler import ErrorHandler
-from src.app.errors import SaleError
+from src.app.errors import ErrorStore, SaleError
 from src.domain import OrderStatus
-from src.interfaces import IErrorQueue, IOrderService, IRegistry, ISaleService
+from src.interfaces import IOrderService, IRegistry, ISaleService
 
 logger = getLogger(__name__)
 
@@ -17,12 +16,11 @@ class CompletedSaleUseCase:
 
     order_services: IRegistry[IOrderService]
     sale_service: ISaleService
-    error_queue: IErrorQueue
 
     def execute(self) -> None:
         """Complete sales for all order services."""
         logger.info("Complete sales for all order services...")
-        error_handler = ErrorHandler(self.error_queue)
+        error_store = ErrorStore()
         for order_provider, order_service in self.order_services.items():
             try:
                 logger.info("Complete sales for %s service...", order_provider)
@@ -39,16 +37,8 @@ class CompletedSaleUseCase:
                                 order_id=remote_order_id,
                             )
                     except Exception as exc:
-                        error_handler.handle_provider_error(
-                            exc,
-                            order_provider,
-                            remote_order_id,
-                            "Error completing sale",
-                        )
+                        logger.exception("Error completing sale for order %s", remote_order_id)
+                        error_store.add(exc)
             except Exception as exc:
-                error_handler.handle_provider_error(
-                    exc,
-                    order_provider,
-                    None,
-                    "Error completing sales",
-                )
+                logger.exception("Error completing sales for %s service", order_provider)
+                error_store.add(exc)

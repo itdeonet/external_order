@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.app.completed_sale_use_case import CompletedSaleUseCase
-from src.app.errors import SaleError
+from src.app.errors import ErrorStore, SaleError
 from src.domain.order import Order, OrderStatus
 
 
@@ -24,10 +24,11 @@ def mock_sales_service():
 
 
 @pytest.fixture
-def mock_error_queue():
-    """Create a mock error queue."""
-    mock_queue = MagicMock()
-    return mock_queue
+def mock_error_store(mocker):
+    """Create a mock error store and patch it in the use case."""
+    mock_store = mocker.Mock(spec=ErrorStore)
+    mocker.patch("src.app.completed_sale_use_case.ErrorStore", return_value=mock_store)
+    return mock_store
 
 
 @pytest.fixture
@@ -37,40 +38,32 @@ def mock_order():
 
 
 @pytest.fixture
-def completed_use_case(mock_order_services, mock_sales_service, mock_error_queue):
+def completed_use_case(mock_order_services, mock_sales_service):
     """Create a CompletedUseCase instance with mocked dependencies."""
     return CompletedSaleUseCase(
         order_services=mock_order_services,
         sale_service=mock_sales_service,
-        error_queue=mock_error_queue,
     )
 
 
 class TestCompletedUseCaseInit:
     """Tests for CompletedUseCase initialization."""
 
-    def test_initialization_with_valid_dependencies(
-        self, mock_order_services, mock_sales_service, mock_error_queue
-    ):
+    def test_initialization_with_valid_dependencies(self, mock_order_services, mock_sales_service):
         """Test that CompletedUseCase initializes correctly with valid dependencies."""
         use_case = CompletedSaleUseCase(
             order_services=mock_order_services,
             sale_service=mock_sales_service,
-            error_queue=mock_error_queue,
         )
 
         assert use_case.order_services is mock_order_services
         assert use_case.sale_service is mock_sales_service
-        assert use_case.error_queue is mock_error_queue
 
-    def test_initialization_creates_frozen_dataclass(
-        self, mock_order_services, mock_sales_service, mock_error_queue
-    ):
+    def test_initialization_creates_frozen_dataclass(self, mock_order_services, mock_sales_service):
         """Test that CompletedUseCase is a frozen dataclass."""
         use_case = CompletedSaleUseCase(
             order_services=mock_order_services,
             sale_service=mock_sales_service,
-            error_queue=mock_error_queue,
         )
 
         with pytest.raises(AttributeError):
@@ -222,7 +215,7 @@ class TestCompletedUseCaseErrorHandling:
     """Tests for error handling in execute method."""
 
     def test_execute_handles_exception_from_get_completed_sales(
-        self, completed_use_case, mock_order_services, mock_sales_service, mock_error_queue
+        self, completed_use_case, mock_order_services, mock_sales_service, mock_error_store
     ):
         """Test that exceptions from get_completed_sales are caught and queued."""
         provider_name = "test_provider"
@@ -236,20 +229,19 @@ class TestCompletedUseCaseErrorHandling:
         completed_use_case.execute()
 
         # Verify error was queued
-        mock_error_queue.put.assert_called_once()
-        error_arg = mock_error_queue.put.call_args[0][0]
-        assert isinstance(error_arg, SaleError)
-        assert "test_provider" in str(error_arg)
-        assert error_arg.order_id is None
+        mock_error_store.add.assert_called_once()
+        error_arg = mock_error_store.add.call_args[0][0]
+        assert isinstance(error_arg, RuntimeError)
+        assert "Service unavailable" in str(error_arg)
 
     def test_execute_handles_exception_from_load_order(
         self,
         completed_use_case,
         mock_order_services,
         mock_sales_service,
-        mock_error_queue,
+        mock_error_store,
     ):
-        """Test that exceptions from load_order are caught and queued."""
+        """Test that exceptions from load_order are caught and stored."""
         provider_name = "test_provider"
         mock_order_service = MagicMock()
 
@@ -261,21 +253,21 @@ class TestCompletedUseCaseErrorHandling:
 
         completed_use_case.execute()
 
-        # Verify error was queued
-        mock_error_queue.put.assert_called_once()
-        error_arg = mock_error_queue.put.call_args[0][0]
-        assert isinstance(error_arg, SaleError)
-        assert "test_provider" in str(error_arg)
+        # Verify error was stored
+        mock_error_store.add.assert_called_once()
+        error_arg = mock_error_store.add.call_args[0][0]
+        assert isinstance(error_arg, ValueError)
+        assert "Invalid order ID" in str(error_arg)
 
     def test_execute_handles_exception_from_notify_completed_sale(
         self,
         completed_use_case,
         mock_order_services,
         mock_sales_service,
-        mock_error_queue,
+        mock_error_store,
         mock_order,
     ):
-        """Test that exceptions from notify_completed_sale are caught and queued."""
+        """Test that exceptions from notify_completed_sale are caught and stored."""
         provider_name = "test_provider"
         mock_order_service = MagicMock()
 
@@ -288,21 +280,21 @@ class TestCompletedUseCaseErrorHandling:
 
         completed_use_case.execute()
 
-        # Verify error was queued
-        mock_error_queue.put.assert_called_once()
-        error_arg = mock_error_queue.put.call_args[0][0]
-        assert isinstance(error_arg, SaleError)
-        assert "test_provider" in str(error_arg)
+        # Verify error was stored
+        mock_error_store.add.assert_called_once()
+        error_arg = mock_error_store.add.call_args[0][0]
+        assert isinstance(error_arg, RuntimeError)
+        assert "Notification failed" in str(error_arg)
 
     def test_execute_handles_exception_from_persist_order(
         self,
         completed_use_case,
         mock_order_services,
         mock_sales_service,
-        mock_error_queue,
+        mock_error_store,
         mock_order,
     ):
-        """Test that exceptions from persist_order are caught and queued."""
+        """Test that exceptions from persist_order are caught and stored."""
         provider_name = "test_provider"
         mock_order_service = MagicMock()
 
@@ -315,18 +307,18 @@ class TestCompletedUseCaseErrorHandling:
 
         completed_use_case.execute()
 
-        # Verify error was queued
-        mock_error_queue.put.assert_called_once()
-        error_arg = mock_error_queue.put.call_args[0][0]
-        assert isinstance(error_arg, SaleError)
-        assert "test_provider" in str(error_arg)
+        # Verify error was stored
+        mock_error_store.add.assert_called_once()
+        error_arg = mock_error_store.add.call_args[0][0]
+        assert isinstance(error_arg, OSError)
+        assert "Persistence failed" in str(error_arg)
 
     def test_execute_continues_after_exception(
         self,
         completed_use_case,
         mock_order_services,
         mock_sales_service,
-        mock_error_queue,
+        mock_error_store,
         mock_order,
     ):
         """Test that processing continues with next provider after an exception."""
@@ -353,7 +345,7 @@ class TestCompletedUseCaseErrorHandling:
         # Verify second provider was still processed
         assert mock_sales_service.get_completed_sales.call_count == 2
         mock_order_service2.load_order.assert_called_once()
-        assert mock_error_queue.put.call_count == 1
+        assert mock_error_store.add.call_count == 1
 
 
 class TestCompletedUseCaseIntegration:
@@ -364,7 +356,7 @@ class TestCompletedUseCaseIntegration:
         completed_use_case,
         mock_order_services,
         mock_sales_service,
-        mock_error_queue,
+        mock_error_store,
         mock_order,
     ):
         """Test a complete workflow with multiple providers and sales."""
@@ -393,14 +385,14 @@ class TestCompletedUseCaseIntegration:
         assert mock_order_service1.persist_order.call_count == 2
         assert mock_order_service2.notify_completed_sale.call_count == 1
         assert mock_order_service2.persist_order.call_count == 1
-        mock_error_queue.put.assert_not_called()
+        mock_error_store.add.assert_not_called()
 
     def test_execute_with_mixed_success_and_missing_orders(
         self,
         completed_use_case,
         mock_order_services,
         mock_sales_service,
-        mock_error_queue,
+        mock_error_store,
         mock_order,
     ):
         """Test execute with some orders existing and some missing."""
@@ -422,8 +414,8 @@ class TestCompletedUseCaseIntegration:
         # Verify successful orders were processed
         assert mock_order_service.notify_completed_sale.call_count == 2
         assert mock_order_service.persist_order.call_count == 2
-        # Verify missing order error was queued
-        mock_error_queue.put.assert_called_once()
-        error_arg = mock_error_queue.put.call_args[0][0]
+        # Verify missing order error was stored
+        mock_error_store.add.assert_called_once()
+        error_arg = mock_error_store.add.call_args[0][0]
         assert isinstance(error_arg, SaleError)
         assert "missing_order" in str(error_arg)
