@@ -9,8 +9,8 @@ from typing import Any, Self
 
 import xmltodict  # type: ignore
 
+from src.app.errors import ErrorStore
 from src.config import Config
-from src.interfaces import IErrorQueue
 
 logger = getLogger(__name__)
 
@@ -30,9 +30,7 @@ class HarmanStockService:
             output_dir=config.harman_output_dir,
         )
 
-    def read_stock_transfers(
-        self, error_queue: IErrorQueue
-    ) -> Generator[dict[str, Any], None, None]:
+    def read_stock_transfers(self) -> Generator[dict[str, Any], None, None]:
         """Read stock transfer requests."""
         for file_path in self.input_dir.glob("*.xml", case_sensitive=False):
             try:
@@ -40,7 +38,7 @@ class HarmanStockService:
                 transfer_data = xmltodict.parse(file_path.read_text(encoding="utf-8"))
                 yield self._get_transfer_info(transfer_data, file_path)
             except Exception as exc:
-                error_queue.put(exc)
+                ErrorStore().add(exc)
 
     def _get_transfer_info(self, transfer_data: dict[str, Any], file_path: Path) -> dict[str, Any]:
         """Extract relevant information from the stock transfer data."""

@@ -2,10 +2,10 @@
 
 import datetime as dt
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
+from src.app.errors import ErrorStore
 from src.services.harman_stock_service import HarmanStockService
 
 
@@ -65,9 +65,9 @@ class TestHarmanStockServiceInstantiation:
 class TestHarmanStockServiceFromConfig:
     """Tests for from_config class method."""
 
-    def test_from_config_with_valid_paths(self, tmp_path):
+    def test_from_config_with_valid_paths(self, tmp_path, mocker):
         """Test creating HarmanStockService from config."""
-        mock_config = Mock()
+        mock_config = mocker.Mock()
         input_dir = tmp_path / "input"
         output_dir = tmp_path / "output"
         input_dir.mkdir()
@@ -81,9 +81,9 @@ class TestHarmanStockServiceFromConfig:
         assert service.input_dir == input_dir
         assert service.output_dir == output_dir
 
-    def test_from_config_returns_harman_stock_service_instance(self, tmp_path):
+    def test_from_config_returns_harman_stock_service_instance(self, tmp_path, mocker):
         """Test that from_config returns a HarmanStockService instance."""
-        mock_config = Mock()
+        mock_config = mocker.Mock()
         input_dir = tmp_path / "input"
         output_dir = tmp_path / "output"
         input_dir.mkdir()
@@ -132,9 +132,8 @@ class TestHarmanStockServiceReadStockTransfers:
         output_dir.mkdir()
 
         service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
-        mock_error_queue = MagicMock()
 
-        transfers = list(service.read_stock_transfers(mock_error_queue))
+        transfers = list(service.read_stock_transfers())
 
         assert transfers == []
 
@@ -149,13 +148,12 @@ class TestHarmanStockServiceReadStockTransfers:
         xml_file.write_text(sample_xml_data)
 
         service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
-        mock_error_queue = MagicMock()
 
-        with patch(
+        with mocker.patch(
             "src.services.harman_stock_service.HarmanStockService._get_transfer_info",
             return_value={"id": "transfer_1"},
         ):
-            transfers = list(service.read_stock_transfers(mock_error_queue))
+            transfers = list(service.read_stock_transfers())
 
         assert len(transfers) == 1
         assert transfers[0] == {"id": "transfer_1"}
@@ -173,13 +171,12 @@ class TestHarmanStockServiceReadStockTransfers:
             xml_file.write_text(sample_xml_data)
 
         service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
-        mock_error_queue = MagicMock()
 
-        with patch(
+        with mocker.patch(
             "src.services.harman_stock_service.HarmanStockService._get_transfer_info",
             side_effect=[{"id": f"t{i}"} for i in range(3)],
         ):
-            transfers = list(service.read_stock_transfers(mock_error_queue))
+            transfers = list(service.read_stock_transfers())
 
         assert len(transfers) == 3
 
@@ -198,13 +195,12 @@ class TestHarmanStockServiceReadStockTransfers:
         (input_dir / "data.json").write_text("{}")
 
         service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
-        mock_error_queue = MagicMock()
 
-        with patch(
+        with mocker.patch(
             "src.services.harman_stock_service.HarmanStockService._get_transfer_info",
             return_value={"id": "t1"},
         ):
-            transfers = list(service.read_stock_transfers(mock_error_queue))
+            transfers = list(service.read_stock_transfers())
 
         assert len(transfers) == 1
 
@@ -220,13 +216,16 @@ class TestHarmanStockServiceReadStockTransfers:
         xml_file.write_text("Not valid XML <unclosed>")
 
         service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
-        mock_error_queue = MagicMock()
 
-        transfers = list(service.read_stock_transfers(mock_error_queue))
+        # Mock ErrorStore singleton so we can verify add() was called
+        mock_error_store = mocker.Mock(spec=ErrorStore)
+        mocker.patch("src.services.harman_stock_service.ErrorStore", return_value=mock_error_store)
 
-        # Should catch the error and queue it
+        transfers = list(service.read_stock_transfers())
+
+        # Should catch the error and store it
         assert len(transfers) == 0
-        assert mock_error_queue.put.called
+        assert mock_error_store.add.called
 
     def test_read_stock_transfers_calls_get_transfer_info(self, tmp_path, sample_xml_data, mocker):
         """Test that read_stock_transfers calls _get_transfer_info."""
@@ -239,17 +238,18 @@ class TestHarmanStockServiceReadStockTransfers:
         xml_file.write_text(sample_xml_data)
 
         service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
-        mock_error_queue = MagicMock()
 
-        with patch(
+        mock_get_info = mocker.patch(
             "src.services.harman_stock_service.HarmanStockService._get_transfer_info",
             return_value={"id": "t1"},
-        ) as mock_get_info:
-            list(service.read_stock_transfers(mock_error_queue))
+        )
+        list(service.read_stock_transfers())
 
         assert mock_get_info.called
 
-    def test_read_stock_transfers_case_insensitive_extension(self, tmp_path, sample_xml_data):
+    def test_read_stock_transfers_case_insensitive_extension(
+        self, tmp_path, sample_xml_data, mocker
+    ):
         """Test that XML file matching is case-insensitive."""
         input_dir = tmp_path / "input"
         output_dir = tmp_path / "output"
@@ -261,13 +261,12 @@ class TestHarmanStockServiceReadStockTransfers:
         xml_file.write_text(sample_xml_data)
 
         service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
-        mock_error_queue = MagicMock()
 
-        with patch(
+        with mocker.patch(
             "src.services.harman_stock_service.HarmanStockService._get_transfer_info",
             return_value={"id": "t1"},
         ):
-            transfers = list(service.read_stock_transfers(mock_error_queue))
+            transfers = list(service.read_stock_transfers())
 
         assert len(transfers) == 1
 
