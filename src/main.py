@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 import httpx
 
 from src.app.completed_sale_use_case import CompletedSaleUseCase
-from src.app.errors import ErrorQueue
 from src.app.new_sale_use_case import NewSaleUseCase
 from src.app.odoo_auth import OdooAuth
 from src.app.registry import Registry
@@ -25,7 +24,7 @@ from src.services.odoo_sale_service import OdooSaleService
 from src.services.spectrum_artwork_service import SpectrumArtworkService
 
 if TYPE_CHECKING:
-    from src.interfaces import IErrorQueue, IRegistry, ISaleService
+    from src.interfaces import IRegistry, ISaleService
 
 logger = getLogger(__name__)
 
@@ -36,7 +35,6 @@ def main() -> None:
     # make sure directories exist
     config: Config = get_config()
 
-    error_queue: IErrorQueue = ErrorQueue()
     artwork_services: IRegistry[IArtworkService] = Registry[IArtworkService]()
     order_services: IRegistry[IOrderService] = Registry[IOrderService]()
     order_services.register("Harman", HarmanOrderService.from_config(config=config))
@@ -68,7 +66,6 @@ def main() -> None:
                 order_services=order_services,
                 artwork_services=artwork_services,
                 sale_service=sale_service,
-                error_queue=error_queue,
                 open_orders_dir=config.open_orders_dir,
             ),
         )
@@ -77,14 +74,12 @@ def main() -> None:
             CompletedSaleUseCase(
                 order_services=order_services,
                 sale_service=sale_service,
-                error_queue=error_queue,
             ),
         )
         use_cases.register(
             "StockTransfer",
             StockTransferUseCase(
                 stock_services=stock_services,
-                error_queue=error_queue,
             ),
         )
         # execute use cases
