@@ -14,10 +14,10 @@ from typing import Any, Self
 
 from pydifact import Parser, Segment, Serializer  # type: ignore
 
-from src.app.errors import NotifyError
+from src.app.errors import ErrorStore, NotifyError
 from src.config import Config, get_config
 from src.domain import LineItem, Order, OrderStatus, ShipTo
-from src.interfaces import IArtworkService, IErrorQueue, IRegistry
+from src.interfaces import IArtworkService, IRegistry
 from src.services.render_service import RenderService
 
 logger = getLogger(__name__)
@@ -53,7 +53,7 @@ class HarmanOrderService:
             renderer=RenderService(directory=config.templates_dir),
         )
 
-    def read_orders(self, error_queue: IErrorQueue) -> Generator[Order, None, None]:
+    def read_orders(self) -> Generator[Order, None, None]:
         """Generate orders."""
         logger.info("Generate orders...")
         # parse each .insdes file in the directory and yield an Order instance
@@ -70,7 +70,7 @@ class HarmanOrderService:
                 yield self._make_order(order_data)
             except Exception as exc:
                 logger.error("Error processing file: %s", file, exc_info=exc)
-                error_queue.put(exc)
+                ErrorStore().add(exc)
 
     def _read_order_data(self, file: Path) -> dict[str, Any]:
         """Extract order data from the given file."""

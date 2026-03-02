@@ -9,8 +9,9 @@ from unittest.mock import patch
 import pytest
 from pydifact import Segment  # type: ignore
 
+from src.app.errors import ErrorStore
 from src.domain import Order, OrderStatus
-from src.interfaces import IArtworkService, IErrorQueue
+from src.interfaces import IArtworkService
 from src.services.harman_order_service import HarmanOrderService
 from src.services.render_service import RenderService
 
@@ -650,19 +651,21 @@ class TestReadOrders:
         """Test that read_orders returns a generator."""
         from collections.abc import Generator
 
-        error_queue = mocker.Mock(spec=IErrorQueue)
-        result = service.read_orders(error_queue)
+        result = service.read_orders()
 
         # Verify it's a generator
         assert isinstance(result, Generator)
 
     def test_read_orders_empty_directory(self, service, mocker):
         """Test that read_orders returns empty generator for empty directory."""
-        error_queue = mocker.Mock(spec=IErrorQueue)
-        orders = list(service.read_orders(error_queue))
+        # Mock ErrorStore to verify add() is not called
+        mock_error_store = mocker.Mock(spec=ErrorStore)
+        mocker.patch("src.services.harman_order_service.ErrorStore", return_value=mock_error_store)
+
+        orders = list(service.read_orders())
 
         assert len(orders) == 0
-        error_queue.put.assert_not_called()
+        mock_error_store.add.assert_not_called()
 
     def test_read_orders_yields_order_from_insdes_file(self, service, mocker):
         """Test that read_orders yields an order from a .insdes file."""
@@ -693,13 +696,16 @@ class TestReadOrders:
             return_value=order_data,
         )
 
-        error_queue = mocker.Mock(spec=IErrorQueue)
-        orders = list(service.read_orders(error_queue))
+        # Mock ErrorStore to verify add() is not called
+        mock_error_store = mocker.Mock(spec=ErrorStore)
+        mocker.patch("src.services.harman_order_service.ErrorStore", return_value=mock_error_store)
+
+        orders = list(service.read_orders())
 
         assert len(orders) == 1
         assert isinstance(orders[0], Order)
         assert orders[0].remote_order_id == "ORD-001"
-        error_queue.put.assert_not_called()
+        mock_error_store.add.assert_not_called()
 
     def test_read_orders_yields_order_from_created_file(self, service, mocker):
         """Test that read_orders yields an order from a .created file."""
@@ -730,13 +736,16 @@ class TestReadOrders:
             return_value=order_data,
         )
 
-        error_queue = mocker.Mock(spec=IErrorQueue)
-        orders = list(service.read_orders(error_queue))
+        # Mock ErrorStore to verify add() is not called
+        mock_error_store = mocker.Mock(spec=ErrorStore)
+        mocker.patch("src.services.harman_order_service.ErrorStore", return_value=mock_error_store)
+
+        orders = list(service.read_orders())
 
         assert len(orders) == 1
         assert isinstance(orders[0], Order)
         assert orders[0].remote_order_id == "ORD-002"
-        error_queue.put.assert_not_called()
+        mock_error_store.add.assert_not_called()
 
     def test_read_orders_yields_multiple_orders_from_mixed_files(self, service, mocker):
         """Test that read_orders yields all orders from both .insdes and .created files."""
@@ -788,17 +797,20 @@ class TestReadOrders:
             side_effect=[order_data_1, order_data_2],
         )
 
-        error_queue = mocker.Mock(spec=IErrorQueue)
-        orders = list(service.read_orders(error_queue))
+        # Mock ErrorStore to verify add() is not called
+        mock_error_store = mocker.Mock(spec=ErrorStore)
+        mocker.patch("src.services.harman_order_service.ErrorStore", return_value=mock_error_store)
+
+        orders = list(service.read_orders())
 
         assert len(orders) == 2
         order_ids = {order.remote_order_id for order in orders}
         assert "ORD-003" in order_ids
         assert "ORD-004" in order_ids
-        error_queue.put.assert_not_called()
+        mock_error_store.add.assert_not_called()
 
     def test_read_orders_handles_parsing_exception(self, service, mocker):
-        """Test that read_orders catches exceptions and puts them in error queue."""
+        """Test that read_orders catches exceptions and puts them in error store."""
         order_file = service.input_dir / "ORD-010.insdes"
         order_file.write_text("invalid edi")
 
@@ -809,11 +821,14 @@ class TestReadOrders:
             side_effect=parsing_error,
         )
 
-        error_queue = mocker.Mock(spec=IErrorQueue)
-        orders = list(service.read_orders(error_queue))
+        # Mock ErrorStore class so we can verify add() was called
+        mock_error_store = mocker.Mock(spec=ErrorStore)
+        mocker.patch("src.services.harman_order_service.ErrorStore", return_value=mock_error_store)
+
+        orders = list(service.read_orders())
 
         assert len(orders) == 0
-        error_queue.put.assert_called_once_with(parsing_error)
+        mock_error_store.add.assert_called_once_with(parsing_error)
 
     def test_read_orders_handles_order_creation_exception(self, service, mocker):
         """Test that read_orders catches order creation exceptions."""
@@ -837,11 +852,14 @@ class TestReadOrders:
             side_effect=creation_error,
         )
 
-        error_queue = mocker.Mock(spec=IErrorQueue)
-        orders = list(service.read_orders(error_queue))
+        # Mock ErrorStore class so we can verify add() was called
+        mock_error_store = mocker.Mock(spec=ErrorStore)
+        mocker.patch("src.services.harman_order_service.ErrorStore", return_value=mock_error_store)
+
+        orders = list(service.read_orders())
 
         assert len(orders) == 0
-        error_queue.put.assert_called_once_with(creation_error)
+        mock_error_store.add.assert_called_once_with(creation_error)
 
     def test_read_orders_continues_after_exception(self, service, mocker):
         """Test that read_orders continues processing after encountering an exception."""
@@ -856,12 +874,15 @@ class TestReadOrders:
             side_effect=parsing_error,
         )
 
-        error_queue = mocker.Mock(spec=IErrorQueue)
-        orders = list(service.read_orders(error_queue))
+        # Mock ErrorStore class so we can verify add() was called
+        mock_error_store = mocker.Mock(spec=ErrorStore)
+        mocker.patch("src.services.harman_order_service.ErrorStore", return_value=mock_error_store)
+
+        orders = list(service.read_orders())
 
         # Should have no successful orders and one error
         assert len(orders) == 0
-        error_queue.put.assert_called_once_with(parsing_error)
+        mock_error_store.add.assert_called_once_with(parsing_error)
 
 
 class TestImmutability:
