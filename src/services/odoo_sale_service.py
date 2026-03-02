@@ -71,7 +71,7 @@ class OdooSaleService:
         )
         logger.info("Found country ID %d for country code %s", country_id, country_code)
         if not isinstance(country_id, int):
-            raise SaleError("Country search did not return an ID")
+            raise TypeError("country_id should be an integer")
         return country_id
 
     def _get_state_id(self, country_id: int, state: str) -> int:
@@ -92,7 +92,7 @@ class OdooSaleService:
 
         logger.info("Found state ID %d for country_id=%s region=%s", state_id, country_id, state)
         if not isinstance(state_id, int):
-            raise SaleError("State search did not return an ID")
+            raise TypeError("state_id should be an integer")
         return state_id
 
     def _get_contact_data_from_order(self, order: Order) -> dict[str, Any]:
@@ -168,8 +168,7 @@ class OdooSaleService:
 
             if not isinstance(product, dict) or "id" not in product or "name" not in product:
                 raise SaleError(
-                    "Product search did not return expected fields id and name",
-                    order.remote_order_id,
+                    f"Product search for {line_item.product_code} failed", order.remote_order_id
                 )
             order_lines.append(
                 {
@@ -186,7 +185,7 @@ class OdooSaleService:
         """Resolve delivery.carrier by name."""
         carrier_name = order.shipment_type
         if not carrier_name.strip():
-            raise ValueError("Carrier name is empty")
+            raise ValueError("Shipment type is required in order")
 
         logger.info("Get carrier ID for name: %s", carrier_name)
         carrier_id = self._call_search_single(
@@ -203,7 +202,7 @@ class OdooSaleService:
 
         logger.info("Found carrier ID %d for name: %s", carrier_id, carrier_name)
         if not isinstance(carrier_id, int):
-            raise SaleError("Carrier search did not return an ID", order.remote_order_id)
+            raise TypeError("carrier_id should be an integer")
         return carrier_id
 
     def create_sale(self, order: Order) -> int:
@@ -248,7 +247,7 @@ class OdooSaleService:
         """Confirm the sale for the given order."""
         sale_data = self._get_sale_data(order)
         if not (sale_data and "id" in sale_data and sale_data["id"] != 0):
-            raise SaleError("Cannot confirm sale that does not exist", order.remote_order_id)
+            raise SaleError("Cannot confirm non-existent sale", order.remote_order_id)
 
         sale_id = sale_data["id"]
         logger.info("Confirm sale with id: %s for order: %s", sale_id, order.remote_order_id)
@@ -272,7 +271,7 @@ class OdooSaleService:
         )
         sale_data = self._get_sale_data(order)
         if not sale_data or "id" not in sale_data or sale_data["id"] == 0:
-            raise SaleError("Cannot check order lines for sale that does not exist in Odoo")
+            raise SaleError("Cannot check order lines for non-existent sale", order.remote_order_id)
 
         odoo_lines = {
             (line["product_id"][0], line["product_uom_qty"])
@@ -301,11 +300,11 @@ class OdooSaleService:
         logger.info("Update contact information for order %s", order.remote_order_id)
         sale_data = self._get_sale_data(order)
         if not (sale_data and "id" in sale_data and sale_data["id"] != 0):
-            raise SaleError("Cannot update contact for sale that does not exist")
+            raise SaleError("Cannot update contact for non-existent sale", order.remote_order_id)
 
         contact_id: int = sale_data.get("partner_shipping_id", [0, ""])[0]
         if not contact_id:
-            raise SaleError("Sale does not have a shipping contact to update")
+            raise SaleError("Sale has no shipping contact to update", order.remote_order_id)
 
         contact_data = self._get_contact_data_from_order(order)
         result = self._call(
@@ -314,15 +313,9 @@ class OdooSaleService:
             query_data=[[contact_id], contact_data],
         )
         if not bool(result):
-            raise SaleError(
-                f"Failed to update contact id {contact_id} for order {order.remote_order_id}"
-            )
+            raise SaleError(f"Failed to update contact {contact_id}", order.remote_order_id)
 
-        logger.info(
-            "Contact with ID %d updated successfully for order %s",
-            contact_id,
-            order.remote_order_id,
-        )
+        logger.info("Contact ID %d updated (order %s)", contact_id, order.remote_order_id)
 
     def get_completed_sales(self, order_provider: str) -> list[tuple[int, str]]:
         """Get a list of completed sales for the given order provider."""
@@ -440,8 +433,11 @@ class OdooSaleService:
                 for item in result
             )
         ):
+            # If there are no serials found, return an empty list for each line item
             return {li.remote_line_id: [] for li in order.line_items}
 
+        # Group serials by product code extracted from product name
+        # e.g. {code1: [serial1, serial2], code2: [serial3]}
         serials_by_product = defaultdict(list)
         for item in result:
             # item["product_id"] is a tuple of (id: int, name: str)
@@ -449,6 +445,8 @@ class OdooSaleService:
             product_name = item["product_id"][1].split()[0][1:-1]
             serials_by_product[product_name].append(item["serial"])
 
+        # Group serials by line item based on product code and quantity
+        # e.g. {line_item_id1: [serial1, serial2], line_item_id2: [serial3]}
         serials_by_line_item = defaultdict(list)
         for li in order.line_items:
             # assign serials to line items based on product code and quantity

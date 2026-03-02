@@ -301,7 +301,7 @@ class TestConfirmSale:
         """Test that SaleError is raised when sale not found."""
         mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={})
 
-        with pytest.raises(SaleError, match="Cannot confirm sale that does not exist"):
+        with pytest.raises(SaleError, match="Cannot confirm non-existent sale"):
             service.confirm_sale(order)
 
     def test_confirm_sale_raises_on_confirmation_failure(self, service, mocker, order):
@@ -558,7 +558,7 @@ class TestGetCarrierId:
         order = Mock()
         order.shipment_type = ""
 
-        with pytest.raises(ValueError, match="Carrier name is empty"):
+        with pytest.raises(ValueError, match="Shipment type is required in order"):
             service._get_carrier_id(order)
 
     def test_get_carrier_id_raises_when_not_found(self, service, mocker, order):
@@ -778,14 +778,14 @@ class TestUpdateContact:
         """Test that SaleError is raised when sale is not found."""
         mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={})
 
-        with pytest.raises(SaleError, match="Cannot update contact for sale"):
+        with pytest.raises(SaleError, match="Cannot update contact for non-existent sale"):
             service.update_contact(order)
 
     def test_update_contact_raises_when_no_shipping_contact(self, service, mocker, order):
         """Test that SaleError is raised when sale has no shipping contact."""
         mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={"id": 100})
 
-        with pytest.raises(SaleError, match="does not have a shipping contact"):
+        with pytest.raises(SaleError, match="Sale has no shipping contact to update"):
             service.update_contact(order)
 
     def test_update_contact_raises_on_write_failure(self, service, mocker, order):
