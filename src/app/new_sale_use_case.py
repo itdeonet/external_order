@@ -5,10 +5,9 @@ from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
 
-from src.app.error_handler import ErrorHandler
-from src.app.errors import SaleError
+from src.app.errors import ErrorStore, SaleError
 from src.domain import Order, OrderStatus
-from src.interfaces import IArtworkService, IErrorQueue, IOrderService, IRegistry, ISaleService
+from src.interfaces import IArtworkService, IOrderService, IRegistry, ISaleService
 
 logger = getLogger(__name__)
 
@@ -20,17 +19,15 @@ class NewSaleUseCase:
     order_services: IRegistry[IOrderService]
     artwork_services: IRegistry[IArtworkService]
     sale_service: ISaleService
-    error_queue: IErrorQueue
     open_orders_dir: Path
 
     def execute(self) -> None:
         """Create sales from all order services."""
-        error_handler = ErrorHandler(self.error_queue)
         for order_service_name, order_service in self.order_services.items():
             logger.info("Create sales from %s service...", order_service_name)
 
             # process orders
-            for order in order_service.read_orders(self.error_queue):
+            for order in order_service.read_orders():
                 try:
                     logger.info(
                         "Create sale order %s from %s service.",
@@ -64,12 +61,12 @@ class NewSaleUseCase:
                     order_service.persist_order(order, OrderStatus.CONFIRMED)
 
                 except Exception as exc:
-                    error_handler.handle_order_error(
-                        exc,
+                    logger.exception(
+                        "Error processing order %s from %s service",
                         order.remote_order_id,
                         order_service_name,
-                        "Error processing order",
                     )
+                    ErrorStore().add(exc)
 
     def get_artwork(self, order: Order, artwork_service: IArtworkService | None) -> list[Path]:
         """Get artwork for the given order."""

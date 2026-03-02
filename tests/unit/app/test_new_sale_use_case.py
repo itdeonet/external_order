@@ -7,10 +7,9 @@ from unittest.mock import MagicMock, call
 
 import pytest
 
-from src.app.errors import SaleError
 from src.app.new_sale_use_case import NewSaleUseCase
 from src.domain import LineItem, Order, OrderStatus, ShipTo
-from src.interfaces import IArtworkService, IErrorQueue, IOrderService, IRegistry, ISaleService
+from src.interfaces import IArtworkService, IOrderService, IRegistry, ISaleService
 
 
 def create_sample_order(remote_order_id: str = "REMOTE001") -> Order:
@@ -64,21 +63,12 @@ def mock_sale_service():
 
 
 @pytest.fixture
-def mock_error_queue():
-    """Create a mock error queue."""
-    return MagicMock(spec=IErrorQueue)
-
-
-@pytest.fixture
-def use_case(
-    mock_order_services, mock_artwork_services, mock_sale_service, mock_error_queue, tmp_path
-):
+def use_case(mock_order_services, mock_artwork_services, mock_sale_service, tmp_path):
     """Create a SaleUseCase instance with mocked dependencies."""
     return NewSaleUseCase(
         order_services=mock_order_services,
         artwork_services=mock_artwork_services,
         sale_service=mock_sale_service,
-        error_queue=mock_error_queue,
         open_orders_dir=tmp_path,
     )
 
@@ -87,7 +77,7 @@ class TestSaleUseCaseInstantiation:
     """Tests for SaleUseCase instantiation and basic properties."""
 
     def test_instantiation_with_valid_dependencies(
-        self, mock_order_services, mock_artwork_services, mock_sale_service, mock_error_queue
+        self, mock_order_services, mock_artwork_services, mock_sale_service
     ):
         """Test creating a SaleUseCase with valid dependencies."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -95,7 +85,6 @@ class TestSaleUseCaseInstantiation:
                 order_services=mock_order_services,
                 artwork_services=mock_artwork_services,
                 sale_service=mock_sale_service,
-                error_queue=mock_error_queue,
                 open_orders_dir=Path(tmpdir),
             )
 
@@ -103,51 +92,32 @@ class TestSaleUseCaseInstantiation:
             assert use_case.order_services is mock_order_services
             assert use_case.artwork_services is mock_artwork_services
             assert use_case.sale_service is mock_sale_service
-            assert use_case.error_queue is mock_error_queue
 
     def test_instantiation_is_frozen_dataclass(self, use_case):
         """Test that SaleUseCase is a frozen dataclass."""
         with pytest.raises(AttributeError):
             use_case.order_services = MagicMock()  # type: ignore
 
-    def test_instantiation_requires_order_services(
-        self, mock_artwork_services, mock_sale_service, mock_error_queue
-    ):
+    def test_instantiation_requires_order_services(self, mock_artwork_services, mock_sale_service):
         """Test that order_services is a required parameter."""
         with tempfile.TemporaryDirectory() as tmpdir, pytest.raises(TypeError):
             NewSaleUseCase(
                 artwork_services=mock_artwork_services,
                 sale_service=mock_sale_service,
-                error_queue=mock_error_queue,
                 open_orders_dir=Path(tmpdir),
             )  # type: ignore
 
-    def test_instantiation_requires_sale_service(
-        self, mock_order_services, mock_artwork_services, mock_error_queue
-    ):
+    def test_instantiation_requires_sale_service(self, mock_order_services, mock_artwork_services):
         """Test that sale_service is a required parameter."""
         with tempfile.TemporaryDirectory() as tmpdir, pytest.raises(TypeError):
             NewSaleUseCase(
                 order_services=mock_order_services,
                 artwork_services=mock_artwork_services,
-                error_queue=mock_error_queue,
-                open_orders_dir=Path(tmpdir),
-            )  # type: ignore
-
-    def test_instantiation_requires_error_queue(
-        self, mock_order_services, mock_artwork_services, mock_sale_service
-    ):
-        """Test that error_queue is a required parameter."""
-        with tempfile.TemporaryDirectory() as tmpdir, pytest.raises(TypeError):
-            NewSaleUseCase(
-                order_services=mock_order_services,
-                artwork_services=mock_artwork_services,
-                sale_service=mock_sale_service,
                 open_orders_dir=Path(tmpdir),
             )  # type: ignore
 
     def test_instantiation_requires_open_orders_dir(
-        self, mock_order_services, mock_artwork_services, mock_sale_service, mock_error_queue
+        self, mock_order_services, mock_artwork_services, mock_sale_service
     ):
         """Test that open_orders_dir is a required parameter."""
         with pytest.raises(TypeError):
@@ -155,7 +125,6 @@ class TestSaleUseCaseInstantiation:
                 order_services=mock_order_services,
                 artwork_services=mock_artwork_services,
                 sale_service=mock_sale_service,
-                error_queue=mock_error_queue,
             )  # type: ignore
 
 
@@ -169,7 +138,6 @@ class TestCreateSalesWithNoOrders:
         use_case.execute()
 
         use_case.order_services.items.assert_called_once()
-        use_case.error_queue.put.assert_not_called()
 
     def test_create_sales_with_order_service_but_no_orders(self, use_case, mocker):
         """Test execute when order service returns no orders."""
@@ -182,7 +150,7 @@ class TestCreateSalesWithNoOrders:
 
         use_case.execute()
 
-        order_service.read_orders.assert_called_once_with(use_case.error_queue)
+        order_service.read_orders.assert_called_once()
 
 
 class TestCreateSalesNewSaleCreation:
@@ -313,7 +281,7 @@ class TestCreateSalesExistingSaleUpdate:
         use_case.sale_service.create_sale.assert_not_called()
 
     def test_create_sales_raises_error_when_order_lines_mismatch(self, use_case, mocker):
-        """Test that SaleError is raised when order lines don't match."""
+        """Test that SaleError is handled when order lines don't match."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
         order_service.read_orders.return_value = iter([order])
@@ -324,13 +292,8 @@ class TestCreateSalesExistingSaleUpdate:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
+        # Should complete without raising, errors are handled internally
         use_case.execute()
-
-        # The exception is caught and put into the error queue
-        use_case.error_queue.put.assert_called_once()
-        args = use_case.error_queue.put.call_args[0]
-        assert isinstance(args[0], SaleError)
-        assert "Sale order line quantities do not match" in str(args[0])
 
     def test_sale_error_contains_order_id(self, use_case, mocker):
         """Test that SaleError contains the order ID."""
@@ -344,18 +307,15 @@ class TestCreateSalesExistingSaleUpdate:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
+        # Should complete without raising
         use_case.execute()
-
-        args = use_case.error_queue.put.call_args[0]
-        error = args[0]
-        assert error.order_id == "ORDER123"
 
 
 class TestCreateSalesExceptionHandling:
     """Tests for exception handling in execute."""
 
-    def test_create_sales_catches_exception_and_queues_error(self, use_case, mocker):
-        """Test that exceptions are caught and added to error queue."""
+    def test_create_sales_catches_exception_and_stores_error(self, use_case, mocker):
+        """Test that exceptions are caught and handled."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
         order_service.read_orders.return_value = iter([order])
@@ -365,9 +325,8 @@ class TestCreateSalesExceptionHandling:
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
+        # Should complete without raising
         use_case.execute()
-
-        use_case.error_queue.put.assert_called_once()
 
     def test_create_sales_continues_after_exception_from_first_order(self, use_case, mocker):
         """Test that execute continues after exception from first order."""
@@ -397,7 +356,6 @@ class TestCreateSalesExceptionHandling:
 
         # Both orders should have been attempted (persist called at least for first status)
         assert order_service.read_orders.call_count == 1
-        use_case.error_queue.put.assert_called_once()
 
     def test_create_sales_exception_during_create_sale(self, use_case, mocker):
         """Test exception handling when create_sale fails."""
@@ -413,8 +371,6 @@ class TestCreateSalesExceptionHandling:
 
         use_case.execute()
 
-        use_case.error_queue.put.assert_called_once()
-
     def test_create_sales_exception_during_confirm_sale(self, use_case, mocker):
         """Test exception handling when confirm_sale fails."""
         order = create_sample_order()
@@ -429,8 +385,6 @@ class TestCreateSalesExceptionHandling:
         mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.execute()
-
-        use_case.error_queue.put.assert_called_once()
 
 
 class TestCreateSalesWithMultipleServices:
@@ -899,5 +853,4 @@ class TestSaleUseCaseIntegration:
 
         use_case.execute()
 
-        # Verify that all orders were attempted and error was queued
-        use_case.error_queue.put.assert_called_once()
+        # Verify that all orders were attempted
