@@ -61,57 +61,6 @@ class OdooSaleService:
         logger.info("Sale for order %s created: %s", order.remote_order_id, result)
         return result
 
-    def _call_search_single(
-        self,
-        model: str,
-        query_data: list,
-        fields: list[str] | None = None,
-        error_message: str | None = None,
-    ) -> dict[str, Any] | int | None:
-        """Generic method for searching a single record by criteria.
-
-        Wraps _call() with search_read for a single record lookup.
-
-        Args:
-            model: The Odoo model to search.
-            query_data: The search criteria (domain filter).
-            fields: Optional list of fields to return. Defaults to ["id"].
-            error_message: Optional error message to raise if record not found.
-                          If None, returns None instead of raising.
-
-        Returns:
-            The full record dict if multiple fields requested, the id if only id requested,
-            or None if not found and no error_message provided.
-
-        Raises:
-            SaleError: If record not found and error_message is provided.
-        """
-        fields = fields or ["id"]
-        result = self._call(
-            model=model,
-            method="search_read",
-            query_data=[query_data],
-            query_options={"fields": fields, "limit": 1},
-        )
-
-        if not (result and isinstance(result, list) and result[0]):
-            if error_message:
-                raise SaleError(error_message)
-            return None
-
-        record = result[0]
-        # Validate that all requested fields are present in the record
-        if not all(field in record for field in fields):
-            if error_message:
-                raise SaleError(error_message)
-            return None
-
-        # If only id field requested, return just the id as int
-        if fields == ["id"]:
-            return int(record["id"])
-        # Otherwise return the full record dict
-        return record
-
     def _get_country_id(self, country_code: str) -> int:
         """Resolve ISO country code to res.country id."""
         logger.info("Get country ID for country code: %s", country_code)
@@ -121,7 +70,8 @@ class OdooSaleService:
             error_message=f"Country code '{country_code}' not found",
         )
         logger.info("Found country ID %d for country code %s", country_id, country_code)
-        assert isinstance(country_id, int), "Country search did not return an ID"
+        if not isinstance(country_id, int):
+            raise SaleError("Country search did not return an ID")
         return country_id
 
     def _get_state_id(self, country_id: int, state: str) -> int:
@@ -141,7 +91,8 @@ class OdooSaleService:
             return 0
 
         logger.info("Found state ID %d for country_id=%s region=%s", state_id, country_id, state)
-        assert isinstance(state_id, int), "State search did not return an ID"
+        if not isinstance(state_id, int):
+            raise SaleError("State search did not return an ID")
         return state_id
 
     def _get_contact_data_from_order(self, order: Order) -> dict[str, Any]:
@@ -215,9 +166,11 @@ class OdooSaleService:
                 error_message=f"Product {line_item.product_code} not found",
             )
 
-            assert isinstance(product, dict) and "id" in product and "name" in product, (
-                "Product search did not return expected fields"
-            )
+            if not isinstance(product, dict) or "id" not in product or "name" not in product:
+                raise SaleError(
+                    "Product search did not return expected fields id and name",
+                    order.remote_order_id,
+                )
             order_lines.append(
                 {
                     "product_id": product["id"],
@@ -249,7 +202,8 @@ class OdooSaleService:
         )
 
         logger.info("Found carrier ID %d for name: %s", carrier_id, carrier_name)
-        assert isinstance(carrier_id, int), "Carrier search did not return an ID"
+        if not isinstance(carrier_id, int):
+            raise SaleError("Carrier search did not return an ID", order.remote_order_id)
         return carrier_id
 
     def create_sale(self, order: Order) -> int:
@@ -556,3 +510,54 @@ class OdooSaleService:
             )
             raise SaleError(message)
         return data.get("result")
+
+    def _call_search_single(
+        self,
+        model: str,
+        query_data: list,
+        fields: list[str] | None = None,
+        error_message: str | None = None,
+    ) -> dict[str, Any] | int | None:
+        """Generic method for searching a single record by criteria.
+
+        Wraps _call() with search_read for a single record lookup.
+
+        Args:
+            model: The Odoo model to search.
+            query_data: The search criteria (domain filter).
+            fields: Optional list of fields to return. Defaults to ["id"].
+            error_message: Optional error message to raise if record not found.
+                          If None, returns None instead of raising.
+
+        Returns:
+            The full record dict if multiple fields requested, the id if only id requested,
+            or None if not found and no error_message provided.
+
+        Raises:
+            SaleError: If record not found and error_message is provided.
+        """
+        fields = fields or ["id"]
+        result = self._call(
+            model=model,
+            method="search_read",
+            query_data=[query_data],
+            query_options={"fields": fields, "limit": 1},
+        )
+
+        if not (result and isinstance(result, list) and result[0]):
+            if error_message:
+                raise SaleError(error_message)
+            return None
+
+        record = result[0]
+        # Validate that all requested fields are present in the record
+        if not all(field in record for field in fields):
+            if error_message:
+                raise SaleError(error_message)
+            return None
+
+        # If only id field requested, return just the id as int
+        if fields == ["id"]:
+            return int(record["id"])
+        # Otherwise return the full record dict
+        return record
