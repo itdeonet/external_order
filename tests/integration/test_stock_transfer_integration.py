@@ -32,12 +32,11 @@ class TestStockTransferUseCaseIntegration:
     def test_stock_transfer_processing(
         self,
         stock_services,
-        error_queue,
+        error_store,
     ):
         """Test that stock transfers are properly processed."""
         use_case = StockTransferUseCase(
             stock_services=stock_services,
-            error_queue=error_queue,
         )
 
         # Execute the use case
@@ -52,7 +51,7 @@ class TestStockTransferUseCaseIntegration:
 
     def test_stock_transfer_multiple_services(
         self,
-        error_queue,
+        error_store,
     ):
         """Test processing stock transfers from multiple services."""
         service1 = Mock()
@@ -73,7 +72,6 @@ class TestStockTransferUseCaseIntegration:
 
         use_case = StockTransferUseCase(
             stock_services=stock_services,
-            error_queue=error_queue,
         )
 
         # Execute the use case
@@ -88,7 +86,7 @@ class TestStockTransferUseCaseIntegration:
     def test_stock_transfer_no_transfers(
         self,
         stock_services,
-        error_queue,
+        error_store,
     ):
         """Test when there are no stock transfers to process."""
         stock_service = stock_services.get("TestStockService")
@@ -96,7 +94,6 @@ class TestStockTransferUseCaseIntegration:
 
         use_case = StockTransferUseCase(
             stock_services=stock_services,
-            error_queue=error_queue,
         )
 
         # Execute the use case
@@ -109,7 +106,7 @@ class TestStockTransferUseCaseIntegration:
     def test_stock_transfer_error_handling(
         self,
         stock_services,
-        error_queue,
+        error_store,
     ):
         """Test error handling during stock transfer reply."""
         stock_service = stock_services.get("TestStockService")
@@ -117,36 +114,34 @@ class TestStockTransferUseCaseIntegration:
 
         use_case = StockTransferUseCase(
             stock_services=stock_services,
-            error_queue=error_queue,
         )
 
         # Execute the use case
         use_case.execute()
 
-        # Verify error was queued
-        error_queue.put.assert_called()
+        # Verify error was stored
+        error_store.add.assert_called()
 
     def test_stock_transfer_no_services(
         self,
-        error_queue,
+        error_store,
     ):
         """Test when there are no stock services registered."""
         stock_services = Registry()
 
         use_case = StockTransferUseCase(
             stock_services=stock_services,
-            error_queue=error_queue,
         )
 
         # Execute the use case with empty registry
         use_case.execute()
 
-        # Verify no errors were queued
-        error_queue.put.assert_not_called()
+        # Verify no errors were stored
+        error_store.add.assert_not_called()
 
     def test_stock_transfer_individual_error_isolation(
         self,
-        error_queue,
+        error_store,
     ):
         """Test that error in one transfer doesn't stop processing others."""
         transfers = [
@@ -170,7 +165,6 @@ class TestStockTransferUseCaseIntegration:
 
         use_case = StockTransferUseCase(
             stock_services=stock_services,
-            error_queue=error_queue,
         )
 
         # Execute the use case
@@ -179,5 +173,5 @@ class TestStockTransferUseCaseIntegration:
         # Verify all transfers were attempted (3 calls total, one of which failed)
         assert stock_service.reply_stock_transfer.call_count == 3
 
-        # Verify error was queued
-        error_queue.put.assert_called()
+        # Verify error was stored
+        error_store.add.assert_called()

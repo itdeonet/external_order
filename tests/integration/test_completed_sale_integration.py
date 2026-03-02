@@ -47,7 +47,7 @@ class TestCompletedSaleUseCaseIntegration:
     def test_completed_sale_update(
         self,
         order_services,
-        error_queue,
+        error_store,
     ):
         """Test that completed sales are properly marked as completed."""
         sale_service = Mock()
@@ -58,7 +58,6 @@ class TestCompletedSaleUseCaseIntegration:
         use_case = CompletedSaleUseCase(
             order_services=order_services,
             sale_service=sale_service,
-            error_queue=error_queue,
         )
 
         # Execute the use case
@@ -76,7 +75,7 @@ class TestCompletedSaleUseCaseIntegration:
 
     def test_completed_sale_multiple_orders(
         self,
-        error_queue,
+        error_store,
     ):
         """Test that multiple completed sales are processed."""
         # Create mock order service that returns a valid order
@@ -98,7 +97,6 @@ class TestCompletedSaleUseCaseIntegration:
         use_case = CompletedSaleUseCase(
             order_services=order_services,
             sale_service=sale_service,
-            error_queue=error_queue,
         )
 
         # Execute the use case
@@ -109,7 +107,7 @@ class TestCompletedSaleUseCaseIntegration:
 
     def test_completed_sale_order_not_found(
         self,
-        error_queue,
+        error_store,
     ):
         """Test that missing orders are properly handled."""
         # Setup order service that returns None for a specific order
@@ -127,18 +125,17 @@ class TestCompletedSaleUseCaseIntegration:
         use_case = CompletedSaleUseCase(
             order_services=order_services,
             sale_service=sale_service,
-            error_queue=error_queue,
         )
 
         # Execute the use case
         use_case.execute()
 
-        # Verify that an error was queued
-        error_queue.put.assert_called()
+        # Verify that an error was stored
+        error_store.add.assert_called()
 
     def test_completed_sale_with_error_in_service(
         self,
-        error_queue,
+        error_store,
     ):
         """Test error handling when order service raises an exception."""
         # Setup order service to raise an exception
@@ -157,18 +154,17 @@ class TestCompletedSaleUseCaseIntegration:
         use_case = CompletedSaleUseCase(
             order_services=order_services,
             sale_service=sale_service,
-            error_queue=error_queue,
         )
 
         # Execute the use case
         use_case.execute()
 
-        # Verify that errors were queued
-        error_queue.put.assert_called()
+        # Verify that errors were stored
+        error_store.add.assert_called()
 
     def test_completed_sale_no_completed_sales(
         self,
-        error_queue,
+        error_store,
     ):
         """Test when there are no completed sales."""
         # Setup order service
@@ -184,7 +180,6 @@ class TestCompletedSaleUseCaseIntegration:
         use_case = CompletedSaleUseCase(
             order_services=order_services,
             sale_service=sale_service,
-            error_queue=error_queue,
         )
 
         # Execute the use case
@@ -196,7 +191,7 @@ class TestCompletedSaleUseCaseIntegration:
     def test_completed_sale_service_error(
         self,
         order_services,
-        error_queue,
+        error_store,
     ):
         """Test when sale service itself raises an error."""
         sale_service = Mock()
@@ -205,11 +200,10 @@ class TestCompletedSaleUseCaseIntegration:
         use_case = CompletedSaleUseCase(
             order_services=order_services,
             sale_service=sale_service,
-            error_queue=error_queue,
         )
 
         # Execute the use case
         use_case.execute()
 
-        # Verify error was queued
-        error_queue.put.assert_called()
+        # Verify error was stored
+        error_store.add.assert_called()

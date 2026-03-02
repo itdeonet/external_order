@@ -43,7 +43,7 @@ class TestNewSaleUseCaseIntegration:
         temp_dir,
         order_services,
         artwork_services,
-        error_queue,
+        error_store,
         sample_order,
     ):
         """Test creating a new sale checks if it exists in Odoo."""
@@ -128,7 +128,7 @@ class TestNewSaleUseCaseIntegration:
         httpx_mock,
         odoo_auth,
         temp_dir,
-        error_queue,
+        error_store,
     ):
         """Test that missing orders are properly handled."""
         # Setup empty order service
@@ -147,25 +147,24 @@ class TestNewSaleUseCaseIntegration:
                 order_services=order_services,
                 artwork_services=artwork_services,
                 sale_service=sale_service,
-                error_queue=error_queue,
                 open_orders_dir=temp_dir,
             )
 
             # Execute the use case with no orders
             use_case.execute()
 
-            # Verify no errors were queued
-            error_queue.put.assert_not_called()
+            # Verify no errors were stored
+            error_store.add.assert_not_called()
 
     def test_new_sale_error_handling(
         self,
         httpx_mock,
         odoo_auth,
         temp_dir,
-        error_queue,
+        error_store,
         sample_order,
     ):
-        """Test that errors during sale creation are properly queued."""
+        """Test that errors during sale creation are properly stored."""
         # Setup order service that returns a valid order but sale creation fails
         order_service = Mock()
         order_service.read_orders.return_value = [sample_order]
@@ -190,12 +189,11 @@ class TestNewSaleUseCaseIntegration:
                 order_services=order_services,
                 artwork_services=artwork_services,
                 sale_service=sale_service,
-                error_queue=error_queue,
                 open_orders_dir=temp_dir,
             )
 
             # Execute the use case - should handle the error gracefully
             use_case.execute()
 
-            # Verify error was queued
-            error_queue.put.assert_called()
+            # Verify error was stored
+            error_store.add.assert_called()

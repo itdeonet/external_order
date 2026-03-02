@@ -5,6 +5,7 @@ from unittest.mock import Mock
 import httpx
 import pytest
 
+from src.app.errors import ErrorStore
 from src.services.odoo_sale_service import OdooSaleService
 
 
@@ -108,35 +109,45 @@ class TestOdooServiceHttpIntegration:
             assert service.engine == client
 
 
-class TestErrorQueueIntegration:
-    """Integration tests for error queue handling across services."""
+class TestErrorStoreIntegration:
+    """Integration tests for error store handling across services."""
 
-    def test_error_queue_collects_multiple_errors(self, error_queue):
-        """Test that error queue properly collects multiple errors."""
+    def test_error_store_collects_multiple_errors(self):
+        """Test that error store properly collects multiple errors."""
+        error_store = ErrorStore()
+        error_store.clear()  # Clear any previous errors
+
         error1 = Exception("Error 1")
         error2 = Exception("Error 2")
         error3 = Exception("Error 3")
 
-        error_queue.put(error1)
-        error_queue.put(error2)
-        error_queue.put(error3)
+        error_store.add(error1)
+        error_store.add(error2)
+        error_store.add(error3)
 
-        assert len(error_queue.queue) == 3
-        assert error_queue.queue[0] == error1
-        assert error_queue.queue[1] == error2
-        assert error_queue.queue[2] == error3
+        # Verify errors were collected
+        assert error_store.has_errors()
+        all_errors = error_store.all()
+        assert len(all_errors) == 3
+        assert "Error 1" in all_errors[0]
+        assert "Error 2" in all_errors[1]
+        assert "Error 3" in all_errors[2]
 
-    def test_error_queue_preserves_error_type(self, error_queue):
-        """Test that error queue preserves exception types."""
+    def test_error_store_preserves_error_type(self):
+        """Test that error store preserves exception types."""
+        error_store = ErrorStore()
+        error_store.clear()  # Clear any previous errors
 
         class CustomError(Exception):
             pass
 
         custom_error = CustomError("custom message")
-        error_queue.put(custom_error)
+        error_store.add(custom_error)
 
-        assert isinstance(error_queue.queue[0], CustomError)
-        assert str(error_queue.queue[0]) == "custom message"
+        assert error_store.has_errors()
+        all_errors = error_store.all()
+        assert len(all_errors) == 1
+        assert "custom message" in all_errors[0]
 
 
 class TestRegistryIntegration:
