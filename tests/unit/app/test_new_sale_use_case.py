@@ -725,8 +725,8 @@ class TestCreateSalesLogging:
             assert "Error processing order ORDER456" in caplog.text
             assert "Test error" in caplog.text
 
-    def test_create_sales_logs_mismatched_quantities_warning(self, use_case, mocker, caplog):
-        """Test that execute logs warning for mismatched order lines."""
+    def test_create_sales_logs_mismatched_quantities_error(self, use_case, mocker, caplog):
+        """Test that execute logs error for mismatched order lines."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
         order_service.read_orders.return_value = iter([order])
@@ -735,10 +735,10 @@ class TestCreateSalesLogging:
         use_case.sale_service.is_sale_created.return_value = True
         use_case.sale_service.has_expected_order_lines.return_value = False
 
-        with caplog.at_level(logging.WARNING):
+        with caplog.at_level(logging.ERROR):
             use_case.execute()
 
-            assert "Sale order line quantities do not match" in caplog.text
+            assert "Error processing order REMOTE001" in caplog.text
 
     def test_get_artwork_logs_no_service_warning(self, use_case, mocker, caplog):
         """Test that get_artwork logs warning when no service available."""

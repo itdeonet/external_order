@@ -36,19 +36,17 @@ class NewSaleUseCase:
                     )
                     order_service.persist_order(order, OrderStatus.NEW)
 
-                    # create or update sale for the order
                     if not self.sale_service.is_sale_created(order):
+                        # no sale for this order, create it
                         self.sale_service.create_sale(order)
                     elif self.sale_service.has_expected_order_lines(order):
+                        # sale already exists and has expected order lines, update contact info
                         self.sale_service.update_contact(order)
                     else:
-                        logger.warning(
-                            "Sale order line quantities do not match for order %s.",
-                            order.remote_order_id,
-                        )
-                        raise SaleError(
-                            "Sale order line quantities do not match", order.remote_order_id
-                        )
+                        # sale already exists but order lines do not match
+                        raise SaleError("Sale order lines do not match", order.remote_order_id)
+
+                    # when we reach this point, the order is in an expected state
                     order_service.persist_order(order, OrderStatus.CREATED)
 
                     # get artwork for the order
