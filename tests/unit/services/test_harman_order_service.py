@@ -409,6 +409,60 @@ class TestMakeOrder:
         assert order.ship_to.street2 == ""
         assert order.ship_to.state == ""
 
+    def test_make_order_description_with_delivery_note_id(self, service, order_data_b2b):
+        """Test that description is formatted with order_provider, remote_order_id and delivery_note_id."""
+        order_data_b2b["delivery_note_id"] = "DIV-001"
+        order = service._make_order(order_data_b2b)
+
+        expected_description = "Harman order ORD-12345 / DIV-001"
+        assert order.description == expected_description
+
+    def test_make_order_description_without_delivery_note_id(self, service, order_data_b2b):
+        """Test that description works without delivery_note_id."""
+        order = service._make_order(order_data_b2b)
+
+        expected_description = "Harman order ORD-12345 /"
+        assert order.description == expected_description
+
+    def test_make_order_delivery_instructions_present(self, service, order_data_b2b):
+        """Test that delivery_instructions are properly extracted and set."""
+        order_data_b2b["delivery_instructions"] = "Handle with care"
+        order = service._make_order(order_data_b2b)
+
+        assert order.delivery_instructions == "Handle with care"
+
+    def test_make_order_delivery_instructions_missing(self, service, order_data_b2b):
+        """Test that delivery_instructions defaults to empty string when not provided."""
+        order = service._make_order(order_data_b2b)
+
+        assert order.delivery_instructions == ""
+
+    def test_get_segment_data_ftx_delivery_instructions(self, service, mocker):
+        """Test FTX segment extraction for delivery instructions."""
+        order_data = {"ship_to": {}, "line_items": []}
+        ftx_segment = mocker.Mock()
+        ftx_segment.tag = "FTX"
+        ftx_segment.elements = ["DEL", "3", "", "Special delivery instructions"]
+
+        result = service._get_segment_data(ftx_segment, order_data)
+
+        assert result["delivery_instructions"] == "Special delivery instructions"
+
+    def test_get_segment_data_ftx_prod_with_location_stock(self, service, mocker):
+        """Test FTX segment extraction for product location and stock status."""
+        order_data = {
+            "ship_to": {},
+            "line_items": [{"remote_line_id": "1", "product_code": "PROD001", "quantity": 100}],
+        }
+        ftx_segment = mocker.Mock()
+        ftx_segment.tag = "FTX"
+        ftx_segment.elements = ["PRD", "", "", ["Warehouse A", "In stock"]]
+
+        result = service._get_segment_data(ftx_segment, order_data)
+
+        assert result["line_items"][0]["location"] == "Warehouse A"
+        assert result["line_items"][0]["stock_status"] == "In stock"
+
 
 class TestGetArtworkService:
     """Tests for get_artwork_service method."""
