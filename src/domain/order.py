@@ -73,6 +73,9 @@ class Order:
         pricelist_id: Reference to the pricing rules (must be positive)
         remote_order_id: External ID from source system (non-empty string)
         shipment_type: Type of shipment (e.g., 'Standard', non-empty string)
+        description: Order description/summary (non-empty string, whitespace trimmed)
+        delivery_instructions: Special delivery instructions (optional, default empty,
+            whitespace trimmed)
         status: Current order lifecycle state (default: NEW)
         ship_to: ShipTo instance with delivery address details
         line_items: List of LineItem instances to order (must contain at least one)
@@ -100,6 +103,8 @@ class Order:
         ...     pricelist_id=1,
         ...     remote_order_id="ORDER123",
         ...     shipment_type="Standard",
+        ...     description="Harman Order ORDER123",
+        ...     delivery_instructions="Please deliver between 9-5",
         ...     ship_to=ship_to,
         ...     line_items=[line_item],
         ... )
@@ -115,6 +120,8 @@ class Order:
     pricelist_id: int
     remote_order_id: str
     shipment_type: str
+    description: str
+    delivery_instructions: str = field(default="")
     status: OrderStatus = field(default=OrderStatus.NEW, init=False)
     ship_to: ShipTo
     line_items: list[LineItem] = field(default_factory=list)
@@ -159,6 +166,12 @@ class Order:
 
         validators.validate_non_empty_string(self.shipment_type, "Shipment type")
         validators.set_normalized_string(self, "shipment_type", self.shipment_type)
+
+        validators.validate_non_empty_string(self.description, "Description")
+        validators.set_normalized_string(self, "description", self.description)
+
+        validators.validate_instance(self.delivery_instructions, str, "Delivery instructions")
+        validators.set_normalized_string(self, "delivery_instructions", self.delivery_instructions)
 
         validators.validate_instance(self.ship_to, ShipTo, "Ship to")
 
@@ -230,8 +243,3 @@ class Order:
         if not isinstance(ship_at, dt.date) or ship_at <= dt.date.today():
             raise ValueError("Ship at must be a date in the future.")
         object.__setattr__(self, "ship_at", ship_at)
-
-    @property
-    def description(self) -> str:
-        """Get a description of the order."""
-        return f"{self.order_provider} Order {self.remote_order_id}"
