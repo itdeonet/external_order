@@ -397,6 +397,7 @@ class OdooSaleService:
                     "company_id": order.administration_id,
                     "client_order_ref": order.description,
                     "pricelist_id": order.pricelist_id,
+                    "delivery_message": order.delivery_instructions,
                     "order_line": self._convert_order_lines(order),
                     "state": "draft",
                     "commitment_date": order.ship_at.strftime("%Y-%m-%d"),
