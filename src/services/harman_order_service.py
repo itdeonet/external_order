@@ -1,4 +1,20 @@
-"""Harman order service implementation."""
+"""Harman order service implementation.
+
+This module provides the HarmanOrderService, which reads orders from Harman EDI files
+(EDIFACT format) and manages the complete order lifecycle: reading, parsing, persisting,
+and notifying Harman of completion. It implements the IOrderService protocol.
+
+Key responsibilities:
+- Reading EDIFACT order files (.insdes and .created files) from input directory
+- Parsing EDI segments and extracting order/shipping/line item data
+- Creating Order domain model instances from parsed data
+- Persisting orders to JSON format for storage
+- Generating notification messages (DESADV D96A/D99A format) for completed orders
+- Selecting appropriate artwork services based on order IDs
+
+The service is configured from application settings and works with Harman-specific
+format requirements and business rules.
+"""
 
 import datetime as dt
 import itertools
@@ -25,7 +41,39 @@ logger = getLogger(__name__)
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class HarmanOrderService:
-    """Harman order service implementation."""
+    """Harman order service implementation for reading and managing orders.
+
+    This service reads orders from Harman EDI files in EDIFACT format and manages
+    their complete lifecycle. It parses EDI segments, creates Order domain models,
+    handles persistence, and generates Harman-format completion notifications.
+
+    All fields are configuration values that define how this service processes
+    Harman orders, including naming, shipment type, delivery timing, and
+    file system paths.
+
+    This class enforces:
+    - Frozen: All attributes are read-only after creation (configured via from_config)
+    - Harman-specific processing: EDIFACT parsing, shipment type formatting
+    - Proper error handling with ErrorStore singleton
+    - Integration with RenderService for notification templates
+
+    Attributes:
+        administration_id: Internal administration unit ID for orders
+        customer_id: Internal customer ID for Harman orders
+        pricelist_id: Pricing list ID for Harman orders
+        order_provider: Name of the provider ('Harman')
+        shipment_type: Base shipment type (formatted as B2B or B2C)
+        workdays_for_delivery: Standard lead time in workdays
+        input_dir: Path to directory containing order files
+        output_dir: Path to directory for output notifications
+        renderer: RenderService for generating EDI notifications
+
+    Example:
+        >>> service = HarmanOrderService.from_config(config)
+        >>> for order in service.read_orders():
+        ...     print(f"Processing {order.remote_order_id}")
+        ...     service.persist_order(order, OrderStatus.CREATED)
+    """
 
     administration_id: int
     customer_id: int
@@ -39,7 +87,18 @@ class HarmanOrderService:
 
     @classmethod
     def from_config(cls, config: Config) -> Self:
-        """Create a HarmanOrderService instance from settings."""
+        """Create a HarmanOrderService instance from application configuration.
+
+        Factory method that builds a HarmanOrderService with all settings from
+        the application configuration object. This is the standard way to
+        instantiate the service.
+
+        Args:
+            config: Application Config instance with Harman-specific settings
+
+        Returns:
+            Fully initialized HarmanOrderService ready to process orders
+        """
         logger.info("Create HarmanOrderService from config...")
         return cls(
             administration_id=config.harman_administration_id,
@@ -54,7 +113,19 @@ class HarmanOrderService:
         )
 
     def read_orders(self) -> Generator[Order, None, None]:
-        """Generate orders."""
+        """Generate orders from Harman EDI files in the input directory.
+
+        Scans the input directory for .insdes and .created files, parses each
+        as EDIFACT order data, and yields Order instances. Errors during parsing
+        are caught and stored without stopping iteration of remaining files.
+
+        Yields:
+            Order instances ready for processing
+
+        Note:
+            Files are processed in sorted order for consistency. Files with parse
+            errors are logged but don't prevent processing of other files.
+        """
         logger.info("Generate orders...")
         # parse each .insdes file in the directory and yield an Order instance
         chain = itertools.chain.from_iterable(
@@ -73,7 +144,24 @@ class HarmanOrderService:
                 ErrorStore().add(exc)
 
     def _read_order_data(self, file: Path) -> dict[str, Any]:
-        """Extract order data from the given file."""
+        """Extract order data from an EDIFACT order file.
+
+        Parses the EDIFACT format file and extracts relevant order information
+        (shipping address, line items, etc.) into a structured dictionary.
+
+        Args:
+            file: Path to the EDIFACT order file to parse
+
+        Returns:
+            Dictionary with keys:
+            - 'ship_to': Dictionary with shipping address fields
+            - 'line_items': List of line item dictionaries
+            - 'remote_order_id': External order ID
+            - 'delivery_note_id': Delivery note reference (if present)
+
+        Raises:
+            Exception: If file cannot be read or EDIFACT format is invalid
+        """
         order_data: dict[str, Any] = {
             "ship_to": {},
             "line_items": [],
@@ -85,7 +173,26 @@ class HarmanOrderService:
         return order_data
 
     def _get_segment_data(self, segment: Segment, order_data: dict[str, Any]) -> dict[str, Any]:
-        """Extract data from a segment."""
+        """Extract data from an EDIFACT segment and update order data.
+
+        Parses individual EDI segments (NAD, RFF, LIN, QTY, FTX) using pattern
+        matching to extract shipping, line item, and order reference data.
+        Updates the order_data dictionary with extracted values.
+
+        Segment types processed:
+        - NAD: Shipping address and contact information
+        - RFF: Order and delivery note references
+        - LIN: Line item product codes
+        - QTY: Line item quantities
+        - FTX: Location and stock status per line item
+
+        Args:
+            segment: EDIFACT Segment instance to parse
+            order_data: Dictionary to update with extracted data
+
+        Returns:
+            The updated order_data dictionary
+        """
         logger.debug("Process segment: %s", segment)
         match [segment.tag, *segment.elements]:
             case [
@@ -131,7 +238,21 @@ class HarmanOrderService:
         return order_data
 
     def _make_order(self, data: dict[str, Any]) -> Order:
-        """Create an Order instance from the given data."""
+        """Create an Order instance from parsed order data.
+
+        Transforms the parsed EDIFACT data into a complete Order domain model.
+        Handles normalization of shipment type (B2B vs B2C based on company name),
+        creation of ShipTo and LineItem instances, and setting appropriate delivery dates.
+
+        Args:
+            data: Dictionary with parsed order data from _read_order_data()
+
+        Returns:
+            Fully initialized Order instance ready for processing
+
+        Raises:
+            ValueError: If required fields are missing or invalid
+        """
         logger.debug("Create Order instance from data: %s", json.dumps(data))
         is_company = bool(data.get("ship_to", {}).get("company_name"))
         ship_to_data = data.get("ship_to", {})
@@ -169,7 +290,17 @@ class HarmanOrderService:
         return order
 
     def read_order_data_by_remote_order_id(self, remote_order_id: str) -> dict[str, Any] | None:
-        """Get order data by remote ID."""
+        """Get parsed order data by remote order ID.
+
+        Locates and parses the order file matching the given remote order ID.
+        Useful for retrieving order data when you have the ID but not the file path.
+
+        Args:
+            remote_order_id: External order ID to search for
+
+        Returns:
+            Dictionary with parsed order data, or None if no matching file found
+        """
         logger.info("Get order data for remote order ID: %s", remote_order_id)
         for file in self.input_dir.glob(f"{remote_order_id}.*"):
             return self._read_order_data(file)
@@ -178,14 +309,38 @@ class HarmanOrderService:
     def get_artwork_service(
         self, order: Order, artwork_services: IRegistry[IArtworkService]
     ) -> IArtworkService | None:
-        """Get the artwork service for the given order."""
+        """Get the appropriate artwork service for the given order.
+
+        Selects the correct artwork service based on order ID pattern matching.
+        Harman orders matching pattern (HA|JB)-EM-(ST-)?\\d+ use the Spectrum
+        artwork service. Other orders return None (no artwork service).
+
+        Args:
+            order: The Order to select a service for
+            artwork_services: Registry of available artwork services
+
+        Returns:
+            The Spectrum IArtworkService for matching orders, None otherwise
+        """
         logger.info("Get artwork service for order: %s", order.remote_order_id)
         if re.match(r"(HA|JB)-EM-(ST-)?\d+", order.remote_order_id):
             return artwork_services.get("Spectrum")
         return None
 
     def persist_order(self, order: Order, status: OrderStatus) -> None:
-        """Save the given order."""
+        """Save the given order with its current status to JSON format.
+
+        Persists the order to a JSON file in the input directory for later
+        retrieval. Also renames the original EDIFACT file with the status
+        extension to track processing state.
+
+        Args:
+            order: The Order instance to persist
+            status: The OrderStatus to record
+
+        Raises:
+            May raise file system exceptions if write fails
+        """
         logger.info("Persist order: %s with status: %s", order.remote_order_id, status)
 
         def custom_serializer(obj):
@@ -204,7 +359,19 @@ class HarmanOrderService:
                 file.rename(file.parent / f"{order.remote_order_id}.{order.status.value}".upper())
 
     def load_order(self, remote_order_id: str) -> Order | None:
-        """Load an order by remote ID."""
+        """Load a previously persisted order by its remote ID.
+
+        Retrieves an order from the JSON persistence file if it exists.
+
+        Args:
+            remote_order_id: External order ID to load
+
+        Returns:
+            The Order instance if found, None if no JSON file exists
+
+        Raises:
+            May raise exceptions if JSON parsing fails
+        """
         logger.info("Load order by remote ID: %s", remote_order_id)
         file_path = self.input_dir / f"{remote_order_id}.json"
         if not file_path.exists():
@@ -214,7 +381,23 @@ class HarmanOrderService:
         return Order(**data)
 
     def notify_completed_sale(self, order: Order) -> None:
-        """Notify the order provider of a completed sale."""
+        """Notify Harman of a completed sale by generating DESADV messages.
+
+        Creates delivery advice (DESADV) notifications in both D96A and D99A
+        EDIFACT format. Uses Jinja2 templates to generate the EDI messages
+        and the PYDIFACT library to serialize them properly.
+
+        Two files are created in the output directory:
+        - {remote_order_id}.DESADVD96A (legacy format)
+        - {remote_order_id}.DESADVD99A (current format)
+
+        Args:
+            order: The Order instance that has been completed
+
+        Raises:
+            NotifyError: If required order data cannot be found
+            May raise exceptions if file writing fails
+        """
         logger.info("Notify completed sale for order: %s", order.remote_order_id)
         # The notification exists of 2 desdav files, one in D96A format and one in D99A format.
         for file in self.renderer.directory.glob("desadv-*.j2"):
@@ -231,7 +414,27 @@ class HarmanOrderService:
             notify_path.write_text(content, encoding="utf-8")
 
     def _get_notify_data(self, order: Order, doc_type: str) -> dict[str, Any]:
-        """Get the data needed for the notification."""
+        """Get the data needed for DESADV notification generation.
+
+        Prepares all data required to render DESADV notification templates,
+        including order information, shipment details, and EDI segment counts.
+        Different segment counts are calculated for D96A vs D99A formats.
+
+        Args:
+            order: The Order being notified about
+            doc_type: Format type ('D96A' or 'D99A')
+
+        Returns:
+            Dictionary with notification data for template rendering:
+            - interchange_control_ref: Unique message reference
+            - ship_date, expected_date: Shipment timeline
+            - box dimensions and SSCC: Shipment details
+            - segments: Calculated EDI segment count
+            - order: Original parsed order data
+
+        Raises:
+            NotifyError: If required order data cannot be retrieved
+        """
         logger.info(
             "Get notify data for order: %s with doc type: %s", order.remote_order_id, doc_type
         )

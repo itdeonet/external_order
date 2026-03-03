@@ -1,4 +1,12 @@
-"""Errors module."""
+"""Error management and custom exception types.
+
+This module provides:
+- ErrorStore: A thread-safe singleton for collecting and managing exceptions across the application
+- Custom exception hierarchy: Domain-specific error types for different error scenarios
+
+The ErrorStore is used throughout use cases to collect exceptions without stopping execution.
+Custom exceptions allow callers to handle different error types appropriately.
+"""
 
 import datetime as dt
 from dataclasses import dataclass, field
@@ -9,7 +17,20 @@ from typing import Any, ClassVar, Self
 
 @dataclass(frozen=True, slots=True)
 class ErrorStore:
-    """A thread-safe store to store exceptions."""
+    """Thread-safe singleton for collecting and managing application exceptions.
+
+    This class implements the singleton pattern to ensure a single instance is used
+    throughout the application. All operations are thread-safe via locks.
+
+    The ErrorStore collects exceptions from all use cases and makes them available
+    for review, logging, and error reporting without interrupting normal execution.
+
+    Usage:
+        error_store = ErrorStore()  # Always returns the same instance
+        error_store.add(some_exception)
+        error_store.has_errors()  # Check if errors were collected
+        error_store.summarize()  # Get formatted error summary
+    """
 
     _instance: ClassVar[Self | None] = None
     _errors: list[TracebackException] = field(default_factory=list, init=False, repr=False)
@@ -22,7 +43,14 @@ class ErrorStore:
         return cls._instance
 
     def add(self, exc: Exception) -> None:
-        """Add an exception to the store."""
+        """Add an exception to the thread-safe error collection.
+
+        The exception is stored with its full traceback information for later inspection.
+        This method is safe to call from multiple threads simultaneously.
+
+        Args:
+            exc: The exception to store.
+        """
         with self._lock:
             self._errors.append(TracebackException.from_exception(exc))
 
@@ -32,7 +60,13 @@ class ErrorStore:
             self._errors.clear()
 
     def all(self) -> list[str]:
-        """Summarize all collected exceptions."""
+        """Get all collected exceptions formatted with their full tracebacks.
+
+        Returns:
+            A list of formatted exception strings, one per error. Each includes
+            the error number, type, message, and full stack trace. Empty list if
+            no exceptions have been collected.
+        """
         with self._lock:
             if not self._errors:
                 return []
@@ -42,7 +76,14 @@ class ErrorStore:
             return errors
 
     def get_render_email_data(self) -> dict[str, Any]:
-        """Get data for rendering error alert email."""
+        """Get formatted error data for rendering error notification email.
+
+        Returns:
+            A dictionary with keys:
+            - 'error_count': Number of errors collected
+            - 'errors': List of formatted error strings
+            - 'timestamp': Current timestamp when method was called
+        """
         return {
             "error_count": len(self._errors),
             "errors": self.all(),
@@ -55,12 +96,27 @@ class ErrorStore:
             return bool(self._errors)
 
     def summarize(self) -> str:
-        """Get a summary of all collected exceptions as a single string."""
+        """Get all collected exceptions as a single formatted string.
+
+        Each exception is separated by a blank line and includes full traceback.
+
+        Returns:
+            A multi-line string with all errors formatted and separated.
+            Empty string if no exceptions have been collected.
+        """
         return "\n\n".join(self.all())
 
 
 class BaseError(Exception):
-    """Base exception for custom errors."""
+    """Base exception for domain-specific error types.
+
+    All custom exceptions in this module inherit from BaseError, providing
+    a consistent way to capture context about which order is affected by an error.
+
+    Attributes:
+        message: The error message explaining what went wrong.
+        order_id: Optional identifier of the affected order, simplifies error tracking.
+    """
 
     def __init__(self, message: str, order_id: str | None = None) -> None:
         super().__init__(message)
@@ -73,24 +129,41 @@ class BaseError(Exception):
 
 
 class ArtworkError(BaseError):
-    """Raised for errors related to artwork retrieval."""
+    """Raised when artwork retrieval or processing fails.
+
+    This includes errors from the artwork service, file download failures,
+    invalid file formats, or missing artwork for orders.
+    """
 
     pass
 
 
 class InsdesError(BaseError):
-    """Raised for errors related to .insdes file processing."""
+    """Raised when .insdes file processing fails.
+
+    This includes errors from parsing, validating, or processing .insdes files
+    that are part of order information.
+    """
 
     pass
 
 
 class NotifyError(BaseError):
-    """Raised for errors related to notifying order providers."""
+    """Raised when notification to an order provider fails.
+
+    This includes failures to communicate status updates, completion notifications,
+    or any other provider-specific notifications.
+    """
 
     pass
 
 
 class SaleError(BaseError):
-    """Raised for sale related errors."""
+    """Raised when sale operations fail.
+
+    This includes errors from the Odoo sale service, order not found errors,
+    validation failures, or any issue preventing sales from being created,
+    updated, or completed.
+    """
 
     pass

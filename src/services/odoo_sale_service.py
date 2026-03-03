@@ -1,4 +1,20 @@
-"""Odoo service implementation."""
+"""Odoo sales management service implementation.
+
+This module provides the OdooSaleService, which manages the complete sales lifecycle
+in Odoo for orders received from external providers. It implements the ISaleService protocol.
+
+Key responsibilities:
+- Creating and retrieving sales orders in Odoo from Order domain models
+- Managing shipping contacts and addresses for deliveries
+- Converting order line items to Odoo product format
+- Confirming sales after validation and artwork processing
+- Tracking shipments and retrieving product serial numbers
+- Executing JSON-RPC calls to Odoo backend server
+- Resolving references (products, carriers, countries, states) in Odoo
+
+The service uses Odoo's JSON-RPC API to communicate with a configured Odoo instance
+and validates all operations with proper error handling via SaleError exceptions.
+"""
 
 import json
 from collections import defaultdict
@@ -18,14 +34,53 @@ logger = getLogger(__name__)
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class OdooSaleService:
-    """Service for managing sales in Odoo."""
+    """Service for managing sales in Odoo ERP system.
+
+    This service creates and manages sales orders in Odoo based on Order domain
+    models from external order providers. It handles the complete order-to-sale
+    workflow including contact management, line item conversion, shipping tracking,
+    and serial number management.
+
+    All fields are configuration values for connecting to and authenticating with
+    the Odoo JSON-RPC API.
+
+    This class enforces:
+    - Frozen: All attributes are read-only after creation
+    - Authentication: OdooAuth instance with database, user, and password
+    - HTTP client: httpx.Client configured with Odoo base URL
+    - ID generation: Monotonic counter for JSON-RPC request IDs
+
+    Attributes:
+        auth: OdooAuth instance with database, user_id, and password credentials
+        engine: httpx.Client configured with Odoo server base URL
+        _id_counter: Auto-generated monotonic counter for RPC request IDs
+
+    Example:
+        >>> from src.app.odoo_auth import OdooAuth
+        >>> import httpx
+        >>> auth = OdooAuth(database="odoo_db", user_id=2, password="admin")
+        >>> client = httpx.Client(base_url="http://odoo-server:8069")
+        >>> service = OdooSaleService(auth=auth, engine=client)
+        >>> sale_id = service.create_sale(order)
+        >>> service.confirm_sale(order)
+    """
 
     auth: OdooAuth
     engine: httpx.Client
     _id_counter: Iterator[int] = field(default_factory=lambda: iter(range(1, 1000000)), init=False)
 
     def __post_init__(self) -> None:
-        """Initialize the Odoo RPC client."""
+        """Validate authentication and HTTP client after initialization.
+
+        Ensures that the OdooAuth credentials and httpx.Client are properly
+        configured before the service is used. Raises ValueError if any
+        required component is missing.
+
+        Raises:
+            ValueError: If auth is missing or not OdooAuth instance
+            ValueError: If engine is missing or not httpx.Client instance
+            ValueError: If engine base URL is not configured
+        """
         if not (self.auth and isinstance(self.auth, OdooAuth)):
             raise ValueError("Odoo authentication information is missing or invalid")
         if not (self.engine and isinstance(self.engine, httpx.Client)):
@@ -34,7 +89,18 @@ class OdooSaleService:
             raise ValueError("Odoo engine base URL is not set")
 
     def _get_sale_data(self, order: Order) -> dict[str, Any]:
-        """Get the OdooSale object for the given order."""
+        """Retrieve sale order data from Odoo by order reference.
+
+        Searches Odoo for an existing sale.order record matching the order's
+        remote ID or name. Searches within the correct company/administration unit.
+
+        Args:
+            order: The Order instance to look up in Odoo
+
+        Returns:
+            Dictionary with sale order data if found, empty dict {} if not found.
+            Contains all sale.order fields when found.
+        """
         logger.info("Get OdooSale for order: %s", order.remote_order_id)
         result = self._call(
             model="sale.order",
@@ -55,14 +121,38 @@ class OdooSaleService:
         return result[0]
 
     def is_sale_created(self, order: Order) -> bool:
-        """Check if a sale/quote has been created for the given order."""
+        """Check if a sale order has been created in Odoo for the given order.
+
+        Determines whether Odoo already has a sale order matching this order's
+        remote ID. Used to prevent duplicate sale creation.
+
+        Args:
+            order: The Order to check for
+
+        Returns:
+            True if a matching sale exists, False otherwise
+        """
         logger.info("Is order %s created?", order.remote_order_id)
         result = bool(self._get_sale_data(order).get("id", 0))
         logger.info("Sale for order %s created: %s", order.remote_order_id, result)
         return result
 
     def _get_country_id(self, country_code: str) -> int:
-        """Resolve ISO country code to res.country id."""
+        """Resolve ISO 3166-1 alpha-2 country code to Odoo res.country ID.
+
+        Looks up the country ID in Odoo's country master data by the
+        standardized 2-letter ISO country code.
+
+        Args:
+            country_code: ISO 3166-1 alpha-2 country code (case-insensitive)
+
+        Returns:
+            Integer country ID from Odoo
+
+        Raises:
+            SaleError: If country code is not found in Odoo
+            TypeError: If returned ID is not an integer
+        """
         logger.info("Get country ID for country code: %s", country_code)
         country_id = self._call_search_single(
             model="res.country",
@@ -75,7 +165,21 @@ class OdooSaleService:
         return country_id
 
     def _get_state_id(self, country_id: int, state: str) -> int:
-        """Resolve a region/state to res.country.state id."""
+        """Resolve region/state name to Odoo res.country.state ID.
+
+        Looks up state/province ID in Odoo by name and country. Returns 0
+        if state is empty or not found (optional field).
+
+        Args:
+            country_id: The Odoo country ID to search within
+            state: State/province name (case-insensitive)
+
+        Returns:
+            Integer state ID from Odoo, or 0 if empty or not found
+
+        Raises:
+            TypeError: If returned ID is not an integer
+        """
         logger.info("Get state ID for country_id=%s region=%s", country_id, state)
         if not (state := state.strip()):
             return 0
@@ -96,7 +200,17 @@ class OdooSaleService:
         return state_id
 
     def _get_contact_data_from_order(self, order: Order) -> dict[str, Any]:
-        """Build contact data from the order's ship_to information."""
+        """Build Odoo contact/partner data from Order shipping information.
+
+        Transforms the Order's ship_to details into Odoo res.partner fields.
+        Resolves country and state references and handles optional fields.
+
+        Args:
+            order: The Order to extract shipping data from
+
+        Returns:
+            Dictionary with Odoo res.partner fields ready for create/write
+        """
         logger.info("Build contact data from order: %s", order.remote_order_id)
         ship_to = order.ship_to
         country_id = self._get_country_id(ship_to.country_code)
@@ -125,7 +239,21 @@ class OdooSaleService:
         }
 
     def _create_contact(self, order: Order) -> int:
-        """Create or update the contact for the given order and return its ID."""
+        """Create or retrieve shipping contact for the given order.
+
+        Checks if a matching contact already exists in Odoo, returning its ID
+        if found. Otherwise creates a new contact and returns the new ID.
+
+        Args:
+            order: The Order for which to create/retrieve contact
+
+        Returns:
+            Integer ID of the contact (res.partner) in Odoo
+
+        Raises:
+            ValueError: If contact data extraction fails
+            SaleError: If contact creation fails
+        """
         logger.info("Create contact for order: %s", order.remote_order_id)
 
         # build contact data from the order's ship_to information
@@ -153,7 +281,20 @@ class OdooSaleService:
         return contact_id
 
     def _convert_order_lines(self, order: Order) -> list[dict[str, Any]]:
-        """Convert the order lines to the format required by Odoo."""
+        """Convert Order line items to Odoo sale.order.line format.
+
+        Transforms each LineItem into an Odoo order line by resolving product
+        codes to Odoo product IDs and preparing necessary field values.
+
+        Args:
+            order: The Order whose line items to convert
+
+        Returns:
+            List of dictionaries in Odoo sale.order.line create format
+
+        Raises:
+            SaleError: If product lookup fails or validation fails
+        """
         logger.info("Convert order lines for order: %s", order.remote_order_id)
         order_lines = []
 
@@ -182,7 +323,22 @@ class OdooSaleService:
         return order_lines
 
     def _get_carrier_id(self, order: Order) -> int:
-        """Resolve delivery.carrier by name."""
+        """Resolve shipment type to Odoo delivery.carrier ID.
+
+        Looks up the delivery carrier/shipping method in Odoo by matching
+        the order's shipment type name.
+
+        Args:
+            order: The Order specifying the shipment type
+
+        Returns:
+            Integer carrier ID from Odoo
+
+        Raises:
+            ValueError: If shipment type is empty
+            SaleError: If carrier is not found in Odoo
+            TypeError: If returned ID is not an integer
+        """
         carrier_name = order.shipment_type
         if not carrier_name.strip():
             raise ValueError("Shipment type is required in order")
@@ -206,7 +362,21 @@ class OdooSaleService:
         return carrier_id
 
     def create_sale(self, order: Order) -> int:
-        """Create a sale for the given order and return its ID."""
+        """Create a sale order in Odoo from the given Order.
+
+        Creates a new sale.order in Odoo with all details from the Order,
+        including shipping contact, line items, and carrier. Returns the Odoo
+        sale ID. If sale already exists, returns existing ID without duplication.
+
+        Args:
+            order: The Order to create a sale from
+
+        Returns:
+            Integer sale order ID (sale.order) in Odoo
+
+        Raises:
+            SaleError: If contact creation fails or sale creation fails
+        """
         if sale_data := self._get_sale_data(order):
             logger.info(
                 "Sale already exists for order %s from with ID %s",
@@ -244,7 +414,17 @@ class OdooSaleService:
         return sale_id
 
     def confirm_sale(self, order: Order) -> None:
-        """Confirm the sale for the given order."""
+        """Confirm sale order in Odoo (transition from draft to confirmed).
+
+        Calls the sale.order action_confirm method to move the sale from
+        draft state to confirmed state, triggering any configured workflows.
+
+        Args:
+            order: The Order whose sale should be confirmed
+
+        Raises:
+            SaleError: If sale does not exist or confirmation fails
+        """
         sale_data = self._get_sale_data(order)
         if not (sale_data and "id" in sale_data and sale_data["id"] != 0):
             raise SaleError("Cannot confirm non-existent sale", order.remote_order_id)
@@ -263,7 +443,21 @@ class OdooSaleService:
         logger.info("Sale with id %d confirmed successfully", sale_id)
 
     def has_expected_order_lines(self, order: Order) -> bool:
-        """Verify that the sale has the same order line quantities as the given order."""
+        """Verify that Odoo sale has expected line items and quantities.
+
+        Compares the Order's line items against the sale order's lines in Odoo
+        to ensure quantities match. Allows Odoo sale to have additional lines
+        (for B2B manually created orders) as long as all order lines are present.
+
+        Args:
+            order: The Order with expected line items
+
+        Returns:
+            True if all order lines are in the sale, False if mismatch
+
+        Raises:
+            SaleError: If sale does not exist
+        """
         logger.info(
             "Check if sale for order %s from provider %s has expected order lines in Odoo",
             order.remote_order_id,
@@ -296,7 +490,17 @@ class OdooSaleService:
         return result
 
     def update_contact(self, order: Order) -> None:
-        """Update the contact information for the given order."""
+        """Update shipping contact information in Odoo.
+
+        Retrieves the current shipping contact for the sale and updates it
+        with fresh data from the Order.
+
+        Args:
+            order: The Order with updated shipping information
+
+        Raises:
+            SaleError: If sale does not exist, has no contact, or update fails
+        """
         logger.info("Update contact information for order %s", order.remote_order_id)
         sale_data = self._get_sale_data(order)
         if not (sale_data and "id" in sale_data and sale_data["id"] != 0):
@@ -318,7 +522,18 @@ class OdooSaleService:
         logger.info("Contact ID %d updated (order %s)", contact_id, order.remote_order_id)
 
     def get_completed_sales(self, order_provider: str) -> list[tuple[int, str]]:
-        """Get a list of completed sales for the given order provider."""
+        """Get list of completed sales for a provider that need shipping notification.
+
+        Retrieves sales that are fully delivered and in confirmed state, but have not
+        yet had their shipping notification (DESADV) created.
+
+        Args:
+            order_provider: Name of the order provider to filter by
+                           (e.g., 'Harman')
+
+        Returns:
+            List of tuples (sale_id: int, remote_order_id: str) for completed sales
+        """
         logger.info("Get completed sales for order provider: %s", order_provider)
         result = self._call(
             model="sale.order",
@@ -353,7 +568,25 @@ class OdooSaleService:
         return [(item["id"], item["x_remote_id"]) for item in result]
 
     def get_shipping_info(self, order: Order) -> list[dict[str, Any]]:
-        """Get the shipping information for the given order."""
+        """Get shipping/delivery information from Odoo for the given order.
+
+        Retrieves stock.picking (shipment) records for completed deliveries,
+        extracting carrier, tracking, weight, and delivery address information.
+
+        Args:
+            order: The Order to get shipping info for
+
+        Returns:
+            List of dictionaries with shipping details:
+            - 'carrier': Carrier/shipping method name
+            - 'carrier_tracking_ref': Tracking number
+            - 'carrier_tracking_url': Tracking URL
+            - 'ship_to_name': Delivery address contact name
+            - 'weight': Shipment weight
+
+        Raises:
+            SaleError: If no shipping information found
+        """
         logger.info("Get shipping information for order: %s", order.remote_order_id)
         sale_data = self._get_sale_data(order)
         result = self._call(
@@ -411,7 +644,19 @@ class OdooSaleService:
         return shipping_info
 
     def get_serials_by_line_item(self, order: Order) -> dict[str, list[str]]:
-        """Get the serial numbers for the given order by line item."""
+        """Get product serial numbers from Odoo grouped by order line item.
+
+        Retrieves scanned serial numbers for products in the sale and groups
+        them by the original order line items. Assigns serials in quantity order.
+
+        Args:
+            order: The Order to get serial numbers for
+
+        Returns:
+            Dictionary mapping line_item remote IDs to lists of serial numbers:
+            {line_item_id: [serial1, serial2, ...], ...}
+            Returns empty lists for line items with no serials.
+        """
         logger.info("Get serial numbers for order: %s", order.remote_order_id)
         sale_data = self._get_sale_data(order)
         result = self._call(
@@ -472,7 +717,25 @@ class OdooSaleService:
         query_data: list[Any] | None = None,
         query_options: dict[str, Any] | None = None,
     ) -> Any:
-        """Execute a JSON-RPC call to the Odoo server."""
+        """Execute a JSON-RPC call to the Odoo server.
+
+        Makes an authenticated JSON-RPC 2.0 call to the Odoo server using the
+        configured httpx.Client. Automatically includes authentication credentials
+        from OdooAuth. Handles RPC errors and raises SaleError on failures.
+
+        Args:
+            model: Odoo model name (e.g., 'sale.order', 'res.partner')
+            method: Odoo method to call (e.g., 'create', 'write', 'search_read')
+            query_data: Positional arguments for the RPC call (default: [])
+            query_options: Keyword arguments/options for the call (default: {})
+
+        Returns:
+            The 'result' field from the JSON-RPC response
+
+        Raises:
+            SaleError: If JSON-RPC response contains an error
+            httpx.HTTPError: If HTTP request fails
+        """
         payload = {
             "jsonrpc": "2.0",
             "method": "call",

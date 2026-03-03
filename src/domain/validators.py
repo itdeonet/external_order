@@ -1,4 +1,30 @@
-"""Domain validation utilities for frozen dataclasses."""
+"""Domain validation utilities for frozen dataclasses.
+
+This module provides a collection of validation and normalization functions
+used across domain model classes. These utilities enforce data integrity by
+validating inputs at construction time and normalizing strings appropriately.
+
+Validation functions check that values meet domain requirements and raise
+ValueError with descriptive messages if validation fails. Used extensively in
+__post_init__ methods of frozen dataclasses to ensure invalid objects cannot
+be created.
+
+Normalization functions transform string values (trimming whitespace, changing
+case, etc.) as needed by domain models. Some validation functions (like
+validate_email) both validate and normalize in a single operation.
+
+Key patterns:
+- validate_*: Check value correctness, raise ValueError if invalid
+- validate_optional_*: Return normalized value or empty string
+- set_*: Apply object.__setattr__ for frozen dataclass field updates
+
+Example usage in a frozen dataclass:
+    >>> def __post_init__(self):
+    ...     validators.validate_positive_int(self.quantity, "Quantity")
+    ...     validators.validate_non_empty_string(self.name, "Name")
+    ...     normalized = validators.validate_email(self.email)
+    ...     object.__setattr__(self, "email", normalized)
+"""
 
 from typing import Any, TypeVar
 

@@ -1,4 +1,16 @@
-"""Order class."""
+"""Domain model for customer orders.
+
+This module defines the Order entity and OrderStatus enumeration. Orders represent
+customer purchase requests with associated line items and shipping information.
+Orders are immutable and validated at construction time, progressing through
+well-defined lifecycle states from creation to completion.
+
+Validation ensures:
+- All numeric IDs are positive integers
+- Provider, order ID, and shipment type are non-empty strings
+- Ship-to address is a valid ShipTo instance
+- At least one LineItem is present and valid
+"""
 
 import datetime as dt
 import uuid
@@ -11,7 +23,20 @@ from src.domain.ship_to import ShipTo
 
 
 class OrderStatus(Enum):
-    """Order status enumeration."""
+    """Enumeration of order lifecycle states.
+
+    Describes the progression of an order through the order management system.
+    Each status represents a phase in the order processing workflow.
+
+    Attributes:
+        NEW: Order created but not yet submitted to the system
+        CREATED: Order submitted and acknowledged by the system
+        ARTWORK: Order awaiting artwork or design approval
+        CONFIRMED: Order confirmed and ready for fulfillment
+        COMPLETED: Order fulfilled and shipped
+        SHIPPED: Order delivered to customer
+        FAILED: Order processing failed or cancelled
+    """
 
     NEW = "new"
     CREATED = "created"
@@ -24,7 +49,63 @@ class OrderStatus(Enum):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Order:
-    """Order entity."""
+    """Immutable order entity representing a customer purchase request.
+
+    An order contains one or more line items, each specifying a product, quantity,
+    and optional artwork. The order includes shipping destination details and
+    progresses through defined lifecycle states from creation to completion.
+    All fields are validated during post-initialization and are immutable
+    after construction.
+
+    This class enforces:
+    - Immutability: All attributes are read-only after object creation
+    - Validation: All fields must meet strict domain requirements
+    - Lifecycle management: Orders progress through defined status states
+    - Auto-generated fields: ID, sale_id (set later), status, timestamps
+    - Default dates: Orders default to 7-day lead time
+
+    Attributes:
+        id: Unique auto-generated UUID for this order
+        sale_id: Internal sale reference ID (set via set_sale_id, default 0)
+        administration_id: Reference to the administration unit (must be positive)
+        customer_id: Reference to the customer (must be positive)
+        order_provider: Name of the order provider/source (non-empty string)
+        pricelist_id: Reference to the pricing rules (must be positive)
+        remote_order_id: External ID from source system (non-empty string)
+        shipment_type: Type of shipment (e.g., 'Standard', non-empty string)
+        status: Current order lifecycle state (default: NEW)
+        ship_to: ShipTo instance with delivery address details
+        line_items: List of LineItem instances to order (must contain at least one)
+        created_at: Timestamp when order was created (auto-generated)
+        ship_at: Target shipping date (default: 7 days from creation)
+
+    Example:
+        >>> from src.domain import ShipTo, LineItem
+        >>> ship_to = ShipTo(
+        ...     remote_customer_id="CUST123",
+        ...     contact_name="John Doe",
+        ...     email="john@example.com",
+        ...     phone="+1234567890",
+        ...     street1="123 Main St",
+        ...     city="Springfield",
+        ...     state="IL",
+        ...     postal_code="62701",
+        ...     country_code="US",
+        ... )
+        >>> line_item = LineItem(remote_line_id="LI001", product_code="SKU123", quantity=50)
+        >>> order = Order(
+        ...     administration_id=1,
+        ...     customer_id=123,
+        ...     order_provider="Harman",
+        ...     pricelist_id=1,
+        ...     remote_order_id="ORDER123",
+        ...     shipment_type="Standard",
+        ...     ship_to=ship_to,
+        ...     line_items=[line_item],
+        ... )
+        >>> order.set_sale_id(456)
+        >>> order.set_status(OrderStatus.CONFIRMED)
+    """
 
     id: uuid.UUID = field(default_factory=uuid.uuid4, init=False)
     sale_id: int = field(default=0, init=False)
@@ -43,7 +124,29 @@ class Order:
     )
 
     def __post_init__(self) -> None:
-        """Validate the order data."""
+        """Validate and normalize all order fields after initialization.
+
+        This method is called automatically by the dataclass decorator after
+        the instance is created. It validates each field according to domain
+        rules and normalizes string values. All validations must pass before
+        the object is considered fully initialized.
+
+        Validation steps performed:
+        1. administration_id: positive integer (>0)
+        2. customer_id: positive integer (>0)
+        3. pricelist_id: positive integer (>0)
+        4. order_provider: non-empty string, normalized (whitespace trimmed)
+        5. remote_order_id: non-empty string, normalized (whitespace trimmed)
+        6. shipment_type: non-empty string, normalized (whitespace trimmed)
+        7. ship_to: ShipTo instance
+        8. line_items: non-empty list of LineItem instances
+
+        Raises:
+            ValueError: If administration_id, customer_id, or pricelist_id is not positive
+            ValueError: If order_provider, remote_order_id, or shipment_type is empty
+            ValueError: If ship_to is not a ShipTo instance
+            ValueError: If line_items is not a list of LineItem instances or is empty
+        """
         validators.validate_positive_int(self.administration_id, "Administration ID")
         validators.validate_positive_int(self.customer_id, "Customer ID")
         validators.validate_positive_int(self.pricelist_id, "Pricelist ID")
@@ -68,13 +171,46 @@ class Order:
             raise ValueError("Line items must be a list of LineItem instances.")
 
     def set_sale_id(self, value: int) -> None:
-        """Set the sale ID."""
+        """Assign the internal sale reference ID to this order.
+
+        This method allows setting the sales system ID after the order is
+        created. The sale_id must be a positive integer. Despite the class
+        being frozen, this method uses object.__setattr__ to modify the
+        sale_id field, as permitted for specific domain operations.
+
+        Args:
+            value: Positive integer representing the sale reference ID.
+                   Must be greater than 0.
+
+        Raises:
+            ValueError: If value is not a positive integer.
+
+        Example:
+            >>> order.set_sale_id(456)
+        """
         if not (isinstance(value, int) and value > 0):
             raise ValueError("value must be a positive integer.")
         object.__setattr__(self, "sale_id", value)
 
     def set_status(self, value: OrderStatus) -> None:
-        """Set the order status."""
+        """Transition the order to a new lifecycle state.
+
+        This method updates the order's processing status. The status must be
+        a valid OrderStatus enumeration value. Despite the class being frozen,
+        this method uses object.__setattr__ to modify the status field, as
+        permitted for specific domain operations.
+
+        Args:
+            value: OrderStatus enumeration value representing the new state.
+                   Must be a valid OrderStatus member.
+
+        Raises:
+            ValueError: If value is not an OrderStatus instance.
+
+        Example:
+            >>> order.set_status(OrderStatus.CONFIRMED)
+            >>> order.set_status(OrderStatus.SHIPPED)
+        """
         validators.validate_instance(value, OrderStatus, "Status")
         object.__setattr__(self, "status", value)
 
