@@ -313,7 +313,7 @@ class TestHarmanStockServiceGetTransferInfo:
         assert result["idoc_number"] == "123456"
         assert result["delivery_number"] == "DEL-001"
         assert len(result["items"]) == 1
-        assert result["items"][0]["product_sku"] == "PROD-001"
+        assert result["items"][0]["product_code"] == "PROD-001"
         assert result["items"][0]["quantity"] == 50
         assert result["items"][0]["storage_location"] == "WAREHOUSE"
 
@@ -359,8 +359,8 @@ class TestHarmanStockServiceGetTransferInfo:
         result = service._get_transfer_info(transfer_data, file_path)
 
         assert len(result["items"]) == 2
-        assert result["items"][0]["product_sku"] == "PROD-001"
-        assert result["items"][1]["product_sku"] == "PROD-002"
+        assert result["items"][0]["product_code"] == "PROD-001"
+        assert result["items"][1]["product_code"] == "PROD-002"
         assert result["items"][1]["quantity"] == 30
 
     def test_get_transfer_info_with_single_item_dict(self, tmp_path):
@@ -397,7 +397,7 @@ class TestHarmanStockServiceGetTransferInfo:
         result = service._get_transfer_info(transfer_data, file_path)
 
         assert len(result["items"]) == 1
-        assert result["items"][0]["product_sku"] == "PROD-001"
+        assert result["items"][0]["product_code"] == "PROD-001"
 
     def test_get_transfer_info_with_no_items(self, tmp_path):
         """Test parsing when no items are present."""
@@ -485,7 +485,7 @@ class TestHarmanStockServiceReplyStockTransfer:
             "items": [
                 {
                     "item_number": "001",
-                    "product_sku": "PROD-001",
+                    "product_code": "PROD-001",
                     "quantity": 50,
                     "storage_location": "WAREHOUSE",
                 }
@@ -523,7 +523,7 @@ class TestHarmanStockServiceReplyStockTransfer:
             "items": [
                 {
                     "item_number": "001",
-                    "product_sku": "PROD-001",
+                    "product_code": "PROD-001",
                     "quantity": 50,
                     "storage_location": "WAREHOUSE",
                 }
@@ -588,13 +588,13 @@ class TestHarmanStockServiceReplyStockTransfer:
             "items": [
                 {
                     "item_number": "001",
-                    "product_sku": "PROD-001",
+                    "product_code": "PROD-001",
                     "quantity": 50,
                     "storage_location": "WAREHOUSE",
                 },
                 {
                     "item_number": "002",
-                    "product_sku": "PROD-002",
+                    "product_code": "PROD-002",
                     "quantity": 30,
                     "storage_location": "STOCKROOM",
                 },
