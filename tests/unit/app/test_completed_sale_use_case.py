@@ -83,14 +83,14 @@ class TestCompletedUseCaseCompleteSales:
         """Test execute with a single sale from one provider."""
         provider_name = "test_provider"
         sale_id = 100
-        remote_id = "remote_123"
+        remote_order_id = "remote_123"
         mock_order_service = MagicMock()
 
         # Mock the registry items method
         mock_order_services.items.return_value = [(provider_name, mock_order_service)]
 
         # Mock completed sales
-        mock_sales_service.get_completed_sales.return_value = [(sale_id, remote_id)]
+        mock_sales_service.get_completed_sales.return_value = [(sale_id, remote_order_id)]
 
         # Mock order loading
         mock_order_service.load_order.return_value = mock_order
@@ -99,7 +99,7 @@ class TestCompletedUseCaseCompleteSales:
 
         # Verify interactions
         mock_sales_service.get_completed_sales.assert_called_once_with(provider_name)
-        mock_order_service.load_order.assert_called_once_with(remote_id)
+        mock_order_service.load_order.assert_called_once_with(remote_order_id)
         mock_order_service.notify_completed_sale.assert_called_once_with(mock_order)
         mock_order_service.persist_order.assert_called_once_with(mock_order, OrderStatus.COMPLETED)
 
