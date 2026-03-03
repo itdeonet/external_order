@@ -39,6 +39,7 @@ def create_sample_order(remote_order_id: str = "REMOTE001") -> Order:
         pricelist_id=1,
         remote_order_id=remote_order_id,
         shipment_type="express",
+        description="Test order",
         ship_to=ship_to,
         line_items=[line_item],
     )

@@ -62,6 +62,8 @@ class TestOrderInstantiation:
             "pricelist_id": 50,
             "remote_order_id": "ORD-12345",
             "shipment_type": "standard",
+            "description": "Harman Order ORD-12345",
+            "delivery_instructions": "Please deliver on weekday between 8-17",
             "ship_to": valid_ship_to,
             "line_items": [valid_line_item],
         }
@@ -132,6 +134,8 @@ class TestOrderAdministrationIDValidation:
             "pricelist_id": 50,
             "remote_order_id": "ORD-123",
             "shipment_type": "standard",
+            "description": "Test order",
+            "delivery_instructions": "Please deliver on weekday between 8-17",
             "ship_to": ship_to,
             "line_items": [line_item],
         }
@@ -185,6 +189,7 @@ class TestOrderCustomerIDValidation:
             "pricelist_id": 50,
             "remote_order_id": "ORD-123",
             "shipment_type": "standard",
+            "description": "Test order",
             "ship_to": ship_to,
             "line_items": [line_item],
         }
@@ -238,6 +243,7 @@ class TestOrderOrderProviderValidation:
             "pricelist_id": 50,
             "remote_order_id": "ORD-123",
             "shipment_type": "standard",
+            "description": "Test order",
             "ship_to": ship_to,
             "line_items": [line_item],
         }
@@ -291,6 +297,7 @@ class TestOrderPricelistIDValidation:
             "order_provider": "Provider",
             "remote_order_id": "ORD-123",
             "shipment_type": "standard",
+            "description": "Test order",
             "ship_to": ship_to,
             "line_items": [line_item],
         }
@@ -339,6 +346,7 @@ class TestOrderRemoteOrderIDValidation:
             "order_provider": "Provider",
             "pricelist_id": 50,
             "shipment_type": "standard",
+            "description": "Test order",
             "ship_to": ship_to,
             "line_items": [line_item],
         }
@@ -392,6 +400,7 @@ class TestOrderShipmentTypeValidation:
             "order_provider": "Provider",
             "pricelist_id": 50,
             "remote_order_id": "ORD-123",
+            "description": "Test order",
             "ship_to": ship_to,
             "line_items": [line_item],
         }
@@ -436,6 +445,7 @@ class TestOrderShipToValidation:
             "pricelist_id": 50,
             "remote_order_id": "ORD-123",
             "shipment_type": "standard",
+            "description": "Test order",
             "line_items": [line_item],
         }
 
@@ -493,6 +503,7 @@ class TestOrderLineItemsValidation:
             "pricelist_id": 50,
             "remote_order_id": "ORD-123",
             "shipment_type": "standard",
+            "description": "Test order",
             "ship_to": ship_to,
         }
 
@@ -560,6 +571,7 @@ class TestOrderSetSaleID:
             pricelist_id=50,
             remote_order_id="ORD-123",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -609,6 +621,7 @@ class TestOrderSetStatus:
             pricelist_id=50,
             remote_order_id="ORD-123",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -703,6 +716,7 @@ class TestOrderCalculateDeliveryDate:
             pricelist_id=50,
             remote_order_id="ORD-123",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -736,6 +750,7 @@ class TestOrderSetShipAt:
             pricelist_id=50,
             remote_order_id="ORD-123",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -769,12 +784,12 @@ class TestOrderSetShipAt:
             order.set_ship_at(dt.datetime.now())  # type: ignore
 
 
-class TestOrderDescription:
-    """Tests for description property."""
+class TestOrderDescriptionFieldValidation:
+    """Tests for description field validation."""
 
     @pytest.fixture
-    def order(self):
-        """Provide an Order instance."""
+    def minimal_order_data(self):
+        """Provide minimal valid Order data."""
         ship_to = ShipTo(
             remote_customer_id="CUST123",
             contact_name="John Doe",
@@ -786,23 +801,54 @@ class TestOrderDescription:
             country_code="US",
         )
         line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
-        return Order(
-            administration_id=1,
-            customer_id=100,
-            order_provider="Harman",
-            pricelist_id=50,
-            remote_order_id="ORD-12345",
-            shipment_type="standard",
-            ship_to=ship_to,
-            line_items=[line_item],
-        )
+        return {
+            "administration_id": 1,
+            "customer_id": 100,
+            "order_provider": "Provider",
+            "pricelist_id": 50,
+            "remote_order_id": "ORD-123",
+            "shipment_type": "standard",
+            "ship_to": ship_to,
+            "line_items": [line_item],
+        }
 
-    def test_description_format(self, order):
-        """Test that description has correct format."""
+    def test_description_required(self, minimal_order_data):
+        """Test that description is required."""
+        with pytest.raises(TypeError):
+            Order(**minimal_order_data)
+
+    def test_description_empty_raises_error(self, minimal_order_data):
+        """Test that empty description raises ValueError."""
+        with pytest.raises(ValueError, match="Description must be a non-empty string"):
+            Order(description="", **minimal_order_data)
+
+    def test_description_whitespace_only_raises_error(self, minimal_order_data):
+        """Test that whitespace-only description raises ValueError."""
+        with pytest.raises(ValueError, match="Description must be a non-empty string"):
+            Order(description="   ", **minimal_order_data)
+
+    def test_description_not_string_raises_error(self, minimal_order_data):
+        """Test that non-string description raises ValueError."""
+        with pytest.raises(ValueError, match="Description must be a non-empty string"):
+            Order(description=123, **minimal_order_data)  # type: ignore
+
+    def test_description_gets_stripped(self, minimal_order_data):
+        """Test that whitespace around description is stripped."""
+        order = Order(description="  Test Description  ", **minimal_order_data)
+        assert order.description == "Test Description"
+
+    def test_description_stored_as_member(self, minimal_order_data):
+        """Test that description is stored as a member variable."""
+        order = Order(description="Harman Order ORD-12345", **minimal_order_data)
         assert order.description == "Harman Order ORD-12345"
 
-    def test_description_different_providers(self):
-        """Test description with different order providers."""
+
+class TestOrderDeliveryInstructionsField:
+    """Tests for delivery_instructions field."""
+
+    @pytest.fixture
+    def minimal_order_data(self):
+        """Provide minimal valid Order data."""
         ship_to = ShipTo(
             remote_customer_id="CUST123",
             contact_name="John Doe",
@@ -814,19 +860,44 @@ class TestOrderDescription:
             country_code="US",
         )
         line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
-        providers = ["Harman", "Odoo", "Spectrum"]
-        for provider in providers:
-            order = Order(
-                administration_id=1,
-                customer_id=100,
-                order_provider=provider,
-                pricelist_id=50,
-                remote_order_id="ORD-99999",
-                shipment_type="standard",
-                ship_to=ship_to,
-                line_items=[line_item],
-            )
-            assert order.description == f"{provider} Order ORD-99999"
+        return {
+            "administration_id": 1,
+            "customer_id": 100,
+            "order_provider": "Provider",
+            "pricelist_id": 50,
+            "remote_order_id": "ORD-123",
+            "shipment_type": "standard",
+            "description": "Test order",
+            "ship_to": ship_to,
+            "line_items": [line_item],
+        }
+
+    def test_delivery_instructions_optional(self, minimal_order_data):
+        """Test that delivery_instructions is optional with empty default."""
+        order = Order(**minimal_order_data)
+        assert order.delivery_instructions == ""
+
+    def test_delivery_instructions_can_be_set(self, minimal_order_data):
+        """Test that delivery_instructions can be set to a value."""
+        instructions = "Please deliver on weekday between 8-17"
+        order = Order(delivery_instructions=instructions, **minimal_order_data)
+        assert order.delivery_instructions == instructions
+
+    def test_delivery_instructions_gets_stripped(self, minimal_order_data):
+        """Test that whitespace around delivery_instructions is stripped."""
+        instructions = "  Please deliver between 9-5  "
+        order = Order(delivery_instructions=instructions, **minimal_order_data)
+        assert order.delivery_instructions == "Please deliver between 9-5"
+
+    def test_delivery_instructions_not_string_raises_error(self, minimal_order_data):
+        """Test that non-string delivery_instructions raises ValueError."""
+        with pytest.raises(ValueError, match="Delivery instructions must be an instance of str"):
+            Order(delivery_instructions=123, **minimal_order_data)  # type: ignore
+
+    def test_delivery_instructions_empty_string_allowed(self, minimal_order_data):
+        """Test that empty string is allowed for delivery_instructions."""
+        order = Order(delivery_instructions="", **minimal_order_data)
+        assert order.delivery_instructions == ""
 
 
 class TestOrderImmutability:
@@ -853,6 +924,7 @@ class TestOrderImmutability:
             pricelist_id=50,
             remote_order_id="ORD-123",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -929,6 +1001,7 @@ class TestOrderEquality:
             "pricelist_id": 50,
             "remote_order_id": "ORD-123",
             "shipment_type": "standard",
+            "description": "Test order",
             "ship_to": ship_to,
             "line_items": [line_item],
         }
@@ -946,6 +1019,7 @@ class TestOrderEquality:
             pricelist_id=50,
             remote_order_id="ORD-123",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=line_items,
         )
@@ -956,6 +1030,7 @@ class TestOrderEquality:
             pricelist_id=50,
             remote_order_id="ORD-123",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=line_items,
         )
@@ -964,12 +1039,11 @@ class TestOrderEquality:
 
     def test_different_customer_ids_not_equal(self, order_data):
         """Test that orders with different customer IDs are not equal."""
-        order1 = Order(
-            customer_id=100, **{k: v for k, v in order_data.items() if k != "customer_id"}
-        )
-        order2 = Order(
-            customer_id=200, **{k: v for k, v in order_data.items() if k != "customer_id"}
-        )
+        filtered_data = {
+            k: v for k, v in order_data.items() if k not in ("customer_id", "description")
+        }
+        order1 = Order(customer_id=100, description="Test order", **filtered_data)
+        order2 = Order(customer_id=200, description="Test order", **filtered_data)
 
         assert order1 != order2
 
@@ -998,6 +1072,7 @@ class TestOrderIDGeneration:
             "pricelist_id": 50,
             "remote_order_id": "ORD-123",
             "shipment_type": "standard",
+            "description": "Test order",
             "ship_to": ship_to,
             "line_items": [line_item],
         }
@@ -1045,6 +1120,7 @@ class TestOrderSaleIDDefault:
             "pricelist_id": 50,
             "remote_order_id": "ORD-123",
             "shipment_type": "standard",
+            "description": "Test order",
             "ship_to": ship_to,
             "line_items": [line_item],
         }
@@ -1084,6 +1160,7 @@ class TestOrderStatusDefault:
             "pricelist_id": 50,
             "remote_order_id": "ORD-123",
             "shipment_type": "standard",
+            "description": "Test order",
             "ship_to": ship_to,
             "line_items": [line_item],
         }
@@ -1123,6 +1200,7 @@ class TestOrderCreatedAtDefault:
             "pricelist_id": 50,
             "remote_order_id": "ORD-123",
             "shipment_type": "standard",
+            "description": "Test order",
             "ship_to": ship_to,
             "line_items": [line_item],
         }
@@ -1170,6 +1248,7 @@ class TestOrderShipAtDefault:
             "pricelist_id": 50,
             "remote_order_id": "ORD-123",
             "shipment_type": "standard",
+            "description": "Test order",
             "ship_to": ship_to,
             "line_items": [line_item],
         }
@@ -1215,6 +1294,7 @@ class TestOrderAdministrationIDValidationMessages:
             "pricelist_id": 50,
             "remote_order_id": "ORD-123",
             "shipment_type": "standard",
+            "description": "Test order",
             "ship_to": ship_to,
             "line_items": [line_item],
         }
@@ -1248,6 +1328,7 @@ class TestOrderLargeQuantities:
             pricelist_id=50,
             remote_order_id="ORD-123",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -1281,6 +1362,7 @@ class TestOrderMultipleLineItems:
             pricelist_id=50,
             remote_order_id="ORD-123",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=line_items,
         )
@@ -1312,6 +1394,7 @@ class TestOrderRepresentation:
             pricelist_id=50,
             remote_order_id="ORD-12345",
             shipment_type="standard",
+            description="Harman Order ORD-12345",
             ship_to=ship_to,
             line_items=[line_item],
         )

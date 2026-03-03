@@ -93,6 +93,7 @@ def sample_order(sample_ship_to, sample_line_item):
         pricelist_id=1,
         remote_order_id="ORDER123",
         shipment_type="Standard",
+        description="Test order",
         ship_to=sample_ship_to,
         line_items=[sample_line_item],
     )
