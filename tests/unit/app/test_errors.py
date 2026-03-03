@@ -283,6 +283,78 @@ class TestErrorStore:
         # All checks should have found at least one error
         assert all(results)
 
+    def test_get_render_email_data_empty_store(self, error_store):
+        """Test get_render_email_data with empty store."""
+        data = error_store.get_render_email_data()
+
+        assert isinstance(data, dict)
+        assert "error_count" in data
+        assert "errors" in data
+        assert "timestamp" in data
+        assert data["error_count"] == 0
+        assert data["errors"] == []
+
+    def test_get_render_email_data_with_single_error(self, error_store):
+        """Test get_render_email_data with single error."""
+        error_store.add(ValueError("Test error 1"))
+
+        data = error_store.get_render_email_data()
+
+        assert isinstance(data, dict)
+        assert data["error_count"] == 1
+        assert len(data["errors"]) == 1
+        assert "ValueError" in data["errors"][0]
+        assert "Test error 1" in data["errors"][0]
+        assert "timestamp" in data
+
+    def test_get_render_email_data_with_multiple_errors(self, error_store):
+        """Test get_render_email_data with multiple errors."""
+        error_store.add(ValueError("Error 1"))
+        error_store.add(TypeError("Error 2"))
+        error_store.add(RuntimeError("Error 3"))
+
+        data = error_store.get_render_email_data()
+
+        assert data["error_count"] == 3
+        assert len(data["errors"]) == 3
+        assert any("ValueError" in err for err in data["errors"])
+        assert any("TypeError" in err for err in data["errors"])
+        assert any("RuntimeError" in err for err in data["errors"])
+        assert any("Error 1" in err for err in data["errors"])
+        assert any("Error 2" in err for err in data["errors"])
+        assert any("Error 3" in err for err in data["errors"])
+
+    def test_get_render_email_data_timestamp_format(self, error_store):
+        """Test that timestamp is in correct format."""
+        import re
+
+        data = error_store.get_render_email_data()
+        timestamp = data["timestamp"]
+
+        # Check format: YYYY-MM-DD HH:MM:SS
+        pattern = r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}"
+        assert re.match(pattern, timestamp), f"Timestamp format incorrect: {timestamp}"
+
+    def test_get_render_email_data_does_not_drain_store(self, error_store):
+        """Test that get_render_email_data does not drain the store."""
+        error_store.add(ValueError("Test"))
+
+        data1 = error_store.get_render_email_data()
+        data2 = error_store.get_render_email_data()
+
+        assert data1["error_count"] == data2["error_count"]
+        assert data1["errors"] == data2["errors"]
+
+    def test_get_render_email_data_all_returns_formatted_list(self, error_store):
+        """Test that errors field matches all() output."""
+        error_store.add(ValueError("Error 1"))
+        error_store.add(TypeError("Error 2"))
+
+        data = error_store.get_render_email_data()
+        all_errors = error_store.all()
+
+        assert data["errors"] == all_errors
+
 
 class TestInsdesError:
     """Tests for the InsdesError exception class."""
