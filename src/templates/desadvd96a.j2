@@ -26,7 +26,7 @@ RFF+AAS:{{ order.tracking_numbers|first|default('') }}'
 GIN+BJ+{{ sscc }}'
 
 {% for item in order.items %}
-LIN+{{ item.line_number }}++{{ item.product_sku }}:MF'
+LIN+{{ item.line_number }}++{{ item.product_code }}:MF'
 PIA+1+{{ item_description }}'
 QTY+12:{{ item.quantity }}'
 RFF+DQ:{{ order.delivery_note_number }}'

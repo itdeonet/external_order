@@ -10,7 +10,7 @@ CPS+1'
 FTX+ZZZ+++https?://www.dpdgroup.com/nl/mydpd/my-parcels/track??:lang=nl&parcelNumber={{ order.tracking_numbers|first|default('') }}'
 
 {% for item in order.items %}
-LIN+{{ item.line_number }}+1+{{ item.product_sku }}:MF'
+LIN+{{ item.line_number }}+1+{{ item.product_code }}:MF'
 PIA+1+{{ item_description }}'
 QTY+12:{{ item.quantity }}:EA'
 {% for serial in item.serials %}
