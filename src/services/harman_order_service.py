@@ -184,7 +184,7 @@ class HarmanOrderService:
         - RFF: Order and delivery note references
         - LIN: Line item product codes
         - QTY: Line item quantities
-        - FTX: Location and stock status per line item
+        - FTX: Delivery instructions and location/stock status per line item
 
         Args:
             segment: EDIFACT Segment instance to parse
@@ -230,6 +230,8 @@ class HarmanOrderService:
                 assert order_data["line_items"], "QTY segment must be preceded by a LIN segment."
                 order_data["line_items"][-1]["quantity"] = quantity
                 order_data["line_items"][-1]["unit_of_measure"] = unit_of_measure
+            case ["FTX", "DEL", "3", "", delivery_instructions]:
+                order_data["delivery_instructions"] = delivery_instructions
             case ["FTX", "PRD", "", "", [location, stock_status]]:
                 assert order_data["line_items"], "FTX segment must be preceded by a LIN segment."
                 order_data["line_items"][-1]["location"] = location
@@ -243,6 +245,10 @@ class HarmanOrderService:
         Transforms the parsed EDIFACT data into a complete Order domain model.
         Handles normalization of shipment type (B2B vs B2C based on company name),
         creation of ShipTo and LineItem instances, and setting appropriate delivery dates.
+
+        Populates Order fields:
+        - description: Formatted as "<order_provider> order <remote_order_id> / <delivery_note_id>"
+        - delivery_instructions: Extracted from FTX segments (defaults to empty string)
 
         Args:
             data: Dictionary with parsed order data from _read_order_data()
@@ -263,6 +269,11 @@ class HarmanOrderService:
             pricelist_id=self.pricelist_id,
             remote_order_id=data.get("remote_order_id", ""),
             shipment_type=f"{self.shipment_type}{'b2b%' if is_company else 'b2c%'}",
+            description=(
+                f"{self.order_provider} order {data.get('remote_order_id', '')}"
+                f" / {data.get('delivery_note_id', '')}"
+            ),
+            delivery_instructions=data.get("delivery_instructions", ""),
             ship_to=ShipTo(
                 remote_customer_id=ship_to_data.get("remote_customer_id", ""),
                 company_name=ship_to_data.get("company_name", ""),
