@@ -26,9 +26,7 @@ Example usage in a frozen dataclass:
     ...     object.__setattr__(self, "email", normalized)
 """
 
-from typing import Any, TypeVar
-
-T = TypeVar("T")
+from typing import Any
 
 
 def validate_positive_int(value: Any, field_name: str) -> None:
