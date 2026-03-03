@@ -122,7 +122,7 @@ order_services.register("MyNewProvider", MyNewOrderService.from_config(config))
 
 # In use cases, iterate over all registered services
 for order_service_name, order_service in order_services.items():
-    for order in order_service.read_orders(error_store):
+    for order in order_service.read_orders():
         # Process order
 ```
 
@@ -136,6 +136,8 @@ Services implement Python Protocol interfaces (like TypeScript interfaces). Each
 - `IArtworkServiceProvider` - Select artwork service for order
 - `IOrderService` - Full-featured order provider (combines all above)
 
+Note: Error handling uses a singleton `ErrorStore` class, not an interface, to centralize error collection across all operations.
+
 #### 3. **Separation of Concerns**
 
 - **App Layer** - Orchestration & workflow (use cases)
@@ -143,20 +145,26 @@ Services implement Python Protocol interfaces (like TypeScript interfaces). Each
 - **Service Layer** - External system integration (Odoo, Harman, Spectrum)
 - **Interface Layer** - Contracts between layers (protocols)
 
-#### 4. **Error Queue Pattern**
+#### 4. **Error Store Pattern**
 
-Instead of throwing exceptions up the call stack, errors are collected in a queue for centralized handling:
+Instead of throwing exceptions up the call stack, errors are collected in a singleton ErrorStore for centralized handling:
 
 ```python
-error_store: IErrorQueue = ErrorQueue()
-for order in order_service.read_orders(error_store):
+from src.app.errors import ErrorStore
+
+# Get singleton instance
+error_store = ErrorStore()
+
+for order in order_service.read_orders():
     try:
         # Process order
     except Exception as exc:
-        error_handler.handle_order_error(exc, order_id, service_name, context)
+        error_store.add(exc)
+        logger.error(f"Error processing order: {exc!s}")
 
 # Summarize all errors at the end
-logger.error(error_store.summarize())
+if error_store.has_errors():
+    logger.error(error_store.summarize())
 ```
 
 ### Use Cases (Application Workflows)
@@ -228,7 +236,7 @@ StockTransferUseCase.execute():
 4. **Verify installation**
    ```bash
    uv run pytest tests/ -q
-   # Should show: 862 passed in 0.78s
+   # Should show: 920 passed in 0.85s
    ```
 
 ### Development Setup
@@ -337,6 +345,8 @@ class Order:
     pricelist_id: int
     remote_order_id: str             # ID in external system
     shipment_type: str               # Shipping method
+    description: str                 # Order description/summary
+    delivery_instructions: str = ""  # Optional delivery instructions
     status: OrderStatus              # NEW, CREATED, ARTWORK, CONFIRMED, COMPLETED
     ship_to: ShipTo                  # Shipping address
     line_items: list[LineItem]       # Order lines with products
@@ -444,16 +454,13 @@ class MyProviderOrderService:
         )
     
     # IOrderReader
-    def read_orders(self, error_store: IErrorQueue) -> Generator[Order, None, None]:
+    def read_orders(self) -> Generator[Order, None, None]:
         """Read orders from MyProvider API."""
-        try:
-            response = httpx.get(f"{self.api_url}/orders", headers={
-                "Authorization": f"Bearer {self.api_key}"
-            })
-            for raw_order in response.json()["orders"]:
-                yield self._parse_order(raw_order)
-        except Exception as e:
-            error_store.add(e)
+        response = httpx.get(f"{self.api_url}/orders", headers={
+            "Authorization": f"Bearer {self.api_key}"
+        })
+        for raw_order in response.json()["orders"]:
+            yield self._parse_order(raw_order)
     
     def _parse_order(self, raw_order: dict) -> Order:
         """Convert raw API order to Order domain object."""
@@ -464,6 +471,8 @@ class MyProviderOrderService:
             pricelist_id=raw_order.get("pricelist_id", 1),
             remote_order_id=raw_order["order_id"],
             shipment_type=raw_order.get("shipment_type", "standard"),
+            description=raw_order.get("description", f"MyProvider Order {raw_order['order_id']}"),
+            delivery_instructions=raw_order.get("delivery_instructions", ""),
             ship_to=ShipTo(
                 remote_customer_id=raw_order["ship_to"]["customer_id"],
                 company_name=raw_order["ship_to"]["company"],
@@ -612,15 +621,12 @@ class MyProviderStockService:
     api_url: str
     api_key: str
     
-    def read_stock_transfers(self, error_store: IErrorQueue) -> Generator[dict, None, None]:
+    def read_stock_transfers(self) -> Generator[dict, None, None]:
         """Read pending stock transfer requests."""
-        try:
-            response = httpx.get(f"{self.api_url}/stock_transfers",
-                               headers={"Authorization": f"Bearer {self.api_key}"})
-            for transfer in response.json()["transfers"]:
-                yield transfer
-        except Exception as e:
-            error_store.add(e)
+        response = httpx.get(f"{self.api_url}/stock_transfers",
+                           headers={"Authorization": f"Bearer {self.api_key}"})
+        for transfer in response.json()["transfers"]:
+            yield transfer
     
     def reply_stock_transfer(self, transfer_data: dict[str, Any]) -> None:
         """Confirm stock transfer completion."""
@@ -638,9 +644,9 @@ stock_services.register("MyProvider", MyProviderStockService.from_config(config)
 
 ### Test Coverage
 
-Current coverage: **862 tests passing** with comprehensive test suites
+Current coverage: **920 tests passing** with comprehensive test suites
 
-- **Unit tests** (835+) - Individual component testing with mocks
+- **Unit tests** (893+) - Individual component testing with mocks
 - **Integration tests** (27+) - Cross-module testing with pytest-httpx
 - **Documentation** - All modules have comprehensive docstrings
 
@@ -672,7 +678,6 @@ import httpx
 from pytest_httpx import HTTPXMock
 
 from src.services.myprovider_order_service import MyProviderOrderService
-from src.app.errors import ErrorQueue
 
 class TestMyProviderOrderService:
     
@@ -701,8 +706,7 @@ class TestMyProviderOrderService:
             }
         )
         
-        error_store = ErrorQueue()
-        orders = list(service.read_orders(error_store))
+        orders = list(service.read_orders())
         
         assert len(orders) == 1
         assert orders[0].remote_order_id == "ORD001"
@@ -828,7 +832,7 @@ from src.utils.cache import cached_expensive_operation
 git checkout -b feature/new-service
 
 # Make changes, test, commit
-uv run pytest tests/ -v  # Verify all 862 tests pass
+uv run pytest tests/ -v  # Verify all 920 tests pass
 git add .
 git commit -m "Add new artwork service"
 
@@ -836,9 +840,9 @@ git commit -m "Add new artwork service"
 git push origin feature/new-service
 
 # Before merging:
-# 1. Verify all tests pass with: uv run pytest -q
+# 1. Verify all tests pass with: uv run pytest -q (expect ~920 tests)
 # 2. Ensure new code has type hints and comprehensive docstrings
-# 3. Check that error handling collects to ErrorStore (not print/raise)
+# 3. Check that error handling collects to ErrorStore singleton (not print/raise)
 ```
 
 ## Dependencies
@@ -858,7 +862,7 @@ git push origin feature/new-service
 
 | Package        | Purpose                                              |
 | -------------- | ---------------------------------------------------- |
-| `pytest`       | Test runner & assertion framework (862 tests)       |
+| `pytest`       | Test runner & assertion framework (920 tests)       |
 | `pytest-cov`   | Code coverage measurement                            |
 | `pytest-mock`  | Mocking and patching utilities                       |
 | `pytest-httpx` | Mock HTTP responses for integration testing          |
