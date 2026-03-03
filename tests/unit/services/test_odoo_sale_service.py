@@ -95,6 +95,8 @@ class TestGetSaleData:
             pricelist_id=50,
             remote_order_id="HA-EM-12345",
             shipment_type="standard",
+            description="Test order",
+            delivery_instructions="Handle with care",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -158,6 +160,8 @@ class TestIsSaleCreated:
             pricelist_id=50,
             remote_order_id="HA-EM-12345",
             shipment_type="standard",
+            description="Test order",
+            delivery_instructions="Handle with care",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -211,6 +215,8 @@ class TestCreateSale:
             pricelist_id=50,
             remote_order_id="HA-EM-12345",
             shipment_type="standard",
+            description="Test order",
+            delivery_instructions="Handle with care",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -286,6 +292,7 @@ class TestConfirmSale:
             pricelist_id=50,
             remote_order_id="HA-EM-12345",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -325,14 +332,14 @@ class TestGetCompletedSales:
         return OdooSaleService(auth=mock_auth, engine=mock_client)
 
     def test_get_completed_sales_returns_ids(self, service, mocker):
-        """Test that get_completed_sales returns list of (id, remote_id) tuples."""
+        """Test that get_completed_sales returns list of (id, remote_order_id) tuples."""
         mocker.patch.object(
             OdooSaleService,
             "_call",
             return_value=[
-                {"id": 100, "x_remote_id": "HA-001"},
-                {"id": 101, "x_remote_id": "HA-002"},
-                {"id": 102, "x_remote_id": "HA-003"},
+                {"id": 100, "x_remote_order_id": "HA-001"},
+                {"id": 101, "x_remote_order_id": "HA-002"},
+                {"id": 102, "x_remote_order_id": "HA-003"},
             ],
         )
 
@@ -389,6 +396,7 @@ class TestConvertOrderLines:
             pricelist_id=50,
             remote_order_id="HA-EM-12345",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -415,6 +423,20 @@ class TestConvertOrderLines:
     def test_convert_order_lines_raises_on_invalid_product_data(self, service, mocker, order):
         """Test that SaleError is raised on invalid product data."""
         mocker.patch.object(OdooSaleService, "_call", return_value=[{"id": 1}])  # missing "name"
+
+        with pytest.raises(SaleError, match="Product PROD001 not found"):
+            service._convert_order_lines(order)
+
+    def test_convert_order_lines_raises_when_product_is_not_dict(self, service, mocker, order):
+        """Test that SaleError is raised when product is not a dict."""
+        mocker.patch.object(OdooSaleService, "_call", return_value="not_a_dict")
+
+        with pytest.raises(SaleError, match="Product PROD001 not found"):
+            service._convert_order_lines(order)
+
+    def test_convert_order_lines_raises_when_product_missing_id(self, service, mocker, order):
+        """Test that SaleError is raised when product dict missing id field."""
+        mocker.patch.object(OdooSaleService, "_call", return_value=[{"name": "Product 1"}])
 
         with pytest.raises(SaleError, match="Product PROD001 not found"):
             service._convert_order_lines(order)
@@ -462,6 +484,20 @@ class TestGetCountryId:
         with pytest.raises(SaleError, match="Country code 'XX' not found"):
             service._get_country_id("XX")
 
+    def test_get_country_id_raises_when_not_integer(self, service, mocker):
+        """Test that TypeError is raised when country_id is not an integer."""
+        mocker.patch.object(OdooSaleService, "_call_search_single", return_value="not_an_int")
+
+        with pytest.raises(TypeError, match="country_id should be an integer"):
+            service._get_country_id("US")
+
+    def test_get_country_id_raises_when_id_is_string_numbers(self, service, mocker):
+        """Test that TypeError is raised when country_id is string of numbers."""
+        mocker.patch.object(OdooSaleService, "_call_search_single", return_value=42.5)
+
+        with pytest.raises(TypeError, match="country_id should be an integer"):
+            service._get_country_id("US")
+
 
 class TestGetStateId:
     """Tests for _get_state_id method."""
@@ -508,6 +544,20 @@ class TestGetStateId:
 
         assert result == 0
 
+    def test_get_state_id_raises_when_not_integer(self, service, mocker):
+        """Test that TypeError is raised when state_id is not an integer."""
+        mocker.patch.object(OdooSaleService, "_call_search_single", return_value="not_an_int")
+
+        with pytest.raises(TypeError, match="state_id should be an integer"):
+            service._get_state_id(42, "California")
+
+    def test_get_state_id_raises_when_id_is_float(self, service, mocker):
+        """Test that TypeError is raised when state_id is a float."""
+        mocker.patch.object(OdooSaleService, "_call_search_single", return_value=123.45)
+
+        with pytest.raises(TypeError, match="state_id should be an integer"):
+            service._get_state_id(42, "California")
+
 
 class TestGetCarrierId:
     """Tests for _get_carrier_id method."""
@@ -541,6 +591,7 @@ class TestGetCarrierId:
             pricelist_id=50,
             remote_order_id="HA-EM-12345",
             shipment_type="FedEx",
+            description="Test order",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -566,6 +617,20 @@ class TestGetCarrierId:
         mocker.patch.object(OdooSaleService, "_call", return_value=[])
 
         with pytest.raises(SaleError, match="Carrier 'FedEx' not found"):
+            service._get_carrier_id(order)
+
+    def test_get_carrier_id_raises_when_not_integer(self, service, mocker, order):
+        """Test that TypeError is raised when carrier_id is not an integer."""
+        mocker.patch.object(OdooSaleService, "_call_search_single", return_value="not_an_int")
+
+        with pytest.raises(TypeError, match="carrier_id should be an integer"):
+            service._get_carrier_id(order)
+
+    def test_get_carrier_id_raises_when_id_is_boolean(self, service, mocker, order):
+        """Test that TypeError is raised when carrier_id is a non-int type."""
+        mocker.patch.object(OdooSaleService, "_call_search_single", return_value=[1, 2])
+
+        with pytest.raises(TypeError, match="carrier_id should be an integer"):
             service._get_carrier_id(order)
 
 
@@ -604,6 +669,7 @@ class TestGetContactDataFromOrder:
             pricelist_id=50,
             remote_order_id="HA-EM-12345",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -647,6 +713,7 @@ class TestGetContactDataFromOrder:
             pricelist_id=50,
             remote_order_id="HA-EM-12345",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -692,6 +759,7 @@ class TestCreateContact:
             pricelist_id=50,
             remote_order_id="HA-EM-12345",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -758,6 +826,7 @@ class TestUpdateContact:
             pricelist_id=50,
             remote_order_id="HA-EM-12345",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -834,6 +903,7 @@ class TestHasExpectedOrderLines:
             pricelist_id=50,
             remote_order_id="HA-EM-12345",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -923,6 +993,7 @@ class TestGetShippingInfo:
             pricelist_id=50,
             remote_order_id="HA-EM-12345",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -1001,6 +1072,7 @@ class TestGetSerialsByLineItem:
             pricelist_id=50,
             remote_order_id="HA-EM-12345",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -1227,3 +1299,301 @@ class TestOdooSaleServiceCallSearchSingle:
 
         assert isinstance(result, int)
         assert result == 100
+
+    def test_call_search_single_returns_none_when_multi_field_missing(self, service, mock_client):
+        """Test _call_search_single returns None when multi-field request has missing fields."""
+        mock_client.post.return_value = Mock(
+            json=lambda: {
+                "jsonrpc": "2.0",
+                "result": [{"id": 100, "name": "Test"}],  # Missing "email" field
+            }
+        )
+
+        result = service._call_search_single(
+            model="res.partner",
+            query_data=[["id", "=", 100]],
+            fields=["id", "name", "email"],
+        )
+
+        # Should return None because email field is missing and no error_message
+        assert result is None
+
+    def test_call_search_single_raises_on_missing_field_with_error(self, service, mock_client):
+        """Test _call_search_single raises when field missing and error_message set."""
+        mock_client.post.return_value = Mock(
+            json=lambda: {
+                "jsonrpc": "2.0",
+                "result": [{"id": 100}],  # Missing "name" field
+            }
+        )
+
+        with pytest.raises(SaleError, match="Partner not found"):
+            service._call_search_single(
+                model="res.partner",
+                query_data=[["id", "=", 100]],
+                fields=["id", "name"],
+                error_message="Partner not found",
+            )
+
+
+class TestUpdateDeliveryInstructions:
+    """Tests for update_delivery_instructions method."""
+
+    @pytest.fixture
+    def service(self):
+        """Provide an OdooSaleService instance."""
+        mock_auth = Mock(spec=OdooAuth)
+        mock_client = Mock(spec=httpx.Client)
+        mock_client.base_url = "http://localhost:8069"
+        return OdooSaleService(auth=mock_auth, engine=mock_client)
+
+    @pytest.fixture
+    def order(self):
+        """Provide an Order instance."""
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=10)
+        return Order(
+            administration_id=1,
+            customer_id=100,
+            order_provider="Harman",
+            pricelist_id=50,
+            remote_order_id="HA-EM-12345",
+            shipment_type="standard",
+            description="Test order",
+            delivery_instructions="Handle with care",
+            ship_to=ship_to,
+            line_items=[line_item],
+        )
+
+    def test_update_delivery_instructions_successful(self, service, mocker, order):
+        """Test successful delivery instructions update."""
+        mocker.patch.object(
+            OdooSaleService,
+            "_get_sale_data",
+            return_value={"id": 100},
+        )
+        mocker.patch.object(OdooSaleService, "_call", return_value=True)
+
+        service.update_delivery_instructions(order)
+
+    def test_update_delivery_instructions_returns_early_on_empty_instructions(
+        self, service, mocker
+    ):
+        """Test that update returns early when delivery instructions are empty."""
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=10)
+        order_empty = Order(
+            administration_id=1,
+            customer_id=100,
+            order_provider="Harman",
+            pricelist_id=50,
+            remote_order_id="HA-EM-12345",
+            shipment_type="standard",
+            description="Test order",
+            delivery_instructions="",
+            ship_to=ship_to,
+            line_items=[line_item],
+        )
+        get_sale_spy = mocker.spy(OdooSaleService, "_get_sale_data")
+        call_spy = mocker.spy(OdooSaleService, "_call")
+
+        service.update_delivery_instructions(order_empty)
+
+        get_sale_spy.assert_not_called()
+        call_spy.assert_not_called()
+
+    def test_update_delivery_instructions_returns_early_on_whitespace_instructions(
+        self, service, mocker
+    ):
+        """Test that update returns early when delivery instructions are whitespace only."""
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=10)
+        order_whitespace = Order(
+            administration_id=1,
+            customer_id=100,
+            order_provider="Harman",
+            pricelist_id=50,
+            remote_order_id="HA-EM-12345",
+            shipment_type="standard",
+            description="Test order",
+            delivery_instructions="   \t  \n  ",
+            ship_to=ship_to,
+            line_items=[line_item],
+        )
+        get_sale_spy = mocker.spy(OdooSaleService, "_get_sale_data")
+        call_spy = mocker.spy(OdooSaleService, "_call")
+
+        service.update_delivery_instructions(order_whitespace)
+
+        get_sale_spy.assert_not_called()
+        call_spy.assert_not_called()
+
+    def test_update_delivery_instructions_raises_when_sale_not_found(self, service, mocker, order):
+        """Test that SaleError is raised when sale is not found."""
+        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={})
+
+        with pytest.raises(
+            SaleError, match="Cannot update delivery instructions for non-existent sale"
+        ):
+            service.update_delivery_instructions(order)
+
+    def test_update_delivery_instructions_raises_when_sale_id_is_zero(self, service, mocker, order):
+        """Test that SaleError is raised when sale ID is 0."""
+        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={"id": 0})
+
+        with pytest.raises(
+            SaleError, match="Cannot update delivery instructions for non-existent sale"
+        ):
+            service.update_delivery_instructions(order)
+
+    def test_update_delivery_instructions_raises_when_sale_missing_id_field(
+        self, service, mocker, order
+    ):
+        """Test that SaleError is raised when sale data missing id field."""
+        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={"name": "SO-123"})
+
+        with pytest.raises(
+            SaleError, match="Cannot update delivery instructions for non-existent sale"
+        ):
+            service.update_delivery_instructions(order)
+
+    def test_update_delivery_instructions_raises_on_write_failure(self, service, mocker, order):
+        """Test that SaleError is raised when write fails."""
+        mocker.patch.object(
+            OdooSaleService,
+            "_get_sale_data",
+            return_value={"id": 100},
+        )
+        mocker.patch.object(OdooSaleService, "_call", return_value=False)
+
+        with pytest.raises(SaleError, match="Failed to update delivery instructions for sale 100"):
+            service.update_delivery_instructions(order)
+
+    def test_update_delivery_instructions_calls_with_correct_parameters(
+        self, service, mocker, order
+    ):
+        """Test that _call is invoked with correct parameters."""
+        mocker.patch.object(
+            OdooSaleService,
+            "_get_sale_data",
+            return_value={"id": 100},
+        )
+        call_mock = mocker.patch.object(OdooSaleService, "_call", return_value=True)
+
+        service.update_delivery_instructions(order)
+
+        call_mock.assert_called_once()
+        call_args = call_mock.call_args
+        assert call_args[1]["model"] == "sale.order"
+        assert call_args[1]["method"] == "write"
+        assert call_args[1]["query_data"] == [
+            [100],
+            {"x_remote_delivery_instructions": "Handle with care"},
+        ]
+
+    def test_update_delivery_instructions_handles_long_instructions(self, service, mocker):
+        """Test that long delivery instructions are handled correctly."""
+        long_instructions = "A" * 1000
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=10)
+        order_long = Order(
+            administration_id=1,
+            customer_id=100,
+            order_provider="Harman",
+            pricelist_id=50,
+            remote_order_id="HA-EM-12345",
+            shipment_type="standard",
+            description="Test order",
+            delivery_instructions=long_instructions,
+            ship_to=ship_to,
+            line_items=[line_item],
+        )
+        mocker.patch.object(
+            OdooSaleService,
+            "_get_sale_data",
+            return_value={"id": 100},
+        )
+        call_mock = mocker.patch.object(OdooSaleService, "_call", return_value=True)
+
+        service.update_delivery_instructions(order_long)
+
+        call_args = call_mock.call_args
+        assert call_args[1]["query_data"][1]["x_remote_delivery_instructions"] == long_instructions
+
+    def test_update_delivery_instructions_handles_special_characters(self, service, mocker):
+        """Test that delivery instructions with special characters are handled correctly."""
+        special_instructions = (
+            "Handle with care! Include \n newlines and 'quotes' and \"double quotes\""
+        )
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=10)
+        order_special = Order(
+            administration_id=1,
+            customer_id=100,
+            order_provider="Harman",
+            pricelist_id=50,
+            remote_order_id="HA-EM-12345",
+            shipment_type="standard",
+            description="Test order",
+            delivery_instructions=special_instructions,
+            ship_to=ship_to,
+            line_items=[line_item],
+        )
+        mocker.patch.object(
+            OdooSaleService,
+            "_get_sale_data",
+            return_value={"id": 100},
+        )
+        call_mock = mocker.patch.object(OdooSaleService, "_call", return_value=True)
+
+        service.update_delivery_instructions(order_special)
+
+        call_args = call_mock.call_args
+        assert (
+            call_args[1]["query_data"][1]["x_remote_delivery_instructions"] == special_instructions
+        )

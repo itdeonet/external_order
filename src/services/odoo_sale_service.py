@@ -109,7 +109,7 @@ class OdooSaleService:
                 [
                     ["company_id", "=", order.administration_id],
                     "|",
-                    ["x_remote_id", "=", order.remote_order_id],
+                    ["x_remote_order_id", "=", order.remote_order_id],
                     ["name", "=", order.remote_order_id],
                 ]
             ],
@@ -235,7 +235,7 @@ class OdooSaleService:
             "country_id": country_id,
             "phone": ship_to.phone,
             "email": ship_to.email,
-            "x_remote_source": order.order_provider,
+            "x_remote_order_provider": order.order_provider,
         }
 
     def _create_contact(self, order: Order) -> int:
@@ -397,13 +397,13 @@ class OdooSaleService:
                     "company_id": order.administration_id,
                     "client_order_ref": order.description,
                     "pricelist_id": order.pricelist_id,
-                    "delivery_message": order.delivery_instructions,
                     "order_line": self._convert_order_lines(order),
                     "state": "draft",
                     "commitment_date": order.ship_at.strftime("%Y-%m-%d"),
                     "carrier_id": self._get_carrier_id(order),
-                    "x_remote_id": order.remote_order_id,
-                    "x_remote_source": order.order_provider,
+                    "x_remote_delivery_instructions": order.delivery_instructions,
+                    "x_remote_order_id": order.remote_order_id,
+                    "x_remote_order_provider": order.order_provider,
                 }
             ],
         )
@@ -522,6 +522,46 @@ class OdooSaleService:
 
         logger.info("Contact ID %d updated (order %s)", contact_id, order.remote_order_id)
 
+    def update_delivery_instructions(self, order: Order) -> None:
+        """Update delivery instructions on the sale order in Odoo.
+
+        Updates the x_remote_delivery_instructions field on the sale.order
+        with the latest instructions from the Order.
+
+        Args:
+            order: The Order with updated delivery instructions
+
+        Raises:
+            SaleError: If sale does not exist or update fails
+        """
+        if not order.delivery_instructions.strip():
+            logger.info("No delivery instructions to update for order %s", order.remote_order_id)
+            return
+
+        logger.info("Update delivery instructions for order %s", order.remote_order_id)
+        sale_data = self._get_sale_data(order)
+        if not (sale_data and "id" in sale_data and sale_data["id"] != 0):
+            raise SaleError(
+                "Cannot update delivery instructions for non-existent sale", order.remote_order_id
+            )
+
+        sale_id = sale_data["id"]
+        result = self._call(
+            model="sale.order",
+            method="write",
+            query_data=[[sale_id], {"x_remote_delivery_instructions": order.delivery_instructions}],
+        )
+        if not bool(result):
+            raise SaleError(
+                f"Failed to update delivery instructions for sale {sale_id}", order.remote_order_id
+            )
+
+        logger.info(
+            "Delivery instructions updated for sale ID %d (order %s)",
+            sale_id,
+            order.remote_order_id,
+        )
+
     def get_completed_sales(self, order_provider: str) -> list[tuple[int, str]]:
         """Get list of completed sales for a provider that need shipping notification.
 
@@ -543,18 +583,19 @@ class OdooSaleService:
                 [
                     ["delivery_status", "=", "full"],
                     ["state", "=", "sale"],
-                    ["x_remote_source", "=", order_provider],
-                    ["x_remote_desadv_created", "=", False],
+                    ["x_remote_order_provider", "=", order_provider],
+                    ["x_remote_notified_completion", "=", False],
                 ]
             ],
-            query_options={"fields": ["id", "x_remote_id"]},
+            query_options={"fields": ["id", "x_remote_order_id"]},
         )
 
         if not (
             result
             and isinstance(result, list)
             and all(
-                isinstance(item, dict) and "id" in item and "x_remote_id" in item for item in result
+                isinstance(item, dict) and "id" in item and "x_remote_order_id" in item
+                for item in result
             )
         ):
             logger.info("No completed sales found for order provider %s", order_provider)
@@ -566,7 +607,7 @@ class OdooSaleService:
             order_provider,
             json.dumps(result),
         )
-        return [(item["id"], item["x_remote_id"]) for item in result]
+        return [(item["id"], item["x_remote_order_id"]) for item in result]
 
     def get_shipping_info(self, order: Order) -> list[dict[str, Any]]:
         """Get shipping/delivery information from Odoo for the given order.
