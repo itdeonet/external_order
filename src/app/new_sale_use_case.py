@@ -85,8 +85,9 @@ class NewSaleUseCase:
                         # no sale for this order, create it
                         self.sale_service.create_sale(order)
                     elif self.sale_service.has_expected_order_lines(order):
-                        # sale already exists and has expected order lines, update contact info
+                        # sale already exists and has expected order lines, update info
                         self.sale_service.update_contact(order)
+                        self.sale_service.update_delivery_instructions(order)
                     else:
                         # sale already exists but order lines do not match
                         raise SaleError("Sale order lines do not match", order.remote_order_id)
