@@ -112,6 +112,7 @@ class TestSpectrumArtworkServiceGetArtwork:
             pricelist_id=50,
             remote_order_id="HA-EM-12345",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=[line_item],
         )
@@ -366,6 +367,7 @@ class TestSpectrumArtworkServiceGetArtwork:
             remote_order_id="HA-EM-55555",
             shipment_type="standard",
             ship_to=ship_to,
+            description="Test order",
             line_items=[line_item],
         )
         order.set_sale_id(55555)
@@ -520,6 +522,7 @@ class TestSpectrumArtworkServiceGetArtwork:
             pricelist_id=50,
             remote_order_id="HA-EM-99999",
             shipment_type="standard",
+            description="Test order",
             ship_to=ship_to,
             line_items=[line_item1, line_item2],
         )
