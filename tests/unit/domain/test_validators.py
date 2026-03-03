@@ -287,3 +287,138 @@ class TestValidateNonNegativeInt:
         """Test that floats are rejected."""
         with pytest.raises(ValueError, match="count must be a non-negative integer"):
             validators.validate_non_negative_int(0.5, "count")
+
+
+class TestValidateListOfInstances:
+    """Tests for validate_list_of_instances."""
+
+    def test_accepts_valid_list_of_instances(self):
+        """Test that valid list of instances is accepted."""
+        test_list = [1, 2, 3, 4, 5]
+        validators.validate_list_of_instances(test_list, int, "numbers")  # Should not raise
+
+    def test_accepts_empty_list_when_allow_empty_true(self):
+        """Test that empty list is accepted when allow_empty=True."""
+        validators.validate_list_of_instances(
+            [], int, "numbers", allow_empty=True
+        )  # Should not raise
+
+    def test_raises_on_empty_list_by_default(self):
+        """Test that empty list raises ValueError by default."""
+        with pytest.raises(ValueError, match="numbers cannot be empty"):
+            validators.validate_list_of_instances([], int, "numbers")
+
+    def test_raises_on_non_list(self):
+        """Test that non-list raises ValueError."""
+        with pytest.raises(ValueError, match="numbers must be a list"):
+            validators.validate_list_of_instances(123, int, "numbers")
+
+    def test_raises_on_string(self):
+        """Test that string (which is technically iterable) raises ValueError."""
+        with pytest.raises(ValueError, match="numbers must be a list"):
+            validators.validate_list_of_instances("123", int, "numbers")
+
+    def test_raises_on_none(self):
+        """Test that None raises ValueError."""
+        with pytest.raises(ValueError, match="numbers must be a list"):
+            validators.validate_list_of_instances(None, int, "numbers")
+
+    def test_raises_on_wrong_item_type(self):
+        """Test that list with wrong item types raises ValueError."""
+        with pytest.raises(ValueError, match="numbers must contain only instances of int"):
+            validators.validate_list_of_instances([1, 2, "three", 4], int, "numbers")
+
+    def test_raises_on_all_wrong_types(self):
+        """Test that list with all wrong types raises ValueError."""
+        with pytest.raises(ValueError, match="items must contain only instances of str"):
+            validators.validate_list_of_instances([1, 2, 3], str, "items")
+
+    def test_accepts_list_of_strings(self):
+        """Test that list of strings is accepted."""
+        test_list = ["apple", "banana", "cherry"]
+        validators.validate_list_of_instances(test_list, str, "fruits")  # Should not raise
+
+    def test_single_item_list_valid(self):
+        """Test that single item list is valid."""
+        validators.validate_list_of_instances([42], int, "numbers")  # Should not raise
+
+
+class TestSetNormalizedString:
+    """Tests for set_normalized_string."""
+
+    def test_sets_stripped_string_with_no_transform(self):
+        """Test that string is stripped with no transform."""
+
+        class MockObj:
+            field = "original"
+
+        obj = MockObj()
+        validators.set_normalized_string(obj, "field", "  hello  ", "none")
+
+        assert obj.field == "hello"
+
+    def test_sets_uppercase_with_upper_transform(self):
+        """Test that string is uppercased with upper transform."""
+
+        class MockObj:
+            field = "original"
+
+        obj = MockObj()
+        validators.set_normalized_string(obj, "field", "  hello  ", "upper")
+
+        assert obj.field == "HELLO"
+
+    def test_sets_lowercase_with_lower_transform(self):
+        """Test that string is lowercased with lower transform."""
+
+        class MockObj:
+            field = "original"
+
+        obj = MockObj()
+        validators.set_normalized_string(obj, "field", "  HELLO  ", "lower")
+
+        assert obj.field == "hello"
+
+    def test_default_transform_is_none(self):
+        """Test that default transform is 'none'."""
+
+        class MockObj:
+            field = "original"
+
+        obj = MockObj()
+        validators.set_normalized_string(obj, "field", "  MiXeD  ")
+
+        assert obj.field == "MiXeD"
+
+    def test_strips_whitespace_with_mixed_case(self):
+        """Test that whitespace is stripped with mixed case."""
+
+        class MockObj:
+            field = "original"
+
+        obj = MockObj()
+        validators.set_normalized_string(obj, "field", "   MiXeD CaSe   ", "none")
+
+        assert obj.field == "MiXeD CaSe"
+
+    def test_preserves_internal_whitespace(self):
+        """Test that internal whitespace is preserved."""
+
+        class MockObj:
+            field = "original"
+
+        obj = MockObj()
+        validators.set_normalized_string(obj, "field", "  hello world  ", "upper")
+
+        assert obj.field == "HELLO WORLD"
+
+    def test_handles_empty_after_strip(self):
+        """Test that empty string after strip is handled."""
+
+        class MockObj:
+            field = "original"
+
+        obj = MockObj()
+        validators.set_normalized_string(obj, "field", "   ", "none")
+
+        assert obj.field == ""
