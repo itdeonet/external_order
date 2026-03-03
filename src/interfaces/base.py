@@ -445,6 +445,20 @@ class ISaleService(Protocol):
         """
         ...
 
+    def update_delivery_instructions(self, order: "Order") -> None:
+        """Update the delivery instructions for the given order.
+
+        Updates delivery instructions in the sale to match the latest information
+        in the order.
+
+        Args:
+            order: The Order whose delivery instructions should be updated
+
+        Raises:
+            May raise implementation-specific exceptions (API errors, etc.)
+        """
+        ...
+
     def get_completed_sales(self, order_provider: str) -> list[tuple[int, str]]:
         """Get a list of completed sales.
 
