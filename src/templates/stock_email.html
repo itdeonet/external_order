@@ -44,29 +44,15 @@
       <div style="padding: 30px; background-color: #ffffff">
         <!-- Introduction -->
         <p style="margin: 0 0 15px 0; font-size: 14px">
-          <strong>{{ supplier_name | default('Harman JBL') }}</strong> has sent
-          an upcoming stock transfer. The attached file contains the expected
-          products and quantities for this shipment.
+          <strong>{{ supplier_name }}</strong> has sent an upcoming stock
+          transfer. The attached file contains the expected products and
+          quantities for this shipment.
         </p>
-
-        {% if expected_delivery_date %}
-        <div
-          style="
-            background-color: #e8f4f8;
-            border-left: 4px solid #0088cc;
-            padding: 12px;
-            margin: 15px 0;
-            font-size: 14px;
-          "
-        >
-          <strong>📦 Expected Delivery:</strong> {{ expected_delivery_date }}
-        </div>
-        {% endif %}
 
         <p style="margin: 15px 0; font-size: 14px">
           After receiving and processing the shipment through your normal
           procedures, please follow these steps to send a response back to {{
-          supplier_name | default('Harman JBL') }}:
+          supplier_name }}:
         </p>
 
         <!-- Instructions -->
@@ -167,7 +153,7 @@
           <li style="margin-bottom: 10px">
             <strong>Upload the file:</strong> Upload the updated file to
             <a
-              href="{{ upload_link | default('https://drive.google.com/drive/u/0/folders/1-jWQEY9jrjKxDWNYNYsYqMqonQtZb3cD') }}"
+              href="{{ upload_link }}"
               style="color: #0088cc; text-decoration: none; font-weight: bold"
               >the designated upload location</a
             >
@@ -189,7 +175,7 @@
           "
         >
           <strong>✓ After upload:</strong> The response will be sent to {{
-          supplier_name | default('Harman JBL') }} EDI automatically.
+          supplier_name }} EDI automatically.
         </p>
 
         <!-- Troubleshooting -->
@@ -220,8 +206,7 @@
               UTF-8)
             </li>
             <li>
-              Contact {{ support_email | default('support@company.com') }} if
-              you need technical assistance
+              Contact {{ support_email }} if you need technical assistance
             </li>
           </ul>
         </div>
@@ -239,8 +224,7 @@
         "
       >
         <p style="margin: 0 0 8px 0">
-          <strong>{{ company_name | default('Deonet') }}</strong> | Stock
-          Transfer System
+          <strong>{{ company_name }}</strong> | Stock Transfer System
         </p>
         <p style="margin: 0">
           This is an automated message. Please do not reply to this email.
