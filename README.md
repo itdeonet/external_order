@@ -213,6 +213,8 @@ StockTransferUseCase.execute():
 
 - **Python 3.12+** (check with `python --version`)
 - **uv** package manager ([install from](https://docs.astral.sh/uv/))
+- **sale.order required fields**: x_remote_delivery_instructions (char), x_remote_notified_completion (bool), x_remote_order_id (char), x_remote_order_provider (char)
+- **sale.order sql update**: "update sale_order set x_remote_order_provider = 'HARMAN JBL' where x_remote_order_provider = 'Harman INSDES'"
 
 ### Installation Steps
 
@@ -275,7 +277,7 @@ class Config:
     harman_administration_id: int = 2
     harman_customer_id: int = 5380
     harman_pricelist_id: int = 2
-    harman_order_provider: str = "Harman INSDES"
+    harman_order_provider: str = "HARMAN JBL"
     harman_shipment_type: str = "harman%"
     harman_workdays_for_delivery: int = 2
     
@@ -302,7 +304,7 @@ WORK_DIR=/path/to/work/directory
 HARMAN_ADMINISTRATION_ID=2
 HARMAN_CUSTOMER_ID=5380
 HARMAN_PRICELIST_ID=2
-HARMAN_ORDER_PROVIDER="Harman INSDES"
+HARMAN_ORDER_PROVIDER="HARMAN JBL"
 HARMAN_SHIPMENT_TYPE="harman%"
 HARMAN_WORKDAYS_FOR_DELIVERY=2
 

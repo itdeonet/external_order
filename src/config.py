@@ -120,7 +120,7 @@ class Config:
     harman_administration_id: int = 2
     harman_customer_id: int = 5380
     harman_pricelist_id: int = 2
-    harman_order_provider: str = "Harman INSDES"
+    harman_order_provider: str = "HARMAN JBL"
     harman_shipment_type: str = "harman%"
     harman_stock_supplier_name: str = "Harman JBL"
     harman_stock_upload_link: str = (

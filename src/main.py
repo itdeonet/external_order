@@ -138,10 +138,14 @@ def main() -> None:
 
     artwork_services: IRegistry[IArtworkService] = Registry[IArtworkService]()
     order_services: IRegistry[IOrderService] = Registry[IOrderService]()
-    order_services.register("Harman", HarmanOrderService.from_config(config=config))
+    order_services.register(
+        config.harman_order_provider, HarmanOrderService.from_config(config=config)
+    )
     RenderService(directory=config.templates_dir)
     stock_services: IRegistry[IStockService] = Registry[IStockService]()
-    stock_services.register("Harman", HarmanStockService.from_config(config=config))
+    stock_services.register(
+        config.harman_stock_supplier_name, HarmanStockService.from_config(config=config)
+    )
     use_cases: IRegistry[IUseCase] = Registry[IUseCase]()  # type: ignore[type-arg]
 
     timeout = httpx.Timeout(connect=10.0, read=120.0, write=30.0)
