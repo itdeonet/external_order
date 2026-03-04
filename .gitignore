@@ -13,6 +13,10 @@ wheels/
 # Virtual environments
 .venv
 
+# env files
+.env
+.env.*
+
 # IDE and editor files
 .vscode/
 .idea/
