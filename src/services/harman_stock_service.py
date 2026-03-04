@@ -239,13 +239,13 @@ class HarmanStockService:
         emailer.send(
             subject=f"Harman Stock Transfer Reply for Delivery {transfer_data.get('delivery_number')}",
             sender=config.email_sender,
-            receivers=[config.email_alert_recipient],
+            receivers=config.email_stock_to,
             html_template="stock_email.html",
             body_params={
                 "stock_transfer": transfer_data,
                 "supplier_name": config.harman_stock_supplier_name,
                 "upload_link": config.harman_stock_upload_link,
-                "support_email": config.email_alert_recipient,
+                "support_email": config.email_alert_to,
                 "company_name": config.sale_company_name,
             },
             attachments={reply_path.name: reply_path.read_bytes()},

@@ -204,7 +204,7 @@ def main() -> None:
             emailer.send(
                 subject=f"Deonet External Order - Errors during execution on {socket.gethostname()}",
                 sender=config.email_sender,
-                receivers=[config.email_alert_recipient],
+                receivers=config.email_alert_to,
                 html_template="error_alert.html",
                 body_params=error_store.get_render_email_data(),
             )

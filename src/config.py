@@ -61,7 +61,8 @@ class Config:
     - smtp_host: Gmail SMTP relay host for email delivery
     - smtp_port: SMTP server port (TLS)
     - email_sender: From address with hostname context
-    - email_alert_recipient: Alert notification recipient
+    - email_alert_to: Alert notification recipient
+    - email_stock_to: Stock transfer notification recipient
 
     Harman ERP Settings:
     - harman_input_dir: EDI order file input directory
@@ -102,17 +103,22 @@ class Config:
 
     # Application settings
     templates_dir: Path = Path(__file__).parent / "templates"
-    work_dir: Path = Path.home() / "projects_data" / "external_order"
+    work_dir: Path = Path(os.getenv("WORK_DIR", Path.home() / "projects_data" / "external_order"))
     digitals_dir: Path = field(init=False)
     open_orders_dir: Path = field(init=False)
     default_box_size: tuple[int, int, int] = (24, 21, 6)  # L, W, H in cm
     sale_company_name: str = "Deonet Production B.V."
 
     # Email settings
-    smtp_host: str = "smtp-relay.gmail.com"
-    smtp_port: int = 587
-    email_sender: str = f"Deonet External Order on {socket.gethostname()}<no-reply@deonet.com>"
-    email_alert_recipient: str = "Deonet IT Team<it@deonet.com>"
+    smtp_host: str = os.getenv("SMTP_HOST", "smtp-relay.gmail.com")
+    smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
+    email_sender: str = f"External Order on {socket.gethostname()}<{os.getenv('EMAIL_SENDER', '')}>"
+    email_alert_to: list[str] = field(
+        default_factory=lambda: [s.strip() for s in os.getenv("EMAIL_ALERT_TO", "").split(",")]
+    )
+    email_stock_to: list[str] = field(
+        default_factory=lambda: [s.strip() for s in os.getenv("EMAIL_STOCK_TO", "").split(",")]
+    )
 
     # Harman settings
     harman_input_dir: Path = field(init=False)
