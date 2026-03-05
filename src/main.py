@@ -48,6 +48,7 @@ from redmail.email.sender import EmailSender
 
 from src.app.completed_sale_use_case import CompletedSaleUseCase
 from src.app.errors import ErrorStore
+from src.app.log_setup import configure_logging
 from src.app.new_sale_use_case import NewSaleUseCase
 from src.app.odoo_auth import OdooAuth
 from src.app.registry import Registry
@@ -135,6 +136,11 @@ def main() -> None:
     # make sure directories exist
     config: Config = get_config()
     error_store = ErrorStore()
+    configure_logging(
+        log_file=config.log_file,
+        backup_count=config.log_backup_count,
+        log_file_level=config.log_file_level,
+    )
 
     artwork_services: IRegistry[IArtworkService] = Registry[IArtworkService]()
     order_services: IRegistry[IOrderService] = Registry[IOrderService]()

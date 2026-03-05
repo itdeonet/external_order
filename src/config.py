@@ -134,6 +134,11 @@ class Config:
     )
     harman_workdays_for_delivery: int = 2
 
+    # Log settings
+    log_file: Path = field(init=False, default=Path("external_order.log"))
+    log_backup_count: int = 14
+    log_file_level: str = "DEBUG"
+
     # Odoo settings
     odoo_base_url: str = os.getenv("ODOO_BASE_URL", "")
     odoo_database: str = os.getenv("ODOO_DATABASE", "")
@@ -180,11 +185,13 @@ class Config:
         object.__setattr__(self, "harman_output_dir", self.work_dir / "harman" / "out")
         object.__setattr__(self, "digitals_dir", self.work_dir / "digitals")
         object.__setattr__(self, "open_orders_dir", self.work_dir / "open_orders")
+        object.__setattr__(self, "log_file", self.work_dir / "logs" / self.log_file.name)
 
         self.harman_input_dir.mkdir(parents=True, exist_ok=True)
         self.harman_output_dir.mkdir(parents=True, exist_ok=True)
         self.digitals_dir.mkdir(parents=True, exist_ok=True)
         self.open_orders_dir.mkdir(parents=True, exist_ok=True)
+        self.log_file.parent.mkdir(parents=True, exist_ok=True)
 
 
 @cache
