@@ -220,6 +220,7 @@ class OdooSaleService:
             else 0
         )
         return {
+            "active": ship_to.active,
             "company_id": int(order.administration_id),
             "parent_id": int(order.customer_id),
             "ref": ship_to.remote_customer_id,
