@@ -22,8 +22,10 @@ import json
 import random
 import re
 import string
+import uuid
 from collections.abc import Generator
 from dataclasses import asdict, dataclass
+from enum import Enum
 from logging import getLogger
 from pathlib import Path
 from typing import Any, Self
@@ -218,15 +220,15 @@ class HarmanOrderService:
                 order_data["ship_to"]["state"] = state
                 order_data["ship_to"]["postal_code"] = postcode
                 order_data["ship_to"]["country_code"] = country
-            case ["RFF", "DQ", delivery_note_id]:
+            case ["RFF", ["DQ", delivery_note_id]]:
                 order_data["delivery_note_id"] = delivery_note_id
-            case ["RFF", "ON", remote_order_id]:
+            case ["RFF", ["ON", remote_order_id]]:
                 order_data["remote_order_id"] = remote_order_id
             case ["LIN", line_id, "1", [product_code, "MF"]]:
                 order_data["line_items"].append(
                     {"remote_line_id": line_id, "product_code": product_code}
                 )
-            case ["QTY", "113", quantity, unit_of_measure]:
+            case ["QTY", ["113", quantity, unit_of_measure]]:
                 assert order_data["line_items"], "QTY segment must be preceded by a LIN segment."
                 order_data["line_items"][-1]["quantity"] = quantity
                 order_data["line_items"][-1]["unit_of_measure"] = unit_of_measure
@@ -357,6 +359,12 @@ class HarmanOrderService:
         def custom_serializer(obj):
             if isinstance(obj, dt.datetime):
                 return obj.isoformat()
+            if isinstance(obj, dt.date):
+                return obj.isoformat()
+            if isinstance(obj, uuid.UUID):
+                return str(obj)
+            if isinstance(obj, Enum):
+                return obj.value
             raise TypeError(f"Type {type(obj)} not serializable")
 
         order.set_status(status)
@@ -369,7 +377,7 @@ class HarmanOrderService:
             if file.suffix.lower() != ".json":
                 file.rename(file.parent / f"{order.remote_order_id}.{order.status.value}".upper())
 
-    def load_order(self, remote_order_id: str) -> Order | None:
+    def load_order(self, remote_order_id: str) -> Order:
         """Load a previously persisted order by its remote ID.
 
         Retrieves an order from the JSON persistence file if it exists.
@@ -378,15 +386,13 @@ class HarmanOrderService:
             remote_order_id: External order ID to load
 
         Returns:
-            The Order instance if found, None if no JSON file exists
+            The Order instance if found
 
         Raises:
-            May raise exceptions if JSON parsing fails
+            May raise exceptions if JSON parsing fails or file cannot be read
         """
         logger.info("Load order by remote ID: %s", remote_order_id)
         file_path = self.input_dir / f"{remote_order_id}.json"
-        if not file_path.exists():
-            return None
         text = file_path.read_text(encoding="utf-8")
         data = json.loads(text)
         return Order(**data)
