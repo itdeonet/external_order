@@ -14,6 +14,8 @@ from threading import Lock
 from traceback import TracebackException
 from typing import Any, ClassVar, Self
 
+from src.config import get_config
+
 
 @dataclass(frozen=True, slots=True)
 class ErrorStore:
@@ -88,6 +90,7 @@ class ErrorStore:
             "error_count": len(self._errors),
             "errors": self.all(),
             "timestamp": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "company_name": get_config().sale_company_name,
         }
 
     def has_errors(self) -> bool:
