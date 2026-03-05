@@ -141,6 +141,7 @@ def main() -> None:
         backup_count=config.log_backup_count,
         log_file_level=config.log_file_level,
     )
+    logger.info("Application started")
 
     artwork_services: IRegistry[IArtworkService] = Registry[IArtworkService]()
     order_services: IRegistry[IOrderService] = Registry[IOrderService]()
@@ -154,16 +155,17 @@ def main() -> None:
     )
     use_cases: IRegistry[IUseCase] = Registry[IUseCase]()  # type: ignore[type-arg]
 
-    timeout = httpx.Timeout(connect=10.0, read=120.0, write=30.0)
+    timeout = httpx.Timeout(10.0, read=120.0, write=30.0)
 
-    def create_client(url: str) -> httpx.Client:
-        return httpx.Client(base_url=url, follow_redirects=True, timeout=timeout)
+    def create_client(url: str, **kwargs) -> httpx.Client:
+        return httpx.Client(base_url=url, follow_redirects=True, timeout=timeout, **kwargs)
 
     with (
-        create_client(config.odoo_base_url) as sale_engine,
-        create_client(config.spectrum_base_url) as spectrum_engine,
+        create_client(config.odoo_base_url, verify=config.ssl_verify) as sale_engine,
+        create_client(
+            config.spectrum_base_url, headers={"SPECTRUM_API_TOKEN": config.spectrum_api_key}
+        ) as spectrum_engine,
     ):
-        spectrum_engine.headers["SPECTRUM_API_TOKEN"] = config.spectrum_api_key
         artwork_services.register(
             "Spectrum",
             SpectrumArtworkService(engine=spectrum_engine, digitals_dir=config.digitals_dir),
@@ -207,17 +209,22 @@ def main() -> None:
         logger.info("Errors were collected during execution, sending alert email...")
         try:
             emailer = EmailSender(host=config.smtp_host, port=config.smtp_port, use_starttls=True)
+            emailer.set_template_paths(config.templates_dir)
             emailer.send(
                 subject=f"Deonet External Order - Errors during execution on {socket.gethostname()}",
                 sender=config.email_sender,
                 receivers=config.email_alert_to,
-                html_template="error_alert.html",
+                html_template=config.email_alert_template.name,
                 body_params=error_store.get_render_email_data(),
             )
 
             logger.info("Error alert email sent successfully.")
         except Exception as exc:
             logger.error(f"Failed to send error alert email: {exc!s}")
+
+    logger.info("Application finished")
+    with config.log_file.open("a", encoding="utf-8") as log_file:
+        log_file.write(f"\n{'=' * 80}\n")  # add spacing in log file for next run
 
 
 if __name__ == "__main__":
