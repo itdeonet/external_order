@@ -284,8 +284,8 @@ class Config:
     # Odoo settings
     odoo_base_url: str                           # from env ODOO_BASE_URL
     odoo_database: str                           # from env ODOO_DATABASE
-    odoo_rpc_user_id: int                        # from env ODOO_USER_ID
-    odoo_rpc_password: str                       # from env ODOO_PASSWORD
+    odoo_rpc_user_id: int                        # from env ODOO_RPC_USER_ID
+    odoo_rpc_password: str                       # from env ODOO_RPC_PASSWORD
     
     # Spectrum settings
     spectrum_base_url: str                       # from env SPECTRUM_BASE_URL
@@ -300,6 +300,9 @@ Create a `.env` file with the following variables:
 # Working Directory (optional, defaults to ~/projects_data/external_order)
 WORK_DIR=/path/to/work/directory
 
+# SSL Verification (optional, defaults to true for production)
+SSL_VERIFY=true
+
 # Email/SMTP Settings (optional, for notifications and alerts)
 SMTP_HOST=smtp-relay.gmail.com
 SMTP_PORT=587
@@ -307,19 +310,11 @@ EMAIL_SENDER=your_email@company.com
 EMAIL_ALERT_TO=alert@company.com
 EMAIL_STOCK_TO=stock@company.com
 
-# Harman ERP Settings (optional, defaults shown)
-HARMAN_ADMINISTRATION_ID=2
-HARMAN_CUSTOMER_ID=5380
-HARMAN_PRICELIST_ID=2
-HARMAN_ORDER_PROVIDER=HARMAN JBL
-HARMAN_SHIPMENT_TYPE=harman%
-HARMAN_WORKDAYS_FOR_DELIVERY=2
-
 # Odoo ERP (required for sales operations)
 ODOO_BASE_URL=https://odoo.company.com
 ODOO_DATABASE=production_db
-ODOO_USER_ID=2
-ODOO_PASSWORD=your_odoo_token_here
+ODOO_RPC_USER_ID=2
+ODOO_RPC_PASSWORD=your_odoo_token_here
 
 # Spectrum Artwork Service (required for artwork retrieval)
 SPECTRUM_BASE_URL=https://staging.spectrumcustomizer.com/
@@ -331,6 +326,7 @@ SPECTRUM_API_KEY=your_spectrum_token_here
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `WORK_DIR` | No | `~/projects_data/external_order` | Base directory for working files, logs, and order tracking |
+| `SSL_VERIFY` | No | `true` | Enable/disable SSL certificate verification for HTTPS requests |
 | `SMTP_HOST` | No | `smtp-relay.gmail.com` | SMTP server host for email notifications |
 | `SMTP_PORT` | No | `587` | SMTP server port (TLS) |
 | `EMAIL_SENDER` | No | Empty | Sender email address for notifications |
@@ -338,8 +334,8 @@ SPECTRUM_API_KEY=your_spectrum_token_here
 | `EMAIL_STOCK_TO` | No | Empty | Comma-separated email addresses for stock transfer notifications |
 | `ODOO_BASE_URL` | Yes | Empty | Base URL for Odoo JSON-RPC API |
 | `ODOO_DATABASE` | Yes | Empty | Odoo database/instance name |
-| `ODOO_USER_ID` | Yes | `0` | Numeric user ID for Odoo API authentication |
-| `ODOO_PASSWORD` | Yes | Empty | Odoo user password for API authentication |
+| `ODOO_RPC_USER_ID` | Yes | `0` | Numeric user ID for Odoo JSON-RPC API authentication |
+| `ODOO_RPC_PASSWORD` | Yes | Empty | Odoo user password for JSON-RPC API authentication |
 | `SPECTRUM_BASE_URL` | Yes | Empty | Base URL for Spectrum artwork API |
 | `SPECTRUM_API_KEY` | Yes | Empty | API key for Spectrum authentication |
 

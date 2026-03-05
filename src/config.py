@@ -15,8 +15,8 @@ the same Config instance across the application, eliminating redundant instantia
 Environment Variables Required:
 - ODOO_BASE_URL: Base URL for Odoo JSON-RPC API
 - ODOO_DATABASE: Odoo database name
-- ODOO_USER_ID: Numeric user ID for Odoo authentication
-- ODOO_PASSWORD: Odoo user password for authentication
+- ODOO_RPC_USER_ID: Numeric user ID for Odoo JSON-RPC API authentication
+- ODOO_RPC_PASSWORD: Odoo user password for JSON-RPC API authentication
 - SPECTRUM_BASE_URL: Base URL for Spectrum artwork API
 - SPECTRUM_API_KEY: API key for Spectrum authentication
 
@@ -108,6 +108,7 @@ class Config:
     open_orders_dir: Path = field(init=False)
     default_box_size: tuple[int, int, int] = (24, 21, 6)  # L, W, H in cm
     sale_company_name: str = "Deonet Production B.V."
+    ssl_verify: bool = os.getenv("SSL_VERIFY", "true").lower() == "true"
 
     # Email settings
     smtp_host: str = os.getenv("SMTP_HOST", "smtp-relay.gmail.com")
@@ -119,6 +120,8 @@ class Config:
     email_stock_to: list[str] = field(
         default_factory=lambda: [s.strip() for s in os.getenv("EMAIL_STOCK_TO", "").split(",")]
     )
+    email_alert_template: Path = Path(__file__).parent / "templates" / "error_alert.html"
+    email_stock_template: Path = Path(__file__).parent / "templates" / "stock_email.html"
 
     # Harman settings
     harman_input_dir: Path = field(init=False)
@@ -142,8 +145,8 @@ class Config:
     # Odoo settings
     odoo_base_url: str = os.getenv("ODOO_BASE_URL", "")
     odoo_database: str = os.getenv("ODOO_DATABASE", "")
-    odoo_rpc_user_id: int = int(os.getenv("ODOO_USER_ID", "0"))
-    odoo_rpc_password: str = os.getenv("ODOO_PASSWORD", "")
+    odoo_rpc_user_id: int = int(os.getenv("ODOO_RPC_USER_ID", "0"))
+    odoo_rpc_password: str = os.getenv("ODOO_RPC_PASSWORD", "")
 
     # Spectrum settings
     spectrum_base_url: str = os.getenv("SPECTRUM_BASE_URL", "")
