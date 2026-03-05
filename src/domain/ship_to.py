@@ -69,6 +69,7 @@ class ShipTo:
     """
 
     id: uuid.UUID = field(default_factory=uuid.uuid4, init=False)
+    active: bool = field(default=False, init=False)  # archived, not loaded in client portal
     remote_customer_id: str
     company_name: str = ""
     contact_name: str
