@@ -294,30 +294,54 @@ class Config:
 
 ### Environment Variables
 
-Create a `.env` file:
+Create a `.env` file with the following variables:
 
 ```bash
-# Directories (optional, defaults shown above)
+# Working Directory (optional, defaults to ~/projects_data/external_order)
 WORK_DIR=/path/to/work/directory
 
-# Harman settings (optional, defaults shown above)
+# Email/SMTP Settings (optional, for notifications and alerts)
+SMTP_HOST=smtp-relay.gmail.com
+SMTP_PORT=587
+EMAIL_SENDER=your_email@company.com
+EMAIL_ALERT_TO=alert@company.com
+EMAIL_STOCK_TO=stock@company.com
+
+# Harman ERP Settings (optional, defaults shown)
 HARMAN_ADMINISTRATION_ID=2
 HARMAN_CUSTOMER_ID=5380
 HARMAN_PRICELIST_ID=2
-HARMAN_ORDER_PROVIDER="HARMAN JBL"
-HARMAN_SHIPMENT_TYPE="harman%"
+HARMAN_ORDER_PROVIDER=HARMAN JBL
+HARMAN_SHIPMENT_TYPE=harman%
 HARMAN_WORKDAYS_FOR_DELIVERY=2
 
-# Odoo ERP (required)
+# Odoo ERP (required for sales operations)
 ODOO_BASE_URL=https://odoo.company.com
 ODOO_DATABASE=production_db
 ODOO_USER_ID=2
-ODOO_PASSWORD=your_password_here
+ODOO_PASSWORD=your_odoo_token_here
 
-# Spectrum Artwork Service (required)
-SPECTRUM_BASE_URL=https://spectrum-api.company.com
-SPECTRUM_API_KEY=your_api_key_here
+# Spectrum Artwork Service (required for artwork retrieval)
+SPECTRUM_BASE_URL=https://staging.spectrumcustomizer.com/
+SPECTRUM_API_KEY=your_spectrum_token_here
 ```
+
+**Environment Variable Reference:**
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `WORK_DIR` | No | `~/projects_data/external_order` | Base directory for working files, logs, and order tracking |
+| `SMTP_HOST` | No | `smtp-relay.gmail.com` | SMTP server host for email notifications |
+| `SMTP_PORT` | No | `587` | SMTP server port (TLS) |
+| `EMAIL_SENDER` | No | Empty | Sender email address for notifications |
+| `EMAIL_ALERT_TO` | No | Empty | Comma-separated email addresses for alerts |
+| `EMAIL_STOCK_TO` | No | Empty | Comma-separated email addresses for stock transfer notifications |
+| `ODOO_BASE_URL` | Yes | Empty | Base URL for Odoo JSON-RPC API |
+| `ODOO_DATABASE` | Yes | Empty | Odoo database/instance name |
+| `ODOO_USER_ID` | Yes | `0` | Numeric user ID for Odoo API authentication |
+| `ODOO_PASSWORD` | Yes | Empty | Odoo user password for API authentication |
+| `SPECTRUM_BASE_URL` | Yes | Empty | Base URL for Spectrum artwork API |
+| `SPECTRUM_API_KEY` | Yes | Empty | API key for Spectrum authentication |
 
 ### Using Configuration
 
