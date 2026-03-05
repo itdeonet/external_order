@@ -236,11 +236,12 @@ class HarmanStockService:
         # email the reply file to the configured recipient
         config = get_config()
         emailer = EmailSender(host=config.smtp_host, port=config.smtp_port, use_starttls=True)
+        emailer.set_template_paths(config.templates_dir)
         emailer.send(
             subject=f"Harman Stock Transfer Reply for Delivery {transfer_data.get('delivery_number')}",
             sender=config.email_sender,
             receivers=config.email_stock_to,
-            html_template="stock_email.html",
+            html_template=config.email_stock_template.name,
             body_params={
                 "stock_transfer": transfer_data,
                 "supplier_name": config.harman_stock_supplier_name,
