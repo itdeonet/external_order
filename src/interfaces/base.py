@@ -240,8 +240,8 @@ class IOrderStore(Protocol):
         """
         ...
 
-    def load_order(self, remote_order_id: str) -> "Order | None":
-        """Load an order by its remote ID, or None if not found.
+    def load_order(self, remote_order_id: str) -> "Order":
+        """Load an order by its remote ID.
 
         Retrieves a previously persisted order from storage by its external ID.
 
@@ -249,7 +249,7 @@ class IOrderStore(Protocol):
             remote_order_id: The external order ID from the provider system
 
         Returns:
-            The Order instance if found, None otherwise
+            The Order instance if found
 
         Raises:
             May raise implementation-specific exceptions (database errors,
