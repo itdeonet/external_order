@@ -192,7 +192,7 @@ class TestReadOrderData:
         """Test extracting delivery note ID from RFF segment."""
         segment = mocker.Mock(spec=Segment)
         segment.tag = "RFF"
-        segment.elements = ["DQ", "DELIV-123"]
+        segment.elements = [["DQ", "DELIV-123"]]
 
         order_data = {"ship_to": {}, "line_items": []}
         service._get_segment_data(segment, order_data)
@@ -203,7 +203,7 @@ class TestReadOrderData:
         """Test extracting remote order ID from RFF segment."""
         segment = mocker.Mock(spec=Segment)
         segment.tag = "RFF"
-        segment.elements = ["ON", "ORD-12345"]
+        segment.elements = [["ON", "ORD-12345"]]
 
         order_data = {"ship_to": {}, "line_items": []}
         service._get_segment_data(segment, order_data)
@@ -231,7 +231,7 @@ class TestReadOrderData:
 
         segment_qty = mocker.Mock(spec=Segment)
         segment_qty.tag = "QTY"
-        segment_qty.elements = ["113", "100", "PCE"]
+        segment_qty.elements = [["113", "100", "PCE"]]
 
         order_data = {"ship_to": {}, "line_items": []}
         service._get_segment_data(segment_lin, order_data)
@@ -244,7 +244,7 @@ class TestReadOrderData:
         """Test that QTY segment without preceding LIN segment raises AssertionError."""
         segment = mocker.Mock(spec=Segment)
         segment.tag = "QTY"
-        segment.elements = ["113", "100", "PCE"]
+        segment.elements = [["113", "100", "PCE"]]
 
         order_data = {"ship_to": {}, "line_items": []}
 
@@ -1049,11 +1049,10 @@ class TestLoadOrder:
 
             assert result is mock_order
 
-    def test_load_order_returns_none_when_file_not_found(self, service):
-        """Test that load_order returns None when JSON file doesn't exist."""
-        result = service.load_order("NONEXISTENT")
-
-        assert result is None
+    def test_load_order_raises_error_when_file_not_found(self, service):
+        """Test that load_order raises an error when JSON file doesn't exist."""
+        with pytest.raises(FileNotFoundError):
+            service.load_order("NONEXISTENT")
 
     def test_load_order_reads_json_file(self, service):
         """Test that load_order correctly reads JSON file."""
