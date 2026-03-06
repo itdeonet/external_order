@@ -4,8 +4,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock
 
-import httpx
 import pytest
+import requests
 
 from src.app.errors import ErrorStore
 from src.app.odoo_auth import OdooAuth
@@ -31,10 +31,9 @@ def odoo_auth():
 
 
 @pytest.fixture
-def odoo_client(httpx_mock):
-    """Provide an httpx.Client for Odoo with pytest_httpx mocking."""
-    with httpx.Client(base_url="http://localhost:8069") as client:
-        yield client
+def odoo_client():
+    """Provide a requests.Session for Odoo."""
+    return requests.Session()
 
 
 @pytest.fixture
@@ -77,7 +76,7 @@ def sample_ship_to():
 def sample_line_item():
     """Provide a sample LineItem instance."""
     return LineItem(
-        remote_line_id="LI123",
+        line_id="LI123",
         product_code="PROD001",
         quantity=100,
     )

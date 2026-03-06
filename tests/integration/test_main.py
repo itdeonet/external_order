@@ -92,12 +92,6 @@ class TestMainApplicationSetup:
 
             from src.main import main
 
-            with patch("src.main.httpx.Client") as mock_client_class:
-                mock_client_instance = Mock()
-                mock_client_instance.__enter__ = Mock(return_value=mock_client_instance)
-                mock_client_instance.__exit__ = Mock(return_value=None)
-                mock_client_class.return_value = mock_client_instance
-
-                # Should not raise exceptions even if use cases fail
-                with contextlib.suppress(Exception):
-                    main()
+            # Should not raise exceptions even if use cases fail
+            with contextlib.suppress(Exception):
+                main()
