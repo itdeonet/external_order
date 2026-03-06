@@ -34,7 +34,7 @@ class TestArtworkInstantiation:
         """Provide valid Artwork initialization data."""
         return {
             "artwork_id": "ART-001",
-            "line_item_id": "LI-001",
+            "line_id": "LI-001",
             "design_url": "https://example.com/design.pdf",
             "design_paths": valid_design_paths,
             "placement_url": "https://example.com/placement.pdf",
@@ -45,31 +45,23 @@ class TestArtworkInstantiation:
         """Test creating an Artwork with all fields."""
         artwork = Artwork(**valid_artwork_data)
 
-        assert isinstance(artwork.id, uuid.UUID)
         assert artwork.artwork_id == "ART-001"
-        assert artwork.line_item_id == "LI-001"
+        assert artwork.line_id == "LI-001"
         assert artwork.design_url == "https://example.com/design.pdf"
         assert artwork.design_paths == valid_artwork_data["design_paths"]
         assert artwork.placement_url == "https://example.com/placement.pdf"
         assert artwork.placement_path is valid_artwork_data["placement_path"]
-
-    def test_id_is_auto_generated_uuid(self, valid_artwork_data):
-        """Test that id is auto-generated as UUID object."""
-        artwork = Artwork(**valid_artwork_data)
-        assert isinstance(artwork.id, uuid.UUID)
 
     def test_id_cannot_be_passed_as_parameter(self, valid_artwork_data):
         """Test that id parameter is rejected (init=False)."""
         with pytest.raises(TypeError):
             Artwork(id=uuid.uuid4(), **valid_artwork_data)  # type: ignore
 
-    def test_id_unique_across_instances(self, valid_artwork_data):
+    def test_unique_across_instances(self, valid_artwork_data):
         """Test that different instances get unique IDs."""
         artwork1 = Artwork(**valid_artwork_data)
         artwork2 = Artwork(**valid_artwork_data)
-        assert artwork1.id != artwork2.id
-        assert isinstance(artwork1.id, uuid.UUID)
-        assert isinstance(artwork2.id, uuid.UUID)
+        assert artwork1 == artwork2
 
     def test_artwork_id_gets_stripped(self, valid_artwork_data):
         """Test that whitespace around artwork_id is stripped."""
@@ -77,11 +69,11 @@ class TestArtworkInstantiation:
         artwork = Artwork(**valid_artwork_data)
         assert artwork.artwork_id == "ART-001"
 
-    def test_line_item_id_gets_stripped(self, valid_artwork_data):
-        """Test that whitespace around line_item_id is stripped."""
-        valid_artwork_data["line_item_id"] = "  LI-001  "
+    def test_line_id_gets_stripped(self, valid_artwork_data):
+        """Test that whitespace around line_id is stripped."""
+        valid_artwork_data["line_id"] = "  LI-001  "
         artwork = Artwork(**valid_artwork_data)
-        assert artwork.line_item_id == "LI-001"
+        assert artwork.line_id == "LI-001"
 
     def test_design_url_gets_stripped(self, valid_artwork_data):
         """Test that whitespace around design_url is stripped."""
@@ -120,7 +112,7 @@ class TestArtworkIDValidation:
     def minimal_artwork_data(self, valid_design_paths, valid_placement_path):
         """Provide minimal valid Artwork data."""
         return {
-            "line_item_id": "LI-001",
+            "line_id": "LI-001",
             "design_url": "https://example.com/design.pdf",
             "design_paths": valid_design_paths,
             "placement_url": "https://example.com/placement.pdf",
@@ -154,7 +146,7 @@ class TestArtworkIDValidation:
 
 
 class TestArtworkLineItemIDValidation:
-    """Tests for line_item_id field validation."""
+    """Tests for line_id field validation."""
 
     @pytest.fixture
     def valid_design_paths(self):
@@ -184,30 +176,30 @@ class TestArtworkLineItemIDValidation:
             "placement_path": valid_placement_path,
         }
 
-    def test_line_item_id_required(self, minimal_artwork_data):
-        """Test that line_item_id is required."""
+    def test_line_id_required(self, minimal_artwork_data):
+        """Test that line_id is required."""
         with pytest.raises(TypeError):
             Artwork(**minimal_artwork_data)
 
-    def test_line_item_id_empty_raises_error(self, minimal_artwork_data):
-        """Test that empty line_item_id raises ValueError."""
+    def test_line_id_empty_raises_error(self, minimal_artwork_data):
+        """Test that empty line_id raises ValueError."""
         with pytest.raises(ValueError, match="Line item ID must be a non-empty string"):
-            Artwork(line_item_id="", **minimal_artwork_data)
+            Artwork(line_id="", **minimal_artwork_data)
 
-    def test_line_item_id_whitespace_only_raises_error(self, minimal_artwork_data):
-        """Test that whitespace-only line_item_id raises ValueError."""
+    def test_line_id_whitespace_only_raises_error(self, minimal_artwork_data):
+        """Test that whitespace-only line_id raises ValueError."""
         with pytest.raises(ValueError, match="Line item ID must be a non-empty string"):
-            Artwork(line_item_id="   ", **minimal_artwork_data)
+            Artwork(line_id="   ", **minimal_artwork_data)
 
-    def test_line_item_id_not_string_raises_error(self, minimal_artwork_data):
-        """Test that non-string line_item_id raises ValueError."""
+    def test_line_id_not_string_raises_error(self, minimal_artwork_data):
+        """Test that non-string line_id raises ValueError."""
         with pytest.raises(ValueError, match="Line item ID must be a non-empty string"):
-            Artwork(line_item_id=456, **minimal_artwork_data)  # type: ignore
+            Artwork(line_id=456, **minimal_artwork_data)  # type: ignore
 
-    def test_line_item_id_none_raises_error(self, minimal_artwork_data):
-        """Test that None line_item_id raises ValueError."""
+    def test_line_id_none_raises_error(self, minimal_artwork_data):
+        """Test that None line_id raises ValueError."""
         with pytest.raises(ValueError, match="Line item ID must be a non-empty string"):
-            Artwork(line_item_id=None, **minimal_artwork_data)  # type: ignore
+            Artwork(line_id=None, **minimal_artwork_data)  # type: ignore
 
 
 class TestArtworkDesignURLValidation:
@@ -235,7 +227,7 @@ class TestArtworkDesignURLValidation:
         """Provide minimal valid Artwork data."""
         return {
             "artwork_id": "ART-001",
-            "line_item_id": "LI-001",
+            "line_id": "LI-001",
             "design_paths": valid_design_paths,
             "placement_url": "https://example.com/placement.pdf",
             "placement_path": valid_placement_path,
@@ -282,7 +274,7 @@ class TestArtworkDesignPathsValidation:
         """Provide minimal valid Artwork data."""
         return {
             "artwork_id": "ART-001",
-            "line_item_id": "LI-001",
+            "line_id": "LI-001",
             "design_url": "https://example.com/design.pdf",
             "placement_url": "https://example.com/placement.pdf",
             "placement_path": valid_placement_path,
@@ -378,7 +370,7 @@ class TestArtworkPlacementURLValidation:
         """Provide minimal valid Artwork data."""
         return {
             "artwork_id": "ART-001",
-            "line_item_id": "LI-001",
+            "line_id": "LI-001",
             "design_url": "https://example.com/design.pdf",
             "design_paths": valid_design_paths,
             "placement_path": valid_placement_path,
@@ -428,7 +420,7 @@ class TestArtworkPlacementPathValidation:
         """Provide minimal valid Artwork data."""
         return {
             "artwork_id": "ART-001",
-            "line_item_id": "LI-001",
+            "line_id": "LI-001",
             "design_url": "https://example.com/design.pdf",
             "design_paths": valid_design_paths,
             "placement_url": "https://example.com/placement.pdf",
@@ -481,7 +473,7 @@ class TestArtworkImmutability:
 
         return Artwork(
             artwork_id="ART-001",
-            line_item_id="LI-001",
+            line_id="LI-001",
             design_url="https://example.com/design.pdf",
             design_paths=design_paths,
             placement_url="https://example.com/placement.pdf",
@@ -493,10 +485,10 @@ class TestArtworkImmutability:
         with pytest.raises((AttributeError, TypeError)):
             artwork.artwork_id = "ART-002"  # type: ignore
 
-    def test_cannot_modify_line_item_id(self, artwork):
-        """Test that line_item_id cannot be modified."""
+    def test_cannot_modify_line_id(self, artwork):
+        """Test that line_id cannot be modified."""
         with pytest.raises((AttributeError, TypeError)):
-            artwork.line_item_id = "LI-002"  # type: ignore
+            artwork.line_id = "LI-002"  # type: ignore
 
     def test_cannot_modify_design_url(self, artwork):
         """Test that design_url cannot be modified."""
@@ -537,7 +529,7 @@ class TestArtworkRepresentation:
 
         return Artwork(
             artwork_id="ART-001",
-            line_item_id="LI-001",
+            line_id="LI-001",
             design_url="https://example.com/design.pdf",
             design_paths=design_paths,
             placement_url="https://example.com/placement.pdf",
@@ -554,10 +546,10 @@ class TestArtworkRepresentation:
         repr_str = repr(artwork)
         assert "ART-001" in repr_str
 
-    def test_repr_contains_id(self, artwork):
-        """Test that repr contains the auto-generated id."""
+    def test_repr_contains_line_id(self, artwork):
+        """Test that repr contains the line_id value."""
         repr_str = repr(artwork)
-        assert str(artwork.id) in repr_str
+        assert "LI-001" in repr_str
 
 
 class TestArtworkEquality:
@@ -584,7 +576,7 @@ class TestArtworkEquality:
         """Test that an artwork equals itself."""
         artwork = Artwork(
             artwork_id="ART-001",
-            line_item_id="LI-001",
+            line_id="LI-001",
             design_url="https://example.com/design.pdf",
             design_paths=design_paths,
             placement_url="https://example.com/placement.pdf",
@@ -592,11 +584,11 @@ class TestArtworkEquality:
         )
         assert artwork == artwork
 
-    def test_different_instances_same_data_are_not_equal(self, design_paths, placement_path):
+    def test_different_instances_same_data_are_equal(self, design_paths, placement_path):
         """Test that two instances with same data are equal (dataclass default behavior)."""
         artwork1 = Artwork(
             artwork_id="ART-001",
-            line_item_id="LI-001",
+            line_id="LI-001",
             design_url="https://example.com/design.pdf",
             design_paths=design_paths,
             placement_url="https://example.com/placement.pdf",
@@ -604,20 +596,20 @@ class TestArtworkEquality:
         )
         artwork2 = Artwork(
             artwork_id="ART-001",
-            line_item_id="LI-001",
+            line_id="LI-001",
             design_url="https://example.com/design.pdf",
             design_paths=design_paths,
             placement_url="https://example.com/placement.pdf",
             placement_path=placement_path,
         )
         # Dataclasses with the same field values are equal
-        assert artwork1 != artwork2
+        assert artwork1 == artwork2
 
     def test_different_artwork_id_not_equal(self, design_paths, placement_path):
         """Test that artworks with different artwork_ids are not equal."""
         artwork1 = Artwork(
             artwork_id="ART-001",
-            line_item_id="LI-001",
+            line_id="LI-001",
             design_url="https://example.com/design.pdf",
             design_paths=design_paths,
             placement_url="https://example.com/placement.pdf",
@@ -625,7 +617,7 @@ class TestArtworkEquality:
         )
         artwork2 = Artwork(
             artwork_id="ART-002",
-            line_item_id="LI-001",
+            line_id="LI-001",
             design_url="https://example.com/design.pdf",
             design_paths=design_paths,
             placement_url="https://example.com/placement.pdf",
@@ -633,11 +625,11 @@ class TestArtworkEquality:
         )
         assert artwork1 != artwork2
 
-    def test_different_line_item_id_not_equal(self, design_paths, placement_path):
-        """Test that artworks with different line_item_ids are not equal."""
+    def test_different_line_id_not_equal(self, design_paths, placement_path):
+        """Test that artworks with different line_ids are not equal."""
         artwork1 = Artwork(
             artwork_id="ART-001",
-            line_item_id="LI-001",
+            line_id="LI-001",
             design_url="https://example.com/design.pdf",
             design_paths=design_paths,
             placement_url="https://example.com/placement.pdf",
@@ -645,33 +637,10 @@ class TestArtworkEquality:
         )
         artwork2 = Artwork(
             artwork_id="ART-001",
-            line_item_id="LI-002",
+            line_id="LI-002",
             design_url="https://example.com/design.pdf",
             design_paths=design_paths,
             placement_url="https://example.com/placement.pdf",
             placement_path=placement_path,
         )
         assert artwork1 != artwork2
-
-    def test_auto_generated_ids_make_instances_not_equal(self, design_paths, placement_path):
-        """Test that auto-generated IDs ensure different instances are not equal."""
-        # Even with identical data, different instances have different IDs
-        artwork1 = Artwork(
-            artwork_id="ART-001",
-            line_item_id="LI-001",
-            design_url="https://example.com/design.pdf",
-            design_paths=design_paths,
-            placement_url="https://example.com/placement.pdf",
-            placement_path=placement_path,
-        )
-        artwork2 = Artwork(
-            artwork_id="ART-001",
-            line_item_id="LI-001",
-            design_url="https://example.com/design.pdf",
-            design_paths=design_paths,
-            placement_url="https://example.com/placement.pdf",
-            placement_path=placement_path,
-        )
-        # Different instances should not be equal due to different auto-generated IDs
-        assert artwork1 != artwork2
-        assert artwork1.id != artwork2.id
