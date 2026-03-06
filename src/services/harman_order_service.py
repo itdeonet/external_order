@@ -1,19 +1,7 @@
-"""Harman order service implementation.
+"""Harman-specific order processing service.
 
-This module provides the HarmanOrderService, which reads orders from Harman EDI files
-(EDIFACT format) and manages the complete order lifecycle: reading, parsing, persisting,
-and notifying Harman of completion. It implements the IOrderService protocol.
-
-Key responsibilities:
-- Reading EDIFACT order files (.insdes and .created files) from input directory
-- Parsing EDI segments and extracting order/shipping/line item data
-- Creating Order domain model instances from parsed data
-- Persisting orders to JSON format for storage
-- Generating notification messages (DESADV D96A/D99A format) for completed orders
-- Selecting appropriate artwork services based on order IDs
-
-The service is configured from application settings and works with Harman-specific
-format requirements and business rules.
+Provides `HarmanOrderService` for parsing Harman EDIFACT orders, creating
+`Order` models, persisting them, and generating completion notifications.
 """
 
 import datetime as dt
@@ -24,11 +12,11 @@ import re
 import string
 import uuid
 from collections.abc import Generator
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Self
+from typing import Any
 
 from pydifact import Parser, Segment, Serializer  # type: ignore
 
@@ -43,97 +31,43 @@ logger = getLogger(__name__)
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class HarmanOrderService:
-    """Harman order service implementation for reading and managing orders.
+    """Service to parse Harman EDIFACT orders and manage their lifecycle.
 
-    This service reads orders from Harman EDI files in EDIFACT format and manages
-    their complete lifecycle. It parses EDI segments, creates Order domain models,
-    handles persistence, and generates Harman-format completion notifications.
-
-    All fields are configuration values that define how this service processes
-    Harman orders, including naming, shipment type, delivery timing, and
-    file system paths.
-
-    This class enforces:
-    - Frozen: All attributes are read-only after creation (configured via from_config)
-    - Harman-specific processing: EDIFACT parsing, shipment type formatting
-    - Proper error handling with ErrorStore singleton
-    - Integration with RenderService for notification templates
-
-    Attributes:
-        administration_id: Internal administration unit ID for orders
-        customer_id: Internal customer ID for Harman orders
-        pricelist_id: Pricing list ID for Harman orders
-        order_provider: Name of the provider ('Harman')
-        shipment_type: Base shipment type (formatted as B2B or B2C)
-        workdays_for_delivery: Standard lead time in workdays
-        input_dir: Path to directory containing order files
-        output_dir: Path to directory for output notifications
-        renderer: RenderService for generating EDI notifications
-
-    Example:
-        >>> service = HarmanOrderService.from_config(config)
-        >>> for order in service.read_orders():
-        ...     print(f"Processing {order.remote_order_id}")
-        ...     service.persist_order(order, OrderStatus.CREATED)
+    Configuration-driven; integrates with `RenderService` and `ErrorStore`.
     """
 
-    administration_id: int
-    customer_id: int
-    pricelist_id: int
-    order_provider: str
-    shipment_type: str
-    workdays_for_delivery: int
-    input_dir: Path
-    output_dir: Path
-    renderer: RenderService
-
-    @classmethod
-    def from_config(cls, config: Config) -> Self:
-        """Create a HarmanOrderService instance from application configuration.
-
-        Factory method that builds a HarmanOrderService with all settings from
-        the application configuration object. This is the standard way to
-        instantiate the service.
-
-        Args:
-            config: Application Config instance with Harman-specific settings
-
-        Returns:
-            Fully initialized HarmanOrderService ready to process orders
-        """
-        logger.info("Create HarmanOrderService from config...")
-        return cls(
-            administration_id=config.harman_administration_id,
-            customer_id=config.harman_customer_id,
-            pricelist_id=config.harman_pricelist_id,
-            order_provider=config.harman_order_provider,
-            shipment_type=config.harman_shipment_type,
-            workdays_for_delivery=config.harman_workdays_for_delivery,
-            input_dir=config.harman_input_dir,
-            output_dir=config.harman_output_dir,
-            renderer=RenderService(directory=config.templates_dir),
-        )
+    administration_id: int = field(default_factory=lambda: get_config().harman_administration_id)
+    customer_id: int = field(default_factory=lambda: get_config().harman_customer_id)
+    pricelist_id: int = field(default_factory=lambda: get_config().harman_pricelist_id)
+    order_provider: str = field(default_factory=lambda: get_config().harman_order_provider)
+    shipment_type: str = field(default_factory=lambda: get_config().harman_shipment_type)
+    workdays_for_delivery: int = field(
+        default_factory=lambda: get_config().harman_workdays_for_delivery
+    )
+    input_dir: Path = field(default_factory=lambda: Path(get_config().harman_input_dir))
+    output_dir: Path = field(default_factory=lambda: Path(get_config().harman_output_dir))
+    renderer: RenderService = field(default_factory=lambda: RenderService())
 
     def read_orders(self) -> Generator[Order, None, None]:
-        """Generate orders from Harman EDI files in the input directory.
+        """Parse EDIFACT files and yield Order instances.
 
-        Scans the input directory for .insdes and .created files, parses each
-        as EDIFACT order data, and yields Order instances. Errors during parsing
-        are caught and stored without stopping iteration of remaining files.
+        Scans input_dir for order files (*.insdes, *.new, *.created, *.artwork),
+        parses each into structured data, and yields Order instances.
 
         Yields:
-            Order instances ready for processing
+            Order: Parsed order from each input file.
 
         Note:
-            Files are processed in sorted order for consistency. Files with parse
-            errors are logged but don't prevent processing of other files.
+            Parsing errors are recorded in ErrorStore and do not stop iteration.
         """
         logger.info("Generate orders...")
         # parse each .insdes file in the directory and yield an Order instance
         chain = itertools.chain.from_iterable(
             [
                 self.input_dir.glob("*.insdes", case_sensitive=False),
+                self.input_dir.glob("*.new", case_sensitive=False),
                 self.input_dir.glob("*.created", case_sensitive=False),
+                self.input_dir.glob("*.artwork", case_sensitive=False),
             ]
         )
         for file in chain:
@@ -146,23 +80,13 @@ class HarmanOrderService:
                 ErrorStore().add(exc)
 
     def _read_order_data(self, file: Path) -> dict[str, Any]:
-        """Extract order data from an EDIFACT order file.
-
-        Parses the EDIFACT format file and extracts relevant order information
-        (shipping address, line items, etc.) into a structured dictionary.
+        """Parse EDIFACT file and extract structured order data.
 
         Args:
-            file: Path to the EDIFACT order file to parse
+            file: Path to EDIFACT order file.
 
         Returns:
-            Dictionary with keys:
-            - 'ship_to': Dictionary with shipping address fields
-            - 'line_items': List of line item dictionaries
-            - 'remote_order_id': External order ID
-            - 'delivery_note_id': Delivery note reference (if present)
-
-        Raises:
-            Exception: If file cannot be read or EDIFACT format is invalid
+            Dict with 'ship_to' and 'line_items' keys extracted from file.
         """
         order_data: dict[str, Any] = {
             "ship_to": {},
@@ -175,26 +99,7 @@ class HarmanOrderService:
         return order_data
 
     def _get_segment_data(self, segment: Segment, order_data: dict[str, Any]) -> dict[str, Any]:
-        """Extract data from an EDIFACT segment and update order data.
-
-        Parses individual EDI segments (NAD, RFF, LIN, QTY, FTX) using pattern
-        matching to extract shipping, line item, and order reference data.
-        Updates the order_data dictionary with extracted values.
-
-        Segment types processed:
-        - NAD: Shipping address and contact information
-        - RFF: Order and delivery note references
-        - LIN: Line item product codes
-        - QTY: Line item quantities
-        - FTX: Delivery instructions and location/stock status per line item
-
-        Args:
-            segment: EDIFACT Segment instance to parse
-            order_data: Dictionary to update with extracted data
-
-        Returns:
-            The updated order_data dictionary
-        """
+        """Parse a single EDIFACT `segment` and update `order_data` in-place."""
         logger.debug("Process segment: %s", segment)
         match [segment.tag, *segment.elements]:
             case [
@@ -242,24 +147,13 @@ class HarmanOrderService:
         return order_data
 
     def _make_order(self, data: dict[str, Any]) -> Order:
-        """Create an Order instance from parsed order data.
-
-        Transforms the parsed EDIFACT data into a complete Order domain model.
-        Handles normalization of shipment type (B2B vs B2C based on company name),
-        creation of ShipTo and LineItem instances, and setting appropriate delivery dates.
-
-        Populates Order fields:
-        - description: Formatted as "<order_provider> order <remote_order_id> / <delivery_note_id>"
-        - delivery_instructions: Extracted from FTX segments (defaults to empty string)
+        """Create Order domain model from parsed EDIFACT data.
 
         Args:
-            data: Dictionary with parsed order data from _read_order_data()
+            data: Structured order data from _read_order_data.
 
         Returns:
-            Fully initialized Order instance ready for processing
-
-        Raises:
-            ValueError: If required fields are missing or invalid
+            Order instance with ShipTo and LineItems populated from data.
         """
         logger.debug("Create Order instance from data: %s", json.dumps(data))
         is_company = bool(data.get("ship_to", {}).get("company_name"))
@@ -291,7 +185,7 @@ class HarmanOrderService:
             ),
             line_items=[
                 LineItem(
-                    remote_line_id=item.get("remote_line_id", ""),
+                    line_id=item.get("remote_line_id", ""),
                     product_code=item.get("product_code", ""),
                     quantity=int(item.get("quantity", 0)),
                 )
@@ -303,17 +197,7 @@ class HarmanOrderService:
         return order
 
     def read_order_data_by_remote_order_id(self, remote_order_id: str) -> dict[str, Any] | None:
-        """Get parsed order data by remote order ID.
-
-        Locates and parses the order file matching the given remote order ID.
-        Useful for retrieving order data when you have the ID but not the file path.
-
-        Args:
-            remote_order_id: External order ID to search for
-
-        Returns:
-            Dictionary with parsed order data, or None if no matching file found
-        """
+        """Find and parse the file for `remote_order_id`, returning parsed data."""
         logger.info("Get order data for remote order ID: %s", remote_order_id)
         for file in self.input_dir.glob(f"{remote_order_id}.*"):
             return self._read_order_data(file)
@@ -322,38 +206,14 @@ class HarmanOrderService:
     def get_artwork_service(
         self, order: Order, artwork_services: IRegistry[IArtworkService]
     ) -> IArtworkService | None:
-        """Get the appropriate artwork service for the given order.
-
-        Selects the correct artwork service based on order ID pattern matching.
-        Harman orders matching pattern (HA|JB)-EM-(ST-)?\\d+ use the Spectrum
-        artwork service. Other orders return None (no artwork service).
-
-        Args:
-            order: The Order to select a service for
-            artwork_services: Registry of available artwork services
-
-        Returns:
-            The Spectrum IArtworkService for matching orders, None otherwise
-        """
+        """Return the matching artwork service for `order`, or `None` if none."""
         logger.info("Get artwork service for order: %s", order.remote_order_id)
         if re.match(r"(HA|JB)-EM-(ST-)?\d+", order.remote_order_id):
             return artwork_services.get("Spectrum")
         return None
 
     def persist_order(self, order: Order, status: OrderStatus) -> None:
-        """Save the given order with its current status to JSON format.
-
-        Persists the order to a JSON file in the input directory for later
-        retrieval. Also renames the original EDIFACT file with the status
-        extension to track processing state.
-
-        Args:
-            order: The Order instance to persist
-            status: The OrderStatus to record
-
-        Raises:
-            May raise file system exceptions if write fails
-        """
+        """Persist `order` as JSON in `input_dir` and update file status."""
         logger.info("Persist order: %s with status: %s", order.remote_order_id, status)
 
         def custom_serializer(obj):
@@ -378,19 +238,7 @@ class HarmanOrderService:
                 file.rename(file.parent / f"{order.remote_order_id}.{order.status.value}".upper())
 
     def load_order(self, remote_order_id: str) -> Order:
-        """Load a previously persisted order by its remote ID.
-
-        Retrieves an order from the JSON persistence file if it exists.
-
-        Args:
-            remote_order_id: External order ID to load
-
-        Returns:
-            The Order instance if found
-
-        Raises:
-            May raise exceptions if JSON parsing fails or file cannot be read
-        """
+        """Load and return an `Order` previously persisted as JSON."""
         logger.info("Load order by remote ID: %s", remote_order_id)
         file_path = self.input_dir / f"{remote_order_id}.json"
         text = file_path.read_text(encoding="utf-8")
