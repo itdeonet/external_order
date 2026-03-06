@@ -1,7 +1,5 @@
 """Unit tests for the ShipTo domain class."""
 
-import uuid
-
 import pytest
 
 from src.domain.ship_to import ShipTo
@@ -61,13 +59,6 @@ class TestShipToInstantiation:
         assert ship_to.contact_name == "Jane Smith"
         assert ship_to.street2 == ""
         assert ship_to.state == ""
-
-    def test_id_auto_generation(self, valid_ship_to_data):
-        """Test that ID is auto-generated as UUID."""
-        ship_to = ShipTo(**valid_ship_to_data)
-
-        assert ship_to.id
-        assert isinstance(ship_to.id, uuid.UUID)
 
 
 class TestShipToRemoteCustomerIDValidation:
@@ -563,22 +554,8 @@ class TestShipToEquality:
             "country_code": "US",
         }
 
-    def test_same_instance_equals_itself(self, ship_to_data):
-        """Test that a ship_to equals itself."""
-        ship_to = ShipTo(**ship_to_data)
-        assert ship_to == ship_to
-
-    def test_different_instances_same_data_are_not_equal(self, ship_to_data):
-        """Test that two instances with same data are not equal (different auto-generated IDs)."""
+    def test_different_instances_same_data_are_equal(self, ship_to_data):
+        """Test that two instances with same data are equal."""
         ship_to1 = ShipTo(**ship_to_data)
         ship_to2 = ShipTo(**ship_to_data)
-        # Different instances should not be equal due to different auto-generated IDs
-        assert ship_to1 != ship_to2
-
-    def test_different_auto_generated_ids_not_equal(self, ship_to_data):
-        """Test that instances with different auto-generated IDs are not equal."""
-        ship_to1 = ShipTo(**ship_to_data)
-        ship_to2 = ShipTo(**ship_to_data)
-        # Even with same data, different auto-generated IDs means not equal
-        assert ship_to1.id != ship_to2.id
-        assert ship_to1 != ship_to2
+        assert ship_to1 == ship_to2
