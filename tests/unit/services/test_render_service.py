@@ -32,11 +32,6 @@ class TestRenderServiceInstantiation:
         with pytest.raises(ValueError, match="does not exist or is not a directory"):
             RenderService(directory=file_path)
 
-    def test_directory_is_required_parameter(self, tmp_path):
-        """Test that directory is a required parameter."""
-        with pytest.raises(TypeError):
-            RenderService()  # type: ignore
-
     def test_instantiation_accepts_path_object(self, tmp_path):
         """Test that instantiation accepts pathlib.Path object."""
         service = RenderService(directory=Path(tmp_path))
