@@ -215,6 +215,8 @@ StockTransferUseCase.execute():
 - **uv** package manager ([install from](https://docs.astral.sh/uv/))
 - **sale.order required fields**: x_remote_delivery_instructions (char), x_remote_notified_completion (bool), x_remote_order_id (char), x_remote_order_provider (char)
 - **sale.order sql update**: "update sale_order set x_remote_order_provider = 'HARMAN JBL' where x_remote_order_provider = 'Harman INSDES'"
+- **res.partner required fields**: x_remote_order_id (char), x_remote_order_provider (char)
+- **res.partner sql update**: "update res_partner set x_remote_order_provider = 'HARMAN JBL' where x_remote_order_provider = 'Harman INSDES'"
 
 ### Installation Steps
 
@@ -238,7 +240,7 @@ StockTransferUseCase.execute():
 4. **Verify installation**
    ```bash
    uv run pytest tests/ -q
-   # Should show: 920 passed in 0.85s
+   # Should show: 894 passed in 0.85s
    ```
 
 ### Development Setup
@@ -666,7 +668,7 @@ stock_services.register("MyProvider", MyProviderStockService.from_config(config)
 
 ### Test Coverage
 
-Current coverage: **920 tests passing** with comprehensive test suites
+Current coverage: **894 tests passing** with comprehensive test suites
 
 - **Unit tests** (893+) - Individual component testing with mocks
 - **Integration tests** (27+) - Cross-module testing with pytest-httpx
@@ -803,10 +805,11 @@ if not order_data:
 
 - **Type hints** are required on all functions and classes
 - **Comprehensive docstrings** required:
-  - Module docstrings: Purpose, key responsibilities, key concepts
-  - Class docstrings: Enforcement rules, attributes with types, usage examples
-  - Method/function docstrings: Args, Returns, Raises with descriptions and examples
-  - All core modules have comprehensive docstrings following this pattern
+  - Module docstrings: Concise one/two-line purpose description
+  - Class docstrings: Clear purpose with Attributes section for dataclasses
+  - Method/function docstrings: Args, Returns, Raises sections for complex methods, one-liners for simple ones
+  - All core modules standardized with consistent style (see spectrum_artwork_service.py as reference)
+  - Action-oriented language preferred ("Retrieve", "Parse", "Create", "Validate")
 - **Frozen dataclasses** used for immutable domain objects with validation in `__post_init__()`
 - **Protocols** instead of abstract base classes for interfaces (contract-based design)
 - **Single responsibility** - each class has one reason to change
@@ -854,7 +857,7 @@ from src.utils.cache import cached_expensive_operation
 git checkout -b feature/new-service
 
 # Make changes, test, commit
-uv run pytest tests/ -v  # Verify all 920 tests pass
+uv run pytest tests/ -v  # Verify all 894 tests pass
 git add .
 git commit -m "Add new artwork service"
 
@@ -862,7 +865,7 @@ git commit -m "Add new artwork service"
 git push origin feature/new-service
 
 # Before merging:
-# 1. Verify all tests pass with: uv run pytest -q (expect ~920 tests)
+# 1. Verify all tests pass with: uv run pytest -q (expect ~894 tests, 94% coverage)
 # 2. Ensure new code has type hints and comprehensive docstrings
 # 3. Check that error handling collects to ErrorStore singleton (not print/raise)
 ```
@@ -873,7 +876,7 @@ git push origin feature/new-service
 
 | Package         | Purpose                                          |
 | --------------- | ------------------------------------------------ |
-| `httpx`         | Modern HTTP client with async support            |
+| `requests`      | HTTP client for API calls with timeout support   |
 | `jinja2`        | Template engine for EDIFACT rendering            |
 | `pydifact`      | EDIFACT EDI message parsing/generation           |
 | `python-dotenv` | Environment variable loading from `.env` files   |
@@ -884,15 +887,15 @@ git push origin feature/new-service
 
 | Package        | Purpose                                              |
 | -------------- | ---------------------------------------------------- |
-| `pytest`       | Test runner & assertion framework (920 tests)       |
-| `pytest-cov`   | Code coverage measurement                            |
+| `pytest`       | Test runner & assertion framework (894 tests)       |
+| `pytest-cov`   | Code coverage measurement (94% coverage)             |
 | `pytest-mock`  | Mocking and patching utilities                       |
-| `pytest-httpx` | Mock HTTP responses for integration testing          |
+| `types-requests` | Type hints for requests library                    |
 
 ### Why These Choices
 
 **Production Packages:**
-- **httpx** over `requests` - Modern async/await support, better connection pooling, granular timeouts (connect/read/write)
+- **requests** - Widely used HTTP client with clear API, excellent error handling, robust connection management
 - **Jinja2** - Industry standard for templating, excellent EDIFACT format support, powerful expression language
 - **pydifact** - Purpose-built EDIFACT parser vs rolling our own, handles D96A/D99A EDI standards correctly
 - **python-dotenv** - Simple, convention-based config management, works well with 12-factor app principles
@@ -900,32 +903,32 @@ git push origin feature/new-service
 - **xmltodict** - Lightweight XML-to-dict conversion for Harman stock API responses
 
 **Development Packages:**
-- **pytest** - Superior fixture system, better assertions, excellent plugin ecosystem (pytest-mock, pytest-httpx)
+- **pytest** - Superior fixture system, better assertions, excellent plugin ecosystem (pytest-mock, pytest-cov)
 - **pytest-cov** - Integrated coverage reporting with HTML output via `--cov-report=html`
 - **pytest-mock** - Cleaner mocking API than unittest.mock, better pytest integration
-- **pytest-httpx** - Mock HTTP responses without external services, enables deterministic testing
+- **types-requests** - Type hints for requests library, enables better IDE support and type checking
 
 ## Project Status
 
 ### Latest Release Highlights
 
-✅ **All 862 Tests Passing**
-- 835+ unit tests for isolated component testing
-- 27+ integration tests for cross-module workflows
-- Full coverage of domain validation, service integration, and use case orchestration
-- Run with: `uv run pytest -q`
+✅ **All 894 Tests Passing with 94% Coverage**
+- 856+ unit tests for isolated component testing
+- 38 integration tests for cross-module workflows
+- Full coverage: 1054 statements, 59 lines missing (mostly edge cases and defensive checks)
+- Run with: `uv run pytest -q` or `uv run pytest --cov=src` for coverage report
 
-✅ **Comprehensive Docstrings Across All Core Modules**
-- **config.py** - Configuration management with 40+ attributes documented
-- **main.py** - Application orchestration with 5-phase workflow documented
-- **Domain models** - All 5 entities (Order, LineItem, ShipTo, Artwork, validators) fully documented
+✅ **Standardized Docstrings with Args/Returns/Raises Sections**
+- **All core modules** - Comprehensive docstrings following spectrum_artwork_service.py style
+- **Service methods** - Args, Returns, Raises sections for complex operations
+- **Domain models** - Clear purpose with Attributes documentation
 - **Interfaces** - 13+ Protocol definitions with method contracts
-- **Services** - 5 complete service implementations:
-  - HarmanOrderService - EDIFACT order EDI processing (49 tests)
-  - HarmanStockService - Stock transfer handling (23 tests)
-  - OdooSaleService - JSON-RPC CRM integration (59 tests)
-  - RenderService - Jinja2 template rendering (33 tests)
-  - SpectrumArtworkService - Artwork retrieval and management (36 tests)
+- **Complete implementation** - 5 service implementations with full test coverage:
+  - HarmanOrderService - EDIFACT order EDI processing (52 tests, 83% coverage)
+  - HarmanStockService - Stock transfer handling (23 tests, 100% coverage)
+  - OdooSaleService - JSON-RPC CRM integration (59 tests, 99% coverage)
+  - RenderService - Jinja2 template rendering (33 tests, 100% coverage)
+  - SpectrumArtworkService - Artwork retrieval and management (35 tests, 100% coverage)
 
 ✅ **Simplified Error Handling**
 - Centralized ErrorStore pattern for collecting exceptions
@@ -940,7 +943,7 @@ git push origin feature/new-service
 - **Protocol-Based Interfaces** - Contract-driven design using Python Protocols
 - **Immutable Domain Objects** - Frozen dataclasses with validation in `__post_init__()`
 - **Type-Safe** - Full type hints on all functions and classes
-- **Well-Tested** - 862 tests providing strong regression protection
+- **Well-Tested** - 894 tests with 94% coverage providing strong regression protection
 
 ### Ready for Production
 
@@ -971,12 +974,13 @@ uv sync
 
 ```bash
 # Setup
-uv sync                          # Install all dependencies
+uv sync                                    # Install all dependencies
 
 # Development
-uv run pytest tests/ -v          # Run all tests
-uv run pytest tests/ --cov=src   # With coverage
-uv run python -m src.main        # Run application
+uv run pytest tests/ -v                    # Run all 894 tests
+uv run pytest tests/ --cov=src             # With coverage report
+uv run pytest tests/ --cov-report=html     # HTML coverage report
+uv run python -m src.main                  # Run application
 
 # Configuration
 export ODOO_BASE_URL="https://..."
@@ -984,8 +988,9 @@ export SPECTRUM_API_KEY="..."
 uv run python -m src.main
 
 # Code quality
-uv run pytest tests/ -q          # Quiet output
-uv run pytest tests/ --lf        # Last failed tests only
+uv run pytest tests/ -q                    # Quiet output (expect 894 passed)
+uv run pytest tests/ --lf                  # Last failed tests only
+uv run pytest tests/ -k test_name          # Run specific test
 ```
 
 ### Key Files to Understand
