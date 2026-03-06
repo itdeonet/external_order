@@ -17,20 +17,10 @@ class TestErrorStore:
 
     @pytest.fixture
     def error_store(self):
-        """Provide the ErrorStore singleton instance, cleared for each test."""
+        """Provide a fresh ErrorStore instance for each test."""
         error_store = ErrorStore()
         error_store.clear()  # Ensure clean state for test isolation
         return error_store
-
-    def test_singleton_pattern(self):
-        """Test that ErrorStore is a singleton."""
-        error_store1 = ErrorStore()
-        error_store2 = ErrorStore()
-        error_store3 = ErrorStore()
-
-        assert error_store1 is error_store2
-        assert error_store2 is error_store3
-        assert id(error_store1) == id(error_store2) == id(error_store3)
 
     def test_instantiation(self):
         """Test creating an ErrorStore instance."""
@@ -811,6 +801,49 @@ class TestArtworkError:
 
         assert str(exc) == "Order ORD-12345: Artwork retrieval failed"
 
+
+class TestGetErrorStoreSingleton:
+    """Tests for the get_error_store() cached singleton helper."""
+
+    def setup_method(self):
+        # Ensure cache is cleared before each test
+        try:
+            from src.app.errors import get_error_store
+
+            get_error_store.cache_clear()
+        except Exception:
+            pass
+
+    def test_returns_same_instance(self):
+        """get_error_store() should return the same object on repeated calls."""
+        from src.app.errors import get_error_store
+
+        s1 = get_error_store()
+        s2 = get_error_store()
+
+        assert s1 is s2
+
+    def test_shared_state_between_calls(self):
+        """Mutating the store via one reference is visible via another."""
+        from src.app.errors import get_error_store
+
+        store1 = get_error_store()
+        store1.clear()
+        store1.add(ValueError("shared"))
+
+        store2 = get_error_store()
+        assert store2.has_errors() is True
+
+    def test_cache_clear_creates_new_instance(self):
+        """Calling cache_clear should cause subsequent calls to return a new instance."""
+        from src.app.errors import get_error_store
+
+        s1 = get_error_store()
+        get_error_store.cache_clear()
+        s2 = get_error_store()
+
+        assert s1 is not s2
+
     def test_inherits_from_base_error(self):
         """Test that ArtworkError inherits from BaseError."""
         exc = ArtworkError("Test")
@@ -961,14 +994,6 @@ class TestErrorStoreImmutability:
 
         with pytest.raises(TypeError):  # FrozenInstanceError
             error_store._store = None  # type: ignore
-
-    def test_frozen_dataclass_instance_equality(self):
-        """Test frozen dataclass singleton behavior."""
-        error_store1 = ErrorStore()
-        error_store2 = ErrorStore()
-
-        # Same instance since ErrorStore is now a singleton
-        assert error_store1 is error_store2
 
 
 class TestAllCustomErrorsInStore:
