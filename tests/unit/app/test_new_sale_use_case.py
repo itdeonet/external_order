@@ -28,7 +28,7 @@ def create_sample_order(remote_order_id: str = "REMOTE001") -> Order:
         country_code="US",
     )
     line_item = LineItem(
-        remote_line_id="LINE001",
+        line_id="LINE001",
         product_code="PROD001",
         quantity=10,
     )

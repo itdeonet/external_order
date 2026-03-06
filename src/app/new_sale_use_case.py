@@ -1,10 +1,6 @@
 """New sale order creation and processing use case.
 
-This module handles the creation of new sales in Odoo from orders received from
-multiple order service providers. It orchestrates order persistence, sale creation,
-contact updates, artwork retrieval, and sale confirmation across the entire order
-lifecycle. Errors at the order level are caught and stored without stopping
-processing of other orders.
+Create new sales in Odoo from orders received from multiple service providers.
 """
 
 import shutil
@@ -23,24 +19,8 @@ logger = getLogger(__name__)
 class NewSaleUseCase:
     """Use case for creating and processing new sales from orders.
 
-    This use case processes orders from multiple service providers through the full
-    order-to-sale workflow:
-    1. Read orders from each service provider
-    2. Persist order and create corresponding sale in Odoo
-    3. Handle existing sales (create or update based on order lines)
-    4. Retrieve and organize artwork for the order
-    5. Confirm the sale
-    6. Persist final order status
-
-    Errors are caught at the individual order level and stored, allowing other orders
-    to be processed normally. Processed artwork is organized by customer ID in the
-    open orders directory.
-
-    Attributes:
-        order_services: Registry of order service providers to process.
-        artwork_services: Registry of artwork services available for orders.
-        sale_service: Service for creating and managing sales in Odoo.
-        open_orders_dir: Directory path where processed artwork is stored.
+    Orchestrates order persistence, sale creation, artwork retrieval, and confirmation.
+    Order-level errors are caught and stored without stopping other orders.
     """
 
     order_services: IRegistry[IOrderService]
@@ -49,25 +29,7 @@ class NewSaleUseCase:
     open_orders_dir: Path
 
     def execute(self) -> None:
-        """Process orders from all registered service providers and create sales.
-
-        For each order service provider:
-        1. Read all orders from the provider
-        2. For each order:
-           - Persist with NEW status
-           - Create new sale if it doesn't exist
-           - Update contact info if sale exists with expected lines
-           - Raise error if sale exists with mismatched lines
-           - Retrieve artwork using the service specified by the order
-           - Persist with ARTWORK status
-           - Confirm the sale in Odoo
-           - Persist with CONFIRMED status
-
-        Order-level errors (create, update, confirm failures) are caught, logged,
-        and stored. Processing continues with the next order.
-
-        All exceptions are stored in the ErrorStore singleton for later review.
-        """
+        """Process all orders and create corresponding sales. Handle errors per-order."""
         for order_service_name, order_service in self.order_services.items():
             logger.info("Create sales from %s service...", order_service_name)
 
@@ -113,22 +75,9 @@ class NewSaleUseCase:
                     ErrorStore().add(exc)
 
     def get_artwork(self, order: Order, artwork_service: IArtworkService | None) -> list[Path]:
-        """Download and organize artwork files for an order.
+        """Download artwork and organize placement files by customer ID.
 
-        Retrieves artwork from the service and processes placement files by:
-        1. Downloading all files for the order
-        2. Filtering for files named with '_placement' suffix
-        3. Organizing placement files into subdirectories named by customer ID
-        4. Logging all operations for tracking
-
-        Args:
-            order: The order to retrieve artwork for.
-            artwork_service: The service to use for artwork retrieval. If None,
-                returns empty list and logs a warning.
-
-        Returns:
-            A list of Path objects for all downloaded files, including placement
-            and non-placement files. Empty list if no service is available.
+        Returns empty list if no artwork service is available.
         """
         if not artwork_service:
             logger.warning("No artwork service found for order %s.", order.remote_order_id)
