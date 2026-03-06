@@ -1,6 +1,5 @@
 """Unit tests for the LineItem domain model."""
 
-import uuid
 from pathlib import Path
 
 import pytest
@@ -13,7 +12,7 @@ from src.domain.line_item import LineItem
 def valid_line_item_data():
     """Provide valid LineItem initialization data."""
     return {
-        "remote_line_id": "RL-001",
+        "line_id": "RL-001",
         "product_code": "PROD-123",
         "quantity": 5,
     }
@@ -40,19 +39,17 @@ class TestLineItemInitialization:
         """Test that LineItem is created with auto-generated ID."""
         item = LineItem(**valid_line_item_data)
 
-        assert item.remote_line_id == "RL-001"
+        assert item.line_id == "RL-001"
         assert item.product_code == "PROD-123"
         assert item.quantity == 5
         assert item.artwork is None
-        # Verify ID is generated as UUID
-        assert isinstance(item.id, uuid.UUID)
 
     def test_line_item_id_is_trimmed(self, valid_line_item_data):
         """Test that LineItem ID is trimmed of whitespace."""
-        valid_line_item_data["remote_line_id"] = "  custom-id-123  "
+        valid_line_item_data["line_id"] = "  custom-id-123  "
         item = LineItem(**valid_line_item_data)
 
-        assert item.remote_line_id == "custom-id-123"
+        assert item.line_id == "custom-id-123"
 
     def test_line_item_product_code_is_trimmed(self, valid_line_item_data):
         """Test that product_code is trimmed of whitespace."""
@@ -69,21 +66,21 @@ class TestLineItemInitialization:
 
         assert item.artwork == mock_artwork
 
-    def test_line_item_invalid_empty_remote_line_id(self, valid_line_item_data):
+    def test_line_item_invalid_empty_line_id(self, valid_line_item_data):
         """Test that empty ID raises ValueError."""
-        valid_line_item_data["remote_line_id"] = ""
+        valid_line_item_data["line_id"] = ""
         with pytest.raises(ValueError, match="ID must be a non-empty string"):
             LineItem(**valid_line_item_data)
 
     def test_line_item_invalid_whitespace_only_id(self, valid_line_item_data):
         """Test that whitespace-only ID raises ValueError."""
-        valid_line_item_data["remote_line_id"] = "   "
+        valid_line_item_data["line_id"] = "   "
         with pytest.raises(ValueError, match="ID must be a non-empty string"):
             LineItem(**valid_line_item_data)
 
-    def test_line_item_invalid_non_string_remote_line_id(self, valid_line_item_data):
+    def test_line_item_invalid_non_string_line_id(self, valid_line_item_data):
         """Test that non-string ID raises ValueError."""
-        valid_line_item_data["remote_line_id"] = 123
+        valid_line_item_data["line_id"] = 123
         with pytest.raises(ValueError, match="ID must be a non-empty string"):
             LineItem(**valid_line_item_data)  # type: ignore
 
@@ -111,10 +108,10 @@ class TestLineItemInitialization:
         with pytest.raises(ValueError, match="Product code must be a non-empty string"):
             LineItem(**valid_line_item_data)  # type: ignore
 
-    def test_line_item_invalid_none_remote_line_id(self, valid_line_item_data):
-        """Test that None remote_line_id raises ValueError."""
-        valid_line_item_data["remote_line_id"] = None
-        with pytest.raises(ValueError, match="Remote line ID must be a non-empty string"):
+    def test_line_item_invalid_none_line_id(self, valid_line_item_data):
+        """Test that None line_id raises ValueError."""
+        valid_line_item_data["line_id"] = None
+        with pytest.raises(ValueError, match="Line ID must be a non-empty string"):
             LineItem(**valid_line_item_data)  # type: ignore
 
 
@@ -125,7 +122,7 @@ class TestLineItemQuantityValidation:
     def minimal_line_item_data(self):
         """Provide minimal valid LineItem data for quantity tests."""
         return {
-            "remote_line_id": "RL-001",
+            "line_id": "RL-001",
             "product_code": "PROD-123",
         }
 
@@ -184,7 +181,7 @@ class TestLineItemArtworkValidation:
     def valid_line_item_data(self):
         """Provide valid LineItem initialization data."""
         return {
-            "remote_line_id": "RL-001",
+            "line_id": "RL-001",
             "product_code": "PROD-123",
             "quantity": 5,
         }
@@ -232,7 +229,7 @@ class TestLineItemSetArtwork:
     def valid_line_item_data(self):
         """Provide valid LineItem data."""
         return {
-            "remote_line_id": "RL-001",
+            "line_id": "RL-001",
             "product_code": "PROD-123",
             "quantity": 5,
         }
@@ -254,37 +251,6 @@ class TestLineItemSetArtwork:
             line_item.set_artwork("not an artwork")  # type: ignore
 
 
-class TestLineItemIDGeneration:
-    """Test cases for LineItem ID auto-generation."""
-
-    @pytest.fixture
-    def valid_line_item_data(self):
-        """Provide valid LineItem data."""
-        return {
-            "remote_line_id": "RL-001",
-            "product_code": "PROD-123",
-            "quantity": 5,
-        }
-
-    def test_id_is_auto_generated_uuid(self, valid_line_item_data):
-        """Test that id is auto-generated as UUID object."""
-        item = LineItem(**valid_line_item_data)
-        assert isinstance(item.id, uuid.UUID)
-
-    def test_id_cannot_be_passed_as_parameter(self, valid_line_item_data):
-        """Test that id parameter is rejected (init=False)."""
-        with pytest.raises(TypeError):
-            LineItem(id=uuid.uuid4(), **valid_line_item_data)  # type: ignore
-
-    def test_id_unique_across_instances(self, valid_line_item_data):
-        """Test that different instances get unique IDs."""
-        item1 = LineItem(**valid_line_item_data)
-        item2 = LineItem(**valid_line_item_data)
-        assert item1.id != item2.id
-        assert isinstance(item1.id, uuid.UUID)
-        assert isinstance(item2.id, uuid.UUID)
-
-
 class TestLineItemImmutability:
     """Tests for LineItem immutability (frozen dataclass)."""
 
@@ -297,15 +263,15 @@ class TestLineItemImmutability:
     def valid_line_item_data(self):
         """Provide valid LineItem data."""
         return {
-            "remote_line_id": "RL-001",
+            "line_id": "RL-001",
             "product_code": "PROD-123",
             "quantity": 5,
         }
 
-    def test_cannot_modify_remote_line_id(self, line_item):
-        """Test that remote_line_id cannot be modified."""
+    def test_cannot_modify_line_id(self, line_item):
+        """Test that line_id cannot be modified."""
         with pytest.raises((AttributeError, TypeError)):
-            line_item.remote_line_id = "RL-002"  # type: ignore
+            line_item.line_id = "RL-002"  # type: ignore
 
     def test_cannot_modify_product_code(self, line_item):
         """Test that product_code cannot be modified."""
@@ -337,27 +303,21 @@ class TestLineItemEquality:
     def valid_line_item_data(self):
         """Provide valid LineItem data."""
         return {
-            "remote_line_id": "RL-001",
+            "line_id": "RL-001",
             "product_code": "PROD-123",
             "quantity": 5,
         }
 
-    def test_same_instance_equals_itself(self, valid_line_item_data):
-        """Test that a line item equals itself."""
-        item = LineItem(**valid_line_item_data)
-        assert item == item
-
-    def test_different_instances_same_data_are_not_equal(self, valid_line_item_data):
-        """Test that two instances with same data are not equal (different auto-generated IDs)."""
+    def test_different_instances_same_data_are_equal(self, valid_line_item_data):
+        """Test that two instances with same data are equal."""
         item1 = LineItem(**valid_line_item_data)
         item2 = LineItem(**valid_line_item_data)
-        # Different instances should not be equal due to different auto-generated IDs
-        assert item1 != item2
+        assert item1 == item2
 
-    def test_different_remote_line_id_not_equal(self, valid_line_item_data):
-        """Test that line items with different remote_line_ids are not equal."""
+    def test_different_line_id_not_equal(self, valid_line_item_data):
+        """Test that line items with different line_ids are not equal."""
         item1 = LineItem(**valid_line_item_data)
-        valid_line_item_data["remote_line_id"] = "RL-002"
+        valid_line_item_data["line_id"] = "RL-002"
         item2 = LineItem(**valid_line_item_data)
         assert item1 != item2
 
@@ -396,7 +356,7 @@ class TestLineItemRepresentation:
     def valid_line_item_data(self):
         """Provide valid LineItem data."""
         return {
-            "remote_line_id": "RL-001",
+            "line_id": "RL-001",
             "product_code": "PROD-123",
             "quantity": 5,
         }
@@ -406,8 +366,8 @@ class TestLineItemRepresentation:
         repr_str = repr(line_item)
         assert "LineItem" in repr_str
 
-    def test_repr_contains_remote_line_id(self, line_item):
-        """Test that repr contains remote_line_id value."""
+    def test_repr_contains_line_id(self, line_item):
+        """Test that repr contains line_id value."""
         repr_str = repr(line_item)
         assert "RL-001" in repr_str
 
@@ -415,8 +375,3 @@ class TestLineItemRepresentation:
         """Test that repr contains product_code value."""
         repr_str = repr(line_item)
         assert "PROD-123" in repr_str
-
-    def test_repr_contains_id(self, line_item):
-        """Test that repr contains the auto-generated id."""
-        repr_str = repr(line_item)
-        assert str(line_item.id) in repr_str
