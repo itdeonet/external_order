@@ -1,7 +1,6 @@
 """Unit tests for the Order domain class."""
 
 import datetime as dt
-import uuid
 
 import pytest
 
@@ -50,7 +49,7 @@ class TestOrderInstantiation:
     @pytest.fixture
     def valid_line_item(self):
         """Provide a LineItem instance."""
-        return LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        return LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
 
     @pytest.fixture
     def valid_order_data(self, valid_ship_to, valid_line_item):
@@ -127,7 +126,7 @@ class TestOrderAdministrationIDValidation:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "customer_id": 100,
             "order_provider": "Provider",
@@ -182,7 +181,7 @@ class TestOrderCustomerIDValidation:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "order_provider": "Provider",
@@ -236,7 +235,7 @@ class TestOrderOrderProviderValidation:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "customer_id": 100,
@@ -290,7 +289,7 @@ class TestOrderPricelistIDValidation:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "customer_id": 100,
@@ -339,7 +338,7 @@ class TestOrderRemoteOrderIDValidation:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "customer_id": 100,
@@ -393,7 +392,7 @@ class TestOrderShipmentTypeValidation:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "customer_id": 100,
@@ -437,7 +436,7 @@ class TestOrderShipToValidation:
     @pytest.fixture
     def minimal_order_data(self):
         """Provide minimal valid Order data."""
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "customer_id": 100,
@@ -534,14 +533,14 @@ class TestOrderLineItemsValidation:
 
     def test_line_items_valid(self, minimal_order_data):
         """Test that valid line_items are accepted."""
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         order = Order(line_items=[line_item], **minimal_order_data)
         assert order.line_items == [line_item]
 
     def test_line_items_multiple_valid(self, minimal_order_data):
         """Test that multiple valid line_items are accepted."""
-        line_item1 = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
-        line_item2 = LineItem(remote_line_id="RL-002", product_code="PROD-002", quantity=10)
+        line_item1 = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item2 = LineItem(line_id="RL-002", product_code="PROD-002", quantity=10)
 
         order = Order(line_items=[line_item1, line_item2], **minimal_order_data)
         assert order.line_items == [line_item1, line_item2]
@@ -563,7 +562,7 @@ class TestOrderSetSaleID:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return Order(
             administration_id=1,
             customer_id=100,
@@ -613,7 +612,7 @@ class TestOrderSetStatus:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return Order(
             administration_id=1,
             customer_id=100,
@@ -708,7 +707,7 @@ class TestOrderCalculateDeliveryDate:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         order = Order(
             administration_id=1,
             customer_id=100,
@@ -742,7 +741,7 @@ class TestOrderSetShipAt:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return Order(
             administration_id=1,
             customer_id=100,
@@ -800,7 +799,7 @@ class TestOrderDescriptionFieldValidation:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "customer_id": 100,
@@ -859,7 +858,7 @@ class TestOrderDeliveryInstructionsField:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "customer_id": 100,
@@ -916,7 +915,7 @@ class TestOrderImmutability:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return Order(
             administration_id=1,
             customer_id=100,
@@ -993,7 +992,7 @@ class TestOrderEquality:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "customer_id": 100,
@@ -1048,54 +1047,6 @@ class TestOrderEquality:
         assert order1 != order2
 
 
-class TestOrderIDGeneration:
-    """Tests for Order ID auto-generation."""
-
-    @pytest.fixture
-    def valid_order_data(self):
-        """Provide valid Order data."""
-        ship_to = ShipTo(
-            remote_customer_id="CUST123",
-            contact_name="John Doe",
-            email="john@example.com",
-            phone="555-0123",
-            street1="123 Main St",
-            city="Chicago",
-            postal_code="60601",
-            country_code="US",
-        )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
-        return {
-            "administration_id": 1,
-            "customer_id": 100,
-            "order_provider": "Provider",
-            "pricelist_id": 50,
-            "remote_order_id": "ORD-123",
-            "shipment_type": "standard",
-            "description": "Test order",
-            "ship_to": ship_to,
-            "line_items": [line_item],
-        }
-
-    def test_id_is_auto_generated_uuid(self, valid_order_data):
-        """Test that id is auto-generated as UUID."""
-        order = Order(**valid_order_data)
-        assert isinstance(order.id, uuid.UUID)
-
-    def test_id_unique_across_instances(self, valid_order_data):
-        """Test that different instances get unique IDs."""
-        order1 = Order(**valid_order_data)
-        order2 = Order(**valid_order_data)
-        assert order1.id != order2.id
-        assert isinstance(order1.id, uuid.UUID)
-        assert isinstance(order2.id, uuid.UUID)
-
-    def test_id_cannot_be_passed_as_parameter(self, valid_order_data):
-        """Test that id parameter is rejected (init=False)."""
-        with pytest.raises(TypeError):
-            Order(id=uuid.uuid4(), **valid_order_data)  # type: ignore
-
-
 class TestOrderSaleIDDefault:
     """Tests for sale_id field defaults."""
 
@@ -1112,7 +1063,7 @@ class TestOrderSaleIDDefault:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "customer_id": 100,
@@ -1152,7 +1103,7 @@ class TestOrderStatusDefault:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "customer_id": 100,
@@ -1192,7 +1143,7 @@ class TestOrderCreatedAtDefault:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "customer_id": 100,
@@ -1240,7 +1191,7 @@ class TestOrderShipAtDefault:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "administration_id": 1,
             "customer_id": 100,
@@ -1287,7 +1238,7 @@ class TestOrderAdministrationIDValidationMessages:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return {
             "customer_id": 100,
             "order_provider": "Provider",
@@ -1320,7 +1271,7 @@ class TestOrderLargeQuantities:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=1000000)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=1000000)
         order = Order(
             administration_id=1,
             customer_id=100,
@@ -1351,9 +1302,9 @@ class TestOrderMultipleLineItems:
             country_code="US",
         )
         line_items = [
-            LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=1),
-            LineItem(remote_line_id="RL-002", product_code="PROD-002", quantity=2),
-            LineItem(remote_line_id="RL-003", product_code="PROD-003", quantity=3),
+            LineItem(line_id="RL-001", product_code="PROD-001", quantity=1),
+            LineItem(line_id="RL-002", product_code="PROD-002", quantity=2),
+            LineItem(line_id="RL-003", product_code="PROD-003", quantity=3),
         ]
         order = Order(
             administration_id=1,
@@ -1386,7 +1337,7 @@ class TestOrderRepresentation:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD-001", quantity=5)
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
         return Order(
             administration_id=1,
             customer_id=100,
