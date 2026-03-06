@@ -5,12 +5,19 @@ from pathlib import Path
 from unittest.mock import Mock
 from zipfile import ZipFile
 
-import httpx
 import pytest
+import requests
 
 from src.app.errors import ArtworkError
 from src.domain import LineItem, Order, ShipTo
 from src.services.spectrum_artwork_service import SpectrumArtworkService
+
+
+def _create_mock_session():
+    """Create a mock requests.Session with a proper headers attribute."""
+    mock = Mock(spec=requests.Session)
+    mock.headers = {}
+    return mock
 
 
 class TestSpectrumArtworkServiceInstantiation:
@@ -18,32 +25,30 @@ class TestSpectrumArtworkServiceInstantiation:
 
     def test_instantiation_with_required_fields(self):
         """Test creating SpectrumArtworkService with required fields."""
-        mock_client = Mock(spec=httpx.Client)
+        mock_client = _create_mock_session()
         digitals_dir = Path("/tmp/digitals")
 
-        service = SpectrumArtworkService(engine=mock_client, digitals_dir=digitals_dir)
+        service = SpectrumArtworkService(
+            session=mock_client, base_url="https://spectrum.example.com", digitals_dir=digitals_dir
+        )
 
-        assert service.engine is mock_client
+        assert service.session is mock_client
         assert service.digitals_dir == digitals_dir
 
     def test_instantiation_initializes_empty_client(self):
         """Test that client is initialized as empty string."""
-        mock_client = Mock(spec=httpx.Client)
-        service = SpectrumArtworkService(engine=mock_client, digitals_dir=Path("/tmp"))
+        mock_client = _create_mock_session()
+        service = SpectrumArtworkService(
+            session=mock_client, base_url="https://spectrum.example.com", digitals_dir=Path("/tmp")
+        )
 
-        assert isinstance(service.client, str)
-        assert service.client == ""
+        assert isinstance(service.client_handle, str)
+        assert service.client_handle == ""
 
-    def test_instantiation_raises_without_engine(self):
-        """Test that engine is required."""
+    def test_instantiation_raises_without_session(self):
+        """Test that session is required."""
         with pytest.raises(TypeError):
-            SpectrumArtworkService(digitals_dir=Path("/tmp"))  # type: ignore
-
-    def test_instantiation_raises_without_digitals_dir(self):
-        """Test that digitals_dir is required."""
-        mock_client = Mock(spec=httpx.Client)
-        with pytest.raises(TypeError):
-            SpectrumArtworkService(engine=mock_client)  # type: ignore
+            SpectrumArtworkService(base_url="https://spectrum.example.com")  # type: ignore
 
 
 class TestSpectrumArtworkServiceClientAttribute:
@@ -51,27 +56,32 @@ class TestSpectrumArtworkServiceClientAttribute:
 
     def test_client_is_initialized_empty(self):
         """Test that client starts as empty string."""
-        mock_client = Mock(spec=httpx.Client)
-        service = SpectrumArtworkService(engine=mock_client, digitals_dir=Path("/tmp"))
+        mock_client = _create_mock_session()
+        service = SpectrumArtworkService(
+            session=mock_client, base_url="https://spectrum.example.com", digitals_dir=Path("/tmp")
+        )
 
-        assert service.client == ""
+        assert service.client_handle == ""
 
     def test_client_cannot_be_set_directly_frozen(self):
         """Test that service is frozen and client cannot be modified directly."""
-        mock_client = Mock(spec=httpx.Client)
-        service = SpectrumArtworkService(engine=mock_client, digitals_dir=Path("/tmp"))
+        mock_client = _create_mock_session()
+        service = SpectrumArtworkService(
+            session=mock_client, base_url="https://spectrum.example.com", digitals_dir=Path("/tmp")
+        )
 
         with pytest.raises(Exception):  # FrozenInstanceError  # noqa: B017
-            service.client = "NEW_CLIENT"  # type: ignore
+            service.client_handle = "NEW_CLIENT"  # type: ignore
 
     def test_client_cannot_be_passed_as_init_parameter(self):
         """Test that client cannot be initialized via __init__."""
-        mock_client = Mock(spec=httpx.Client)
+        mock_client = _create_mock_session()
         with pytest.raises(TypeError):
             SpectrumArtworkService(
-                engine=mock_client,
+                session=mock_client,
+                base_url="https://spectrum.example.com",
                 digitals_dir=Path("/tmp"),
-                client="CLIENT123",  # type: ignore
+                client_handle="CLIENT123",  # type: ignore
             )
 
 
@@ -80,15 +90,15 @@ class TestSpectrumArtworkServiceGetArtwork:
 
     @pytest.fixture
     def mock_client(self):
-        """Provide a mocked httpx.Client."""
-        mock = Mock(spec=httpx.Client)
-        mock.base_url = "https://spectrum.example.com"
-        return mock
+        """Provide a mocked requests.Session."""
+        return _create_mock_session()
 
     @pytest.fixture
     def service(self, mock_client, tmp_path):
         """Provide a SpectrumArtworkService instance."""
-        return SpectrumArtworkService(engine=mock_client, digitals_dir=tmp_path)
+        return SpectrumArtworkService(
+            session=mock_client, base_url="https://spectrum.example.com", digitals_dir=tmp_path
+        )
 
     @pytest.fixture
     def basic_order(self):
@@ -103,7 +113,7 @@ class TestSpectrumArtworkServiceGetArtwork:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD001", quantity=100)
+        line_item = LineItem(line_id="RL-001", product_code="PROD001", quantity=100)
 
         order = Order(
             administration_id=1,
@@ -131,7 +141,7 @@ class TestSpectrumArtworkServiceGetArtwork:
 
         def mock_get_side_effect(url=None, **kwargs):
             """Return different responses based on URL."""
-            response = Mock(spec=httpx.Response)
+            response = Mock(spec=requests.Response)
             if url and "webtoprint" in url:
                 # Design zip file response
                 response.content = design_zip_bytes
@@ -161,11 +171,14 @@ class TestSpectrumArtworkServiceGetArtwork:
 
         # Verify the order API was called with correct endpoint
         calls = mock_client.get.call_args_list
-        assert any(call[1].get("url") == "/api/order/order-number/HA-EM-12345/" for call in calls)
+        assert any(
+            call[1].get("url") == "https://spectrum.example.com/api/order/order-number/HA-EM-12345/"
+            for call in calls
+        )
 
     def test_get_artwork_sets_client_handle(self, service, mock_client, basic_order, mocker):
         """Test that get_artwork sets the client from response."""
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.json.return_value = {
             "clientHandle": "SPECTRUM_CLIENT",
             "line_items": [
@@ -186,7 +199,7 @@ class TestSpectrumArtworkServiceGetArtwork:
         placement_bytes = b"PDF placement content"
 
         def mock_get_side_effect(url=None, **kwargs):
-            response = Mock(spec=httpx.Response)
+            response = Mock(spec=requests.Response)
             if url and "webtoprint" in url:
                 response.content = design_zip_bytes
             elif url and "pdf" in url:
@@ -207,7 +220,7 @@ class TestSpectrumArtworkServiceGetArtwork:
 
         service.get_artwork(basic_order)
 
-        assert service.client == "SPECTRUM_CLIENT"
+        assert service.client_handle == "SPECTRUM_CLIENT"
 
     def test_get_artwork_creates_artwork_object(self, service, mock_client, basic_order, mocker):
         """Test that get_artwork creates Artwork object for each line item."""
@@ -222,7 +235,7 @@ class TestSpectrumArtworkServiceGetArtwork:
 
     def test_get_artwork_raises_for_missing_artwork(self, service, mock_client, basic_order):
         """Test that get_artwork raises ArtworkError if no artwork found."""
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.json.return_value = {
             "clientHandle": "CLIENT123",
             "line_items": [
@@ -241,7 +254,7 @@ class TestSpectrumArtworkServiceGetArtwork:
         self, service, mock_client, basic_order
     ):
         """Test that get_artwork raises error when API returns no line items."""
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.json.return_value = {
             "clientHandle": "CLIENT123",
             "line_items": [],  # Empty list
@@ -265,7 +278,7 @@ class TestSpectrumArtworkServiceGetArtwork:
         placement_bytes = b"PDF placement content"
 
         def mock_get_side_effect(url=None, **kwargs):
-            response = Mock(spec=httpx.Response)
+            response = Mock(spec=requests.Response)
             if url and "webtoprint" in url:
                 response.content = design_zip_bytes
             elif url and "pdf" in url:
@@ -291,7 +304,7 @@ class TestSpectrumArtworkServiceGetArtwork:
         self, service, mock_client, basic_order
     ):
         """Test that get_artwork raises error when skuQuantities is empty."""
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.json.return_value = {
             "clientHandle": "CLIENT123",
             "line_items": [
@@ -319,7 +332,7 @@ class TestSpectrumArtworkServiceGetArtwork:
         placement_bytes = b"PDF placement content"
 
         def mock_get_side_effect(url=None, **kwargs):
-            response = Mock(spec=httpx.Response)
+            response = Mock(spec=requests.Response)
             if url and "webtoprint" in url:
                 response.content = design_zip_bytes
             elif url and "pdf" in url:
@@ -341,7 +354,7 @@ class TestSpectrumArtworkServiceGetArtwork:
         service.get_artwork(basic_order)
 
         # Client should be empty string when not provided
-        assert service.client == ""
+        assert service.client_handle == ""
 
     def test_get_artwork_with_multiple_skus_in_single_line_item(
         self, service, mock_client, tmp_path, mocker
@@ -357,7 +370,7 @@ class TestSpectrumArtworkServiceGetArtwork:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="RL-001", product_code="PROD001", quantity=100)
+        line_item = LineItem(line_id="RL-001", product_code="PROD001", quantity=100)
 
         order = Order(
             administration_id=1,
@@ -382,7 +395,7 @@ class TestSpectrumArtworkServiceGetArtwork:
         placement_bytes = b"PDF placement content"
 
         def mock_get_side_effect(url=None, **kwargs):
-            response = Mock(spec=httpx.Response)
+            response = Mock(spec=requests.Response)
             if url and "webtoprint" in url:
                 response.content = design_zip_bytes
             elif url and "pdf" in url:
@@ -432,7 +445,7 @@ class TestSpectrumArtworkServiceGetArtwork:
         placement_bytes = b"PDF placement content"
 
         def mock_get_side_effect(url=None, **kwargs):
-            response = Mock(spec=httpx.Response)
+            response = Mock(spec=requests.Response)
             if url and "webtoprint" in url:
                 response.content = design_zip_bytes
             elif url and "pdf" in url:
@@ -472,7 +485,7 @@ class TestSpectrumArtworkServiceGetArtwork:
         placement_bytes = b"PDF placement content"
 
         def mock_get_side_effect(url=None, **kwargs):
-            response = Mock(spec=httpx.Response)
+            response = Mock(spec=requests.Response)
             if url and "webtoprint" in url:
                 response.content = design_zip_bytes
             elif url and "pdf" in url:
@@ -512,8 +525,8 @@ class TestSpectrumArtworkServiceGetArtwork:
             postal_code="60601",
             country_code="US",
         )
-        line_item1 = LineItem(remote_line_id="RL-001", product_code="PROD001", quantity=50)
-        line_item2 = LineItem(remote_line_id="RL-002", product_code="PROD002", quantity=75)
+        line_item1 = LineItem(line_id="RL-001", product_code="PROD001", quantity=50)
+        line_item2 = LineItem(line_id="RL-002", product_code="PROD002", quantity=75)
 
         order = Order(
             administration_id=1,
@@ -538,7 +551,7 @@ class TestSpectrumArtworkServiceGetArtwork:
         placement_bytes = b"PDF placement content"
 
         def mock_get_side_effect(url=None, **kwargs):
-            response = Mock(spec=httpx.Response)
+            response = Mock(spec=requests.Response)
             if url and "webtoprint" in url:
                 response.content = design_zip_bytes
             elif url and "pdf" in url:
@@ -563,7 +576,7 @@ class TestSpectrumArtworkServiceGetArtwork:
 
         service.get_artwork(order)
 
-        assert service.client == "CLIENT456"
+        assert service.client_handle == "CLIENT456"
         assert line_item1.artwork is not None
         assert line_item2.artwork is not None
         assert line_item1.artwork.artwork_id == "RECIPE101"
@@ -584,7 +597,7 @@ class TestSpectrumArtworkServiceGetArtwork:
         placement_bytes = b"PDF placement content"
 
         def mock_get_side_effect(url=None, **kwargs):
-            response = Mock(spec=httpx.Response)
+            response = Mock(spec=requests.Response)
             if url and "webtoprint" in url:
                 response.content = design_zip_bytes
             elif url and "pdf" in url:
@@ -614,18 +627,20 @@ class TestSpectrumArtworkServiceGetPlacement:
 
     @pytest.fixture
     def mock_client(self):
-        """Provide a mocked httpx.Client."""
-        return Mock(spec=httpx.Client)
+        """Provide a mocked requests.Session."""
+        return _create_mock_session()
 
     @pytest.fixture
     def service(self, mock_client, tmp_path):
         """Provide a SpectrumArtworkService instance."""
-        return SpectrumArtworkService(engine=mock_client, digitals_dir=tmp_path)
+        return SpectrumArtworkService(
+            session=mock_client, base_url="https://spectrum.example.com", digitals_dir=tmp_path
+        )
 
     def test_get_placement_downloads_pdf(self, service, mock_client):
         """Test that _get_placement downloads and saves PDF file."""
         placement_content = b"PDF content for placement"
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.content = placement_content
         mock_client.get.return_value = mock_response
 
@@ -638,7 +653,7 @@ class TestSpectrumArtworkServiceGetPlacement:
     def test_get_placement_saves_with_correct_filename(self, service, mock_client, tmp_path):
         """Test that placement file is saved with sale_id prefix."""
         placement_content = b"PDF content"
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.content = placement_content
         mock_client.get.return_value = mock_response
 
@@ -650,7 +665,7 @@ class TestSpectrumArtworkServiceGetPlacement:
     def test_get_placement_saves_to_digitals_dir(self, service, mock_client, tmp_path):
         """Test that placement is saved to digitals_dir."""
         placement_content = b"PDF content"
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.content = placement_content
         mock_client.get.return_value = mock_response
 
@@ -660,19 +675,17 @@ class TestSpectrumArtworkServiceGetPlacement:
 
     def test_get_placement_raises_on_http_error(self, service, mock_client):
         """Test that HTTP errors are raised."""
-        mock_response = Mock(spec=httpx.Response)
-        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "404 Not Found", request=Mock(), response=mock_response
-        )
+        mock_response = Mock(spec=requests.Response)
+        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("404 Not Found")
         mock_client.get.return_value = mock_response
 
-        with pytest.raises(httpx.HTTPStatusError):
+        with pytest.raises(requests.exceptions.HTTPError):
             service._get_placement(recipe_set_id="RECIPE001", sale_id=12345)
 
     def test_get_placement_returns_path(self, service, mock_client):
         """Test that _get_placement returns a Path object."""
         placement_content = b"PDF content"
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.content = placement_content
         mock_client.get.return_value = mock_response
 
@@ -683,7 +696,7 @@ class TestSpectrumArtworkServiceGetPlacement:
     def test_get_placement_with_different_recipe_ids(self, service, mock_client, tmp_path):
         """Test that different recipe IDs create different filenames."""
         placement_content = b"PDF content"
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.content = placement_content
         mock_client.get.return_value = mock_response
 
@@ -694,7 +707,7 @@ class TestSpectrumArtworkServiceGetPlacement:
     def test_get_placement_calls_correct_endpoint(self, service, mock_client):
         """Test that _get_placement calls API with correct endpoint structure."""
         placement_content = b"PDF content"
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.content = placement_content
         mock_client.get.return_value = mock_response
 
@@ -712,13 +725,15 @@ class TestSpectrumArtworkServiceGetDesigns:
 
     @pytest.fixture
     def mock_client(self):
-        """Provide a mocked httpx.Client."""
-        return Mock(spec=httpx.Client)
+        """Provide a mocked requests.Session."""
+        return _create_mock_session()
 
     @pytest.fixture
     def service(self, mock_client, tmp_path):
         """Provide a SpectrumArtworkService instance."""
-        return SpectrumArtworkService(engine=mock_client, digitals_dir=tmp_path)
+        return SpectrumArtworkService(
+            session=mock_client, base_url="https://spectrum.example.com", digitals_dir=tmp_path
+        )
 
     def test_get_designs_downloads_zip(self, service, mock_client):
         """Test that _get_designs downloads and extracts zip file."""
@@ -728,14 +743,16 @@ class TestSpectrumArtworkServiceGetDesigns:
             zip_file.writestr("design2.pdf", "design content 2")
         zip_buffer.seek(0)
 
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 
         saved_paths = service._get_designs(recipe_set_id="RECIPE001", sale_id=12345)
 
         assert len(saved_paths) == 2
-        mock_client.get.assert_called_once_with(url="/api/webtoprint/RECIPE001/")
+        mock_client.get.assert_called_once_with(
+            url="https://spectrum.example.com/api/webtoprint/RECIPE001/", timeout=(5, 30)
+        )
         mock_response.raise_for_status.assert_called_once()
 
     def test_get_designs_saves_with_correct_filename(self, service, mock_client, tmp_path):
@@ -745,7 +762,7 @@ class TestSpectrumArtworkServiceGetDesigns:
             zip_file.writestr("design.pdf", "design content")
         zip_buffer.seek(0)
 
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 
@@ -762,7 +779,7 @@ class TestSpectrumArtworkServiceGetDesigns:
             zip_file.writestr("design.pdf", "design content")
         zip_buffer.seek(0)
 
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 
@@ -779,7 +796,7 @@ class TestSpectrumArtworkServiceGetDesigns:
                 zip_file.writestr(f"design_{i}.pdf", f"content {i}")
         zip_buffer.seek(0)
 
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 
@@ -789,13 +806,11 @@ class TestSpectrumArtworkServiceGetDesigns:
 
     def test_get_designs_raises_on_http_error(self, service, mock_client):
         """Test that HTTP errors are raised."""
-        mock_response = Mock(spec=httpx.Response)
-        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "404 Not Found", request=Mock(), response=mock_response
-        )
+        mock_response = Mock(spec=requests.Response)
+        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("404 Not Found")
         mock_client.get.return_value = mock_response
 
-        with pytest.raises(httpx.HTTPStatusError):
+        with pytest.raises(requests.exceptions.HTTPError):
             service._get_designs(recipe_set_id="RECIPE001", sale_id=12345)
 
     def test_get_designs_calls_correct_endpoint(self, service, mock_client):
@@ -805,13 +820,15 @@ class TestSpectrumArtworkServiceGetDesigns:
             zip_file.writestr("design.pdf", "content")
         zip_buffer.seek(0)
 
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 
         service._get_designs(recipe_set_id="ART123", sale_id=456)
 
-        mock_client.get.assert_called_once_with(url="/api/webtoprint/ART123/")
+        mock_client.get.assert_called_once_with(
+            url="https://spectrum.example.com/api/webtoprint/ART123/", timeout=(5, 30)
+        )
 
     def test_get_designs_returns_list_of_paths(self, service, mock_client):
         """Test that _get_designs returns list of Path objects."""
@@ -820,7 +837,7 @@ class TestSpectrumArtworkServiceGetDesigns:
             zip_file.writestr("design.pdf", "content")
         zip_buffer.seek(0)
 
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 
@@ -836,7 +853,7 @@ class TestSpectrumArtworkServiceGetDesigns:
             zip_file.writestr("design.pdf", "content")
         zip_buffer.seek(0)
 
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 

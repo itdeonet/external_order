@@ -1,30 +1,4 @@
-"""Spectrum artwork service for retrieving digital assets from Spectrum API.
-
-This module provides integration with the Spectrum web-to-print system for downloading
-digital artwork assets (design files and specification PDFs) associated with order line items.
-It manages the complete workflow of querying the Spectrum API for artwork metadata, matching
-artwork to order line items, and downloading/extracting ZIP-archived design files and placement
-PDFs to the local digitals directory.
-
-Key Responsibilities:
-- Query Spectrum API to retrieve order and line item artwork metadata
-- Match Spectrum recipe set IDs with order line items by product code and quantity
-- Download and extract ZIP-archived design files from Spectrum
-- Download placement specification PDFs
-- Organize files with sale ID prefixes for traceability
-
-Typical Workflow:
-1. get_artwork() receives an Order with populated line items
-2. Queries /api/order/order-number/{remote_order_id}/ to get artwork metadata
-3. Iterates through line items, matching them to Spectrum SKU/quantity combinations
-4. For each matched line item, downloads designs (_get_designs) and placement (_get_placement)
-5. Sets the Artwork object on the line item with URLs and local file paths
-6. Returns list of all downloaded/extracted file paths
-
-Error Handling:
-Raises ArtworkError if any line item has no matching artwork in Spectrum, preventing
-incomplete orders from proceeding to fulfillment.
-"""
+"""Spectrum artwork service for retrieving and managing digital assets from Spectrum API."""
 
 import io
 from dataclasses import dataclass, field
@@ -32,9 +6,10 @@ from logging import getLogger
 from pathlib import Path
 from zipfile import ZipFile
 
-import httpx
+import requests
 
 from src.app.errors import ArtworkError
+from src.config import get_config
 from src.domain import Artwork, Order
 
 logger = getLogger(__name__)
@@ -42,91 +17,45 @@ logger = getLogger(__name__)
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SpectrumArtworkService:
-    """Frozen dataclass for managing Spectrum artwork service configuration and operations.
-
-    This service implements the artwork service role by integrating with the Spectrum
-    web-to-print platform's HTTP API. The frozen dataclass pattern ensures configuration
-    immutability once initialized, with the httpx.Client maintaining connection pooling
-    and the digitals_dir path anchoring all downloaded files.
-
-    The client attribute is dynamically set during first API call (get_artwork) using
-    object.__setattr__() to bypass frozen state constraints. This captures the clientHandle
-    from the Spectrum API response, which is required for subsequent placement PDF requests.
+    """Retrieve and download digital artwork assets from Spectrum API.
 
     Attributes:
-        engine: Configured httpx.Client with Spectrum API base_url and auth headers.
-                Expected base_url format: "https://api.spectrum.example.com/"
-        digitals_dir: Path to directory where all artwork files (designs and PDFs) are
-                     saved. Directory must exist and be writable.
-        client: Dynamic attribute set on first API call, storing the clientHandle from
-               Spectrum API response. Used to construct placement PDF URLs.
-
-    Example:
-        >>> engine = httpx.Client(
-        ...     base_url="https://api.spectrum.example.com/",
-        ...     headers={"Authorization": "Bearer token"},
-        ... )
-        >>> service = SpectrumArtworkService(engine=engine, digitals_dir=Path("/tmp/artwork"))
-        >>> artwork_files = service.get_artwork(order)
-        >>> len(artwork_files)  # PDF + design files per line item
-        42
+        session: requests.Session configured with auth headers.
+        base_url: Spectrum API base URL (e.g., "https://api.spectrum.example.com/").
+        digitals_dir: Directory where downloaded artwork files are saved.
+        client: Spectrum clientHandle, set from first API call.
     """
 
-    engine: httpx.Client
-    digitals_dir: Path
-    client: str = field(default="", init=False)
+    session: requests.Session
+    base_url: str = field(default_factory=lambda: get_config().spectrum_base_url)
+    digitals_dir: Path = field(default_factory=lambda: Path(get_config().digitals_dir))
+    client_handle: str = field(default="", init=False)
+
+    def __post_init__(self) -> None:
+        """post init to ensure the object is valid."""
+        self.session.headers.update({"SPECTRUM_API_TOKEN": get_config().spectrum_api_key})
 
     def get_artwork(self, order: Order) -> list[Path]:
-        """Retrieve and download all artwork assets for an order from Spectrum.
+        """Retrieve and download artwork assets for an order.
 
-        Orchestrates the complete artwork retrieval workflow:
-        1. Queries Spectrum API for order metadata and line item artwork references
-        2. Extracts clientHandle from response (stored as self.client for later use)
-        3. Builds set of (sku, quantity, recipeSetId) tuples from API response
-        4. Iterates through order line items, matching each to Spectrum artwork by
-           product code and quantity
-        5. For matched line items, downloads designs (ZIP) and placement PDF
-        6. Attaches Artwork object to each line item with URLs and local file paths
-        7. Returns complete list of all local file paths for downstream processing
-
-        The matching process is strict: both product code and quantity must match exactly.
-        If no matching artwork is found for any line item, raises ArtworkError with line
-        item details to prevent incomplete orders from proceeding.
+        Queries Spectrum API for order artwork metadata, matches to line items by product code
+        and quantity, downloads design files and placement PDFs, and returns all file paths.
 
         Args:
-            order: Order object with populated line items. Must have valid remote_order_id
-                  and sale_id set. Each line item requires product_code, quantity, and
-                  remote_line_id attributes.
+            order: Order with line_items. Must have remote_order_id and sale_id set.
 
         Returns:
-            List of Path objects for all downloaded files, including design files (from
-            ZIP extraction) and placement PDFs. Paths use local digitals_dir location
-            with sale ID prefix for traceability (e.g., "S00123_design.pdf").
+            List of Path objects for downloaded files (prefixed with sale ID).
 
         Raises:
-            ArtworkError: If any order line item has no matching artwork in Spectrum
-                         API response based on (product_code, quantity) matching.
-                         Error message includes line item details and remote_order_id
-                         for diagnostics.
-            httpx.HTTPError: If Spectrum API request fails (404, 500, etc.) or
-                            network error occurs.
-
-        Example:
-            >>> order.remote_order_id = "ORD-12345"
-            >>> order.sale_id = 123
-            >>> for li in order.line_items:
-            ...     li.product_code = "ABC123"
-            ...     li.quantity = 5
-            ...     li.remote_line_id = "LI-001"
-            >>> files = service.get_artwork(order)
-            >>> all(f.exists() for f in files)  # All files downloaded
-            True
+            ArtworkError: If any line item has no matching artwork in Spectrum.
+            requests.exceptions.RequestException: If API request fails.
         """
         logger.info(f"Getting artwork IDs for order {order.remote_order_id}")
         endpoint = f"/api/order/order-number/{order.remote_order_id}/"
-        response = self.engine.get(url=endpoint)
+        response = self.session.get(url=f"{self.base_url.rstrip('/')}{endpoint}", timeout=(5, 30))
         response.raise_for_status()
-        object.__setattr__(self, "client", response.json().get("clientHandle", ""))
+        object.__setattr__(self, "client_handle", response.json().get("clientHandle", ""))
 
         # build a set of tuples containing the product code, quantity, and recipe set ID
         artwork_data: set[tuple[str, int, str]] = set()
@@ -140,12 +69,12 @@ class SpectrumArtworkService:
                 if li.product_code == sku and li.quantity == qty:
                     artwork = Artwork(
                         artwork_id=recipe_set_id,
-                        line_item_id=li.remote_line_id,
-                        design_url=f"{str(self.engine.base_url).rstrip('/')}/api/webtoprint/{recipe_set_id}/",
+                        line_id=li.line_id,
+                        design_url=f"{self.base_url.rstrip('/')}/api/webtoprint/{recipe_set_id}/",
                         design_paths=self._get_designs(
                             recipe_set_id=recipe_set_id, sale_id=order.sale_id
                         ),
-                        placement_url=f"{str(self.engine.base_url).rstrip('/')}/{self.client}/specification/{recipe_set_id}/pdf/",
+                        placement_url=f"{self.base_url.rstrip('/')}/{self.client_handle}/specification/{recipe_set_id}/pdf/",
                         placement_path=self._get_placement(
                             recipe_set_id=recipe_set_id, sale_id=order.sale_id
                         ),
@@ -164,46 +93,24 @@ class SpectrumArtworkService:
         return file_paths
 
     def _get_designs(self, recipe_set_id: str, sale_id: int) -> list[Path]:
-        """Download and extract design files from Spectrum webtoprint endpoint.
+        """Download and extract design files from Spectrum.
 
-        Queries the Spectrum webtoprint API endpoint for a recipe set, which returns
-        a ZIP archive containing all design files (typically PDFs or images). The archive
-        is extracted directly to digitals_dir with each file renamed to include the
-        sale ID prefix for traceability.
-
-        Filename transformation:
-        - Original: "design_v1.pdf"
-        - Saved as: "S00123_design_v1.pdf" (where 00123 is the 5-digit sale_id)
-
-        This prefix matching allows downstream systems to quickly find all designs
-        associated with a specific sale.
+        Queries webtoprint endpoint for recipe set, extracts ZIP contents to digitals_dir
+        with sale ID prefix (S{sale_id:05}_{filename}).
 
         Args:
-            recipe_set_id: Spectrum recipe set identifier, obtained from API response.
-                          Used to construct endpoint: /api/webtoprint/{recipe_set_id}/
-            sale_id: Sale/order ID for filename prefixing in format "S{sale_id:05}"
-                    (e.g., S00123 for sale_id=123, S99999 for sale_id=99999).
+            recipe_set_id: Spectrum recipe set identifier.
+            sale_id: Sale ID for filename prefix.
 
         Returns:
-            List of Path objects for extracted design files. All paths point to files
-            in self.digitals_dir with sale ID prefix applied. Order matches ZIP
-            member extraction order.
+            List of Path objects for extracted design files.
 
         Raises:
-            httpx.HTTPError: If Spectrum API request fails (404, 500, etc.) or
-                            network error occurs.
-            zipfile.BadZipFile: If response content is not a valid ZIP archive.
-
-        Example:
-            >>> designs = service._get_designs(recipe_set_id="RST-456", sale_id=123)
-            >>> len(designs)  # Number of files in ZIP
-            7
-            >>> designs[0].name  # e.g., S00123_cover.pdf
-            'S00123_cover.pdf'
+            requests.exceptions.RequestException: If API request fails.
         """
         logger.info("Get designs for artwork %s and order %d", recipe_set_id, sale_id)
         endpoint = f"/api/webtoprint/{recipe_set_id}/"
-        response = self.engine.get(url=endpoint)
+        response = self.session.get(url=f"{self.base_url.rstrip('/')}{endpoint}", timeout=(5, 30))
         response.raise_for_status()
 
         saved_as: list[Path] = []
@@ -220,41 +127,21 @@ class SpectrumArtworkService:
     def _get_placement(self, recipe_set_id: str, sale_id: int) -> Path:
         """Download placement specification PDF from Spectrum.
 
-        Queries the Spectrum specification endpoint to download the placement PDF,
-        which contains production specifications, file setup details, and placement
-        guidelines for the artwork. The PDF is saved to digitals_dir with sale ID
-        prefix for traceability.
-
-        Endpoint construction uses self.client (clientHandle), which must be set
-        from the initial get_artwork() API call. This requirement ensures the client
-        context is established before attempting placement retrieval.
+        Saves PDF to digitals_dir with filename format: S{sale_id:05}_{recipe_set_id}_placement.pdf
 
         Args:
-            recipe_set_id: Spectrum recipe set identifier for which to retrieve
-                          placement specifications.
-            sale_id: Sale/order ID for filename prefixing in format "S{sale_id:05}"
-                    Results in filename like "S00123_RST-456_placement.pdf".
+            recipe_set_id: Spectrum recipe set identifier.
+            sale_id: Sale ID for filename prefix.
 
         Returns:
-            Path to saved placement PDF file in digitals_dir. Filename follows the
-            pattern "S{sale_id:05}_{recipe_set_id}_placement.pdf" to include both
-            sale ID for traceability and recipe set ID for identification.
+            Path to saved placement PDF file.
 
         Raises:
-            httpx.HTTPError: If Spectrum API request fails (404, 500, etc.) or
-                            network error occurs. Note: 404 is likely if client
-                            context (self.client) is not set from get_artwork().
-
-        Example:
-            >>> placement = service._get_placement(recipe_set_id="RST-456", sale_id=123)
-            >>> placement.name
-            'S00123_RST-456_placement.pdf'
-            >>> placement.exists()
-            True
+            requests.exceptions.RequestException: If API request fails.
         """
         logger.info("Get placement for artwork %s and order %d", recipe_set_id, sale_id)
-        endpoint = f"/{self.client}/specification/{recipe_set_id}/pdf/"
-        response = self.engine.get(url=endpoint)
+        endpoint = f"/{self.client_handle}/specification/{recipe_set_id}/pdf/"
+        response = self.session.get(url=f"{self.base_url.rstrip('/')}{endpoint}", timeout=(5, 30))
         response.raise_for_status()
         save_as = self.digitals_dir / f"S{sale_id:05}_{recipe_set_id}_placement.pdf"
         save_as.write_bytes(response.content)
