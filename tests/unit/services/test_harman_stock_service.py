@@ -51,51 +51,6 @@ class TestHarmanStockServiceInstantiation:
         with pytest.raises(AttributeError):
             service.input_dir = tmp_path  # type: ignore
 
-    def test_instantiation_requires_input_dir(self, tmp_path):
-        """Test that input_dir parameter is required."""
-        with pytest.raises(TypeError):
-            HarmanStockService(output_dir=tmp_path)  # type: ignore
-
-    def test_instantiation_requires_output_dir(self, tmp_path):
-        """Test that output_dir parameter is required."""
-        with pytest.raises(TypeError):
-            HarmanStockService(input_dir=tmp_path)  # type: ignore
-
-
-class TestHarmanStockServiceFromConfig:
-    """Tests for from_config class method."""
-
-    def test_from_config_with_valid_paths(self, tmp_path, mocker):
-        """Test creating HarmanStockService from config."""
-        mock_config = mocker.Mock()
-        input_dir = tmp_path / "input"
-        output_dir = tmp_path / "output"
-        input_dir.mkdir()
-        output_dir.mkdir()
-
-        mock_config.harman_input_dir = input_dir
-        mock_config.harman_output_dir = output_dir
-
-        service = HarmanStockService.from_config(mock_config)
-
-        assert service.input_dir == input_dir
-        assert service.output_dir == output_dir
-
-    def test_from_config_returns_harman_stock_service_instance(self, tmp_path, mocker):
-        """Test that from_config returns a HarmanStockService instance."""
-        mock_config = mocker.Mock()
-        input_dir = tmp_path / "input"
-        output_dir = tmp_path / "output"
-        input_dir.mkdir()
-        output_dir.mkdir()
-
-        mock_config.harman_input_dir = input_dir
-        mock_config.harman_output_dir = output_dir
-
-        service = HarmanStockService.from_config(mock_config)
-
-        assert isinstance(service, HarmanStockService)
-
 
 class TestHarmanStockServiceReadStockTransfers:
     """Tests for read_stock_transfers method."""

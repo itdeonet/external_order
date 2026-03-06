@@ -1,106 +1,45 @@
-"""Harman stock transfer service implementation.
+"""Harman stock transfer processing service.
 
-This module provides the HarmanStockService, which reads inbound stock transfer
-notifications (delivery advice) from Harman via XML files and sends confirmations
-back. It implements the IStockService protocol.
-
-Key responsibilities:
-- Reading XML stock transfer notification files from input directory
-- Parsing EDIFACT DELVRY03 data structure into transfer information
-- Extracting delivery numbers, item details, quantities, and locations
-- Generating XML acknowledgment replies in IN05 format
-- Sending email notifications with reply attachments to configured recipient
-- Renaming processed files to prevent re-processing
-
-The service is configured from application settings and integrates with email
-notification system for supplier communication.
+Parses inbound delivery XMLs, extracts transfer info, writes IN05 replies,
+and emails confirmations.
 """
 
 import datetime as dt
 from collections.abc import Generator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Self
+from typing import Any
 
 import xmltodict  # type: ignore
 from redmail.email.sender import EmailSender
 
 from src.app.errors import ErrorStore
-from src.config import Config, get_config
+from src.config import get_config
 
 logger = getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class HarmanStockService:
-    """Harman stock transfer service for reading and confirming deliveries.
+    """Read and acknowledge Harman stock transfer XMLs.
 
-    This service reads inbound stock transfer (delivery advice) notifications
-    from Harman in XML format and manages their lifecycle: reading, parsing,
-    generating acknowledgment replies, and notifying via email.
-
-    All fields are configuration values that define where to read and write
-    stock transfer communications.
-
-    This class enforces:
-    - Frozen: All attributes are read-only after creation (configured via from_config)
-    - Harman-specific formatting: XML parsing and EDIFACT structure generation
-    - Proper error handling with ErrorStore singleton
-    - Email integration for supplier notifications
-
-    Attributes:
-        input_dir: Path to directory containing inbound stock transfer XML files
-        output_dir: Path to directory for output acknowledgment reply files
-
-    Example:
-        >>> service = HarmanStockService.from_config(config)
-        >>> for transfer in service.read_stock_transfers():
-        ...     print(f"Processing delivery {transfer['delivery_number']}")
-        ...     service.reply_stock_transfer(transfer)
+    Config-driven; fields specify `input_dir` and `output_dir` locations.
     """
 
-    input_dir: Path
-    output_dir: Path
-
-    @classmethod
-    def from_config(cls, config: Config) -> Self:
-        """Create a HarmanStockService instance from application configuration.
-
-        Factory method that builds a HarmanStockService with all settings from
-        the application configuration object. This is the standard way to
-        instantiate the service.
-
-        Args:
-            config: Application Config instance with Harman stock service settings
-
-        Returns:
-            Fully initialized HarmanStockService ready to process stock transfers
-        """
-        return cls(
-            input_dir=config.harman_input_dir,
-            output_dir=config.harman_output_dir,
-        )
+    input_dir: Path = field(default_factory=lambda: Path(get_config().harman_input_dir))
+    output_dir: Path = field(default_factory=lambda: Path(get_config().harman_output_dir))
 
     def read_stock_transfers(self) -> Generator[dict[str, Any], None, None]:
-        """Generate stock transfer notifications from input XML files.
+        """Parse XML files and yield stock transfer info.
 
-        Scans the input directory for *.xml files, parses each as EDIFACT
-        delivery advice data, and yields transfer information dictionaries.
-        Errors during parsing are caught and stored without stopping iteration
-        of remaining files.
+        Scans input_dir for *.xml files, parses each, and yields transfer data.
 
         Yields:
-            Dictionary with keys:
-            - 'file_path': Path to the input XML file
-            - 'idoc_number': EDIFACT control document number
-            - 'idoc_datetime': Timestamp from the delivery advice
-            - 'delivery_number': Harman delivery reference number
-            - 'items': List of transfer items with quantity, location, etc.
+            Dict: Stock transfer data with file_path, idoc_number, items, etc.
 
         Note:
-            Files are processed in sorted order for consistency. Files with parse
-            errors are logged but don't prevent processing of other files.
+            Parsing errors are added to ErrorStore and iteration continues.
         """
         for file_path in self.input_dir.glob("*.xml", case_sensitive=False):
             try:
@@ -111,28 +50,14 @@ class HarmanStockService:
                 ErrorStore().add(exc)
 
     def _get_transfer_info(self, transfer_data: dict[str, Any], file_path: Path) -> dict[str, Any]:
-        """Extract transfer information from parsed XML delivery advice data.
-
-        Parses the EDIFACT DELVRY03/IDOC structure containing delivery advice
-        and extracts relevant information about the delivery, items, quantities,
-        and locations into a structured dictionary for processing.
-
-        Handles xmltodict quirk where single items return as dict instead of list.
+        """Extract and normalize stock transfer info from parsed XML.
 
         Args:
-            transfer_data: EDIFACT data parsed by xmltodict from XML file
-            file_path: Path to the source XML file
+            transfer_data: Parsed XML dict (DELVRY03 IDOC).
+            file_path: Source XML file path.
 
         Returns:
-            Dictionary with transfer information:
-            - 'file_path': String path to input file
-            - 'idoc_number': EDIFACT document number (DOCNUM)
-            - 'idoc_datetime': Parsed timestamp from CREDAT and CRETIM
-            - 'delivery_number': Delivery reference (VBELN)
-            - 'items': List of items with item_number, product_code, quantity, storage_location
-
-        Raises:
-            Exception: If required EDIFACT structure elements are missing or unparseable
+            Dict with file_path, idoc_number, idoc_datetime, delivery_number, items.
         """
         idoc: dict = transfer_data.get("DELVRY03", {}).get("IDOC", {})
         control: dict = idoc.get("EDI_DC40", {})
@@ -166,31 +91,13 @@ class HarmanStockService:
         return transfer_info
 
     def reply_stock_transfer(self, transfer_data: dict[str, Any]) -> None:
-        """Generate and send acknowledgment reply for a stock transfer.
-
-        Creates an XML acknowledgment (IN05 format) confirming receipt of the
-        stock transfer, writes it to a file in the output directory, emails it
-        to the configured recipient, and renames the input file to mark it as
-        processed.
-
-        The reply includes:
-        - Matching document number from the original delivery advice
-        - Message direction and code indicating successful processing
-        - Echoed delivery details and item information
-        - Storage location status for inventory tracking
+        """Generate IN05 reply, email confirmation, and mark input file as processed.
 
         Args:
-            transfer_data: Dictionary with transfer information from read_stock_transfers()
-                          Must contain delivery_number, items, idoc_number, idoc_datetime,
-                          and file_path keys.
+            transfer_data: Stock transfer data with delivery_number, items, etc.
 
         Raises:
-            May raise exceptions if file writing or email sending fails
-
-        Side effects:
-            - Creates IN05 reply XML file in output directory
-            - Sends email with attachments to configured recipient
-            - Renames input file with .replied extension to prevent re-processing
+            Exception: If file writing or email sending fails.
         """
         # create reply file with same name as input but with .reply extension
         logger.info(
