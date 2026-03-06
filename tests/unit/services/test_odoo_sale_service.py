@@ -3,8 +3,8 @@
 from datetime import date
 from unittest.mock import Mock
 
-import httpx
 import pytest
+import requests
 
 from src.app.errors import SaleError
 from src.app.odoo_auth import OdooAuth
@@ -26,38 +26,38 @@ class TestOdooSaleServiceInstantiation:
 
     @pytest.fixture
     def mock_client(self):
-        """Provide a mocked httpx.Client with base_url."""
-        client = Mock(spec=httpx.Client)
-        client.base_url = "http://localhost:8069"
+        """Provide a mocked requests.Session."""
+        client = Mock(spec=requests.Session)
         return client
 
     def test_instantiation_with_all_fields(self, mock_auth, mock_client):
         """Test creating OdooSaleService with all required fields."""
-        service = OdooSaleService(auth=mock_auth, engine=mock_client)
+        service = OdooSaleService(auth=mock_auth, session=mock_client)
 
         assert service.auth is mock_auth
-        assert service.engine is mock_client
+        assert service.session is mock_client
 
     def test_instantiation_raises_on_invalid_auth(self, mock_client):
         """Test that ValueError is raised with invalid auth."""
         with pytest.raises(ValueError, match="authentication information is missing or invalid"):
-            OdooSaleService(auth=None, engine=mock_client)  # type: ignore
+            OdooSaleService(auth=None, session=mock_client)  # type: ignore
 
     def test_instantiation_raises_on_invalid_engine(self, mock_auth):
-        """Test that ValueError is raised with invalid engine."""
-        with pytest.raises(ValueError, match="engine is missing or invalid"):
-            OdooSaleService(auth=mock_auth, engine=None)  # type: ignore
+        """Test that ValueError is raised with invalid session."""
+        with pytest.raises(ValueError, match="session is missing or invalid"):
+            OdooSaleService(auth=mock_auth, session=None)  # type: ignore
 
     def test_instantiation_raises_on_missing_base_url(self, mock_auth):
         """Test that ValueError is raised when base_url is not set."""
-        mock_client = Mock(spec=httpx.Client)
-        mock_client.base_url = None
+        # Note: requests.Session doesn't use base_url; it's passed to post()
+        # This test may need adjustment based on how base_url is now being handled
+        mock_client = Mock(spec=requests.Session)
         with pytest.raises(ValueError, match="base URL is not set"):
-            OdooSaleService(auth=mock_auth, engine=mock_client)
+            OdooSaleService(auth=mock_auth, session=mock_client, base_url="")
 
     def test_id_counter_initializes_correctly(self, mock_auth, mock_client):
         """Test that _id_counter is initialized as an iterator."""
-        service = OdooSaleService(auth=mock_auth, engine=mock_client)
+        service = OdooSaleService(auth=mock_auth, session=mock_client)
 
         assert next(service._id_counter) == 1
         assert next(service._id_counter) == 2
@@ -70,9 +70,8 @@ class TestGetSaleData:
     def service(self):
         """Provide an OdooSaleService instance."""
         mock_auth = Mock(spec=OdooAuth)
-        mock_client = Mock(spec=httpx.Client)
-        mock_client.base_url = "http://localhost:8069"
-        return OdooSaleService(auth=mock_auth, engine=mock_client)
+        mock_client = Mock(spec=requests.Session)
+        return OdooSaleService(auth=mock_auth, session=mock_client)
 
     @pytest.fixture
     def order(self):
@@ -87,7 +86,7 @@ class TestGetSaleData:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=10)
+        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=10)
         order = Order(
             administration_id=1,
             customer_id=100,
@@ -135,9 +134,8 @@ class TestIsSaleCreated:
     def service(self):
         """Provide an OdooSaleService instance."""
         mock_auth = Mock(spec=OdooAuth)
-        mock_client = Mock(spec=httpx.Client)
-        mock_client.base_url = "http://localhost:8069"
-        return OdooSaleService(auth=mock_auth, engine=mock_client)
+        mock_client = Mock(spec=requests.Session)
+        return OdooSaleService(auth=mock_auth, session=mock_client)
 
     @pytest.fixture
     def order(self):
@@ -152,7 +150,7 @@ class TestIsSaleCreated:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=10)
+        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=10)
         return Order(
             administration_id=1,
             customer_id=100,
@@ -190,9 +188,8 @@ class TestCreateSale:
     def service(self):
         """Provide an OdooSaleService instance."""
         mock_auth = Mock(spec=OdooAuth)
-        mock_client = Mock(spec=httpx.Client)
-        mock_client.base_url = "http://localhost:8069"
-        return OdooSaleService(auth=mock_auth, engine=mock_client)
+        mock_client = Mock(spec=requests.Session)
+        return OdooSaleService(auth=mock_auth, session=mock_client)
 
     @pytest.fixture
     def order(self):
@@ -207,7 +204,7 @@ class TestCreateSale:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=10)
+        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=10)
         order = Order(
             administration_id=1,
             customer_id=100,
@@ -267,9 +264,8 @@ class TestConfirmSale:
     def service(self):
         """Provide an OdooSaleService instance."""
         mock_auth = Mock(spec=OdooAuth)
-        mock_client = Mock(spec=httpx.Client)
-        mock_client.base_url = "http://localhost:8069"
-        return OdooSaleService(auth=mock_auth, engine=mock_client)
+        mock_client = Mock(spec=requests.Session)
+        return OdooSaleService(auth=mock_auth, session=mock_client)
 
     @pytest.fixture
     def order(self):
@@ -284,7 +280,7 @@ class TestConfirmSale:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=10)
+        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=10)
         return Order(
             administration_id=1,
             customer_id=100,
@@ -327,9 +323,8 @@ class TestGetCompletedSales:
     def service(self):
         """Provide an OdooSaleService instance."""
         mock_auth = Mock(spec=OdooAuth)
-        mock_client = Mock(spec=httpx.Client)
-        mock_client.base_url = "http://localhost:8069"
-        return OdooSaleService(auth=mock_auth, engine=mock_client)
+        mock_client = Mock(spec=requests.Session)
+        return OdooSaleService(auth=mock_auth, session=mock_client)
 
     def test_get_completed_sales_returns_ids(self, service, mocker):
         """Test that get_completed_sales returns list of (id, remote_order_id) tuples."""
@@ -371,9 +366,8 @@ class TestConvertOrderLines:
     def service(self):
         """Provide an OdooSaleService instance."""
         mock_auth = Mock(spec=OdooAuth)
-        mock_client = Mock(spec=httpx.Client)
-        mock_client.base_url = "http://localhost:8069"
-        return OdooSaleService(auth=mock_auth, engine=mock_client)
+        mock_client = Mock(spec=requests.Session)
+        return OdooSaleService(auth=mock_auth, session=mock_client)
 
     @pytest.fixture
     def order(self):
@@ -388,7 +382,7 @@ class TestConvertOrderLines:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=10)
+        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=10)
         return Order(
             administration_id=1,
             customer_id=100,
@@ -449,9 +443,8 @@ class TestGetCountryId:
     def service(self):
         """Provide an OdooSaleService instance."""
         mock_auth = Mock(spec=OdooAuth)
-        mock_client = Mock(spec=httpx.Client)
-        mock_client.base_url = "http://localhost:8069"
-        return OdooSaleService(auth=mock_auth, engine=mock_client)
+        mock_client = Mock(spec=requests.Session)
+        return OdooSaleService(auth=mock_auth, session=mock_client)
 
     def test_get_country_id_successful(self, service, mocker):
         """Test successful country ID retrieval."""
@@ -506,9 +499,8 @@ class TestGetStateId:
     def service(self):
         """Provide an OdooSaleService instance."""
         mock_auth = Mock(spec=OdooAuth)
-        mock_client = Mock(spec=httpx.Client)
-        mock_client.base_url = "http://localhost:8069"
-        return OdooSaleService(auth=mock_auth, engine=mock_client)
+        mock_client = Mock(spec=requests.Session)
+        return OdooSaleService(auth=mock_auth, session=mock_client)
 
     def test_get_state_id_successful(self, service, mocker):
         """Test successful state ID retrieval."""
@@ -566,9 +558,8 @@ class TestGetCarrierId:
     def service(self):
         """Provide an OdooSaleService instance."""
         mock_auth = Mock(spec=OdooAuth)
-        mock_client = Mock(spec=httpx.Client)
-        mock_client.base_url = "http://localhost:8069"
-        return OdooSaleService(auth=mock_auth, engine=mock_client)
+        mock_client = Mock(spec=requests.Session)
+        return OdooSaleService(auth=mock_auth, session=mock_client)
 
     @pytest.fixture
     def order(self):
@@ -583,7 +574,7 @@ class TestGetCarrierId:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=10)
+        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=10)
         return Order(
             administration_id=1,
             customer_id=100,
@@ -641,9 +632,8 @@ class TestGetContactDataFromOrder:
     def service(self):
         """Provide an OdooSaleService instance."""
         mock_auth = Mock(spec=OdooAuth)
-        mock_client = Mock(spec=httpx.Client)
-        mock_client.base_url = "http://localhost:8069"
-        return OdooSaleService(auth=mock_auth, engine=mock_client)
+        mock_client = Mock(spec=requests.Session)
+        return OdooSaleService(auth=mock_auth, session=mock_client)
 
     @pytest.fixture
     def order(self):
@@ -661,7 +651,7 @@ class TestGetContactDataFromOrder:
             country_code="US",
             state="California",
         )
-        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=5)
+        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=5)
         order = Order(
             administration_id=1,
             customer_id=100,
@@ -705,7 +695,7 @@ class TestGetContactDataFromOrder:
             country_code="US",
             state="",
         )
-        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=5)
+        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=5)
         order = Order(
             administration_id=1,
             customer_id=100,
@@ -731,9 +721,8 @@ class TestCreateContact:
     def service(self):
         """Provide an OdooSaleService instance."""
         mock_auth = Mock(spec=OdooAuth)
-        mock_client = Mock(spec=httpx.Client)
-        mock_client.base_url = "http://localhost:8069"
-        return OdooSaleService(auth=mock_auth, engine=mock_client)
+        mock_client = Mock(spec=requests.Session)
+        return OdooSaleService(auth=mock_auth, session=mock_client)
 
     @pytest.fixture
     def order(self):
@@ -751,7 +740,7 @@ class TestCreateContact:
             country_code="US",
             state="California",
         )
-        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=5)
+        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=5)
         return Order(
             administration_id=1,
             customer_id=100,
@@ -798,9 +787,8 @@ class TestUpdateContact:
     def service(self):
         """Provide an OdooSaleService instance."""
         mock_auth = Mock(spec=OdooAuth)
-        mock_client = Mock(spec=httpx.Client)
-        mock_client.base_url = "http://localhost:8069"
-        return OdooSaleService(auth=mock_auth, engine=mock_client)
+        mock_client = Mock(spec=requests.Session)
+        return OdooSaleService(auth=mock_auth, session=mock_client)
 
     @pytest.fixture
     def order(self):
@@ -818,7 +806,7 @@ class TestUpdateContact:
             country_code="US",
             state="California",
         )
-        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=5)
+        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=5)
         return Order(
             administration_id=1,
             customer_id=100,
@@ -878,9 +866,8 @@ class TestHasExpectedOrderLines:
     def service(self):
         """Provide an OdooSaleService instance."""
         mock_auth = Mock(spec=OdooAuth)
-        mock_client = Mock(spec=httpx.Client)
-        mock_client.base_url = "http://localhost:8069"
-        return OdooSaleService(auth=mock_auth, engine=mock_client)
+        mock_client = Mock(spec=requests.Session)
+        return OdooSaleService(auth=mock_auth, session=mock_client)
 
     @pytest.fixture
     def order(self):
@@ -895,7 +882,7 @@ class TestHasExpectedOrderLines:
             postal_code="94102",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=10)
+        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=10)
         order = Order(
             administration_id=1,
             customer_id=100,
@@ -968,9 +955,8 @@ class TestGetShippingInfo:
     def service(self):
         """Provide an OdooSaleService instance."""
         mock_auth = Mock(spec=OdooAuth)
-        mock_client = Mock(spec=httpx.Client)
-        mock_client.base_url = "http://localhost:8069"
-        return OdooSaleService(auth=mock_auth, engine=mock_client)
+        mock_client = Mock(spec=requests.Session)
+        return OdooSaleService(auth=mock_auth, session=mock_client)
 
     @pytest.fixture
     def order(self):
@@ -985,7 +971,7 @@ class TestGetShippingInfo:
             postal_code="94102",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=10)
+        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=10)
         order = Order(
             administration_id=1,
             customer_id=100,
@@ -1047,9 +1033,8 @@ class TestGetSerialsByLineItem:
     def service(self):
         """Provide an OdooSaleService instance."""
         mock_auth = Mock(spec=OdooAuth)
-        mock_client = Mock(spec=httpx.Client)
-        mock_client.base_url = "http://localhost:8069"
-        return OdooSaleService(auth=mock_auth, engine=mock_client)
+        mock_client = Mock(spec=requests.Session)
+        return OdooSaleService(auth=mock_auth, session=mock_client)
 
     @pytest.fixture
     def order(self):
@@ -1064,7 +1049,7 @@ class TestGetSerialsByLineItem:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=2)
+        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=2)
         return Order(
             administration_id=1,
             customer_id=100,
@@ -1128,19 +1113,18 @@ class TestCall:
 
     @pytest.fixture
     def mock_client(self):
-        """Provide a mocked httpx.Client with base_url."""
-        client = Mock(spec=httpx.Client)
-        client.base_url = "http://localhost:8069"
+        """Provide a mocked requests.Session."""
+        client = Mock(spec=requests.Session)
         return client
 
     @pytest.fixture
     def service(self, mock_auth, mock_client):
         """Provide an OdooSaleService instance."""
-        return OdooSaleService(auth=mock_auth, engine=mock_client)
+        return OdooSaleService(auth=mock_auth, session=mock_client)
 
     def test_call_successful(self, service, mock_client):
         """Test successful JSON-RPC call."""
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.json.return_value = {"jsonrpc": "2.0", "result": 100, "id": 1}
         mock_client.post.return_value = mock_response
 
@@ -1151,18 +1135,18 @@ class TestCall:
 
     def test_call_raises_on_http_error(self, service, mock_client):
         """Test that HTTP errors are raised."""
-        mock_response = Mock(spec=httpx.Response)
-        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "500 Server Error", request=Mock(), response=mock_response
+        mock_response = Mock(spec=requests.Response)
+        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
+            "500 Server Error"
         )
         mock_client.post.return_value = mock_response
 
-        with pytest.raises(httpx.HTTPStatusError):
+        with pytest.raises(requests.exceptions.HTTPError):
             service._call("sale.order", "create")
 
     def test_call_raises_on_json_rpc_error(self, service, mock_client):
         """Test that SaleError is raised for JSON-RPC errors."""
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.json.return_value = {
             "jsonrpc": "2.0",
             "error": {
@@ -1179,7 +1163,7 @@ class TestCall:
 
     def test_call_uses_query_options(self, service, mock_client):
         """Test that query_options are included in the payload."""
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.json.return_value = {"jsonrpc": "2.0", "result": [], "id": 1}
         mock_client.post.return_value = mock_response
 
@@ -1196,7 +1180,7 @@ class TestCall:
 
     def test_call_increments_id_counter(self, service, mock_client):
         """Test that ID counter is incremented for each call."""
-        mock_response = Mock(spec=httpx.Response)
+        mock_response = Mock(spec=requests.Response)
         mock_response.json.return_value = {"jsonrpc": "2.0", "result": None, "id": 1}
         mock_client.post.return_value = mock_response
 
@@ -1223,15 +1207,14 @@ class TestOdooSaleServiceCallSearchSingle:
 
     @pytest.fixture
     def mock_client(self):
-        """Provide a mocked httpx.Client with base_url."""
-        client = Mock(spec=httpx.Client)
-        client.base_url = "http://test.example.com"
+        """Provide a mocked requests.Session."""
+        client = Mock(spec=requests.Session)
         return client
 
     @pytest.fixture
     def service(self, mock_auth, mock_client):
         """Provide a configured OdooSaleService."""
-        return OdooSaleService(auth=mock_auth, engine=mock_client)
+        return OdooSaleService(auth=mock_auth, session=mock_client)
 
     def test_call_search_single_with_missing_fields(self, service, mock_client):
         """Test _call_search_single raises when requested fields are missing."""
@@ -1343,9 +1326,8 @@ class TestUpdateDeliveryInstructions:
     def service(self):
         """Provide an OdooSaleService instance."""
         mock_auth = Mock(spec=OdooAuth)
-        mock_client = Mock(spec=httpx.Client)
-        mock_client.base_url = "http://localhost:8069"
-        return OdooSaleService(auth=mock_auth, engine=mock_client)
+        mock_client = Mock(spec=requests.Session)
+        return OdooSaleService(auth=mock_auth, session=mock_client)
 
     @pytest.fixture
     def order(self):
@@ -1360,7 +1342,7 @@ class TestUpdateDeliveryInstructions:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=10)
+        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=10)
         return Order(
             administration_id=1,
             customer_id=100,
@@ -1399,7 +1381,7 @@ class TestUpdateDeliveryInstructions:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=10)
+        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=10)
         order_empty = Order(
             administration_id=1,
             customer_id=100,
@@ -1434,7 +1416,7 @@ class TestUpdateDeliveryInstructions:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=10)
+        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=10)
         order_whitespace = Order(
             administration_id=1,
             customer_id=100,
@@ -1531,7 +1513,7 @@ class TestUpdateDeliveryInstructions:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=10)
+        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=10)
         order_long = Order(
             administration_id=1,
             customer_id=100,
@@ -1571,7 +1553,7 @@ class TestUpdateDeliveryInstructions:
             postal_code="60601",
             country_code="US",
         )
-        line_item = LineItem(remote_line_id="LINE001", product_code="PROD001", quantity=10)
+        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=10)
         order_special = Order(
             administration_id=1,
             customer_id=100,
