@@ -87,12 +87,12 @@ def main() -> None:
             StockTransferUseCase(stock_services=stock_services),
         )
         # execute use cases
-        for _, use_case in use_cases.items():
+        for use_case_name, use_case in use_cases.items():
             try:
                 use_case.execute()
             except Exception as exc:
                 error_store.add(exc)
-                logger.error(f"Error executing use case {use_case.__class__.__name__}: {exc!s}")
+                logger.error(f"Error executing use case {use_case_name}: {exc!s}")
 
     # After all use cases have executed, check if there were any errors and send email if so
     if error_store.has_errors():

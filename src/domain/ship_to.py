@@ -3,7 +3,7 @@
 Defines `ShipTo`, an immutable, validated shipping address for orders.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import src.domain.validators as validators
 
@@ -15,7 +15,6 @@ class ShipTo:
     Validates required fields and normalizes contact data.
     """
 
-    active: bool = field(default=False, init=False)  # archived, not loaded in client portal
     remote_customer_id: str
     company_name: str = ""
     contact_name: str
