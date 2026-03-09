@@ -411,28 +411,28 @@ class TestConvertOrderLines:
         """Test that SaleError is raised when product is not found."""
         mocker.patch.object(OdooSaleService, "_call", return_value=[])
 
-        with pytest.raises(SaleError, match="Product PROD001 not found"):
+        with pytest.raises(SaleError, match="Product search for PROD001 failed"):
             service._convert_order_lines(order)
 
     def test_convert_order_lines_raises_on_invalid_product_data(self, service, mocker, order):
         """Test that SaleError is raised on invalid product data."""
         mocker.patch.object(OdooSaleService, "_call", return_value=[{"id": 1}])  # missing "name"
 
-        with pytest.raises(SaleError, match="Product PROD001 not found"):
+        with pytest.raises(SaleError, match="Product search for PROD001 failed"):
             service._convert_order_lines(order)
 
     def test_convert_order_lines_raises_when_product_is_not_dict(self, service, mocker, order):
         """Test that SaleError is raised when product is not a dict."""
         mocker.patch.object(OdooSaleService, "_call", return_value="not_a_dict")
 
-        with pytest.raises(SaleError, match="Product PROD001 not found"):
+        with pytest.raises(SaleError, match="Product search for PROD001 failed"):
             service._convert_order_lines(order)
 
     def test_convert_order_lines_raises_when_product_missing_id(self, service, mocker, order):
         """Test that SaleError is raised when product dict missing id field."""
         mocker.patch.object(OdooSaleService, "_call", return_value=[{"name": "Product 1"}])
 
-        with pytest.raises(SaleError, match="Product PROD001 not found"):
+        with pytest.raises(SaleError, match="Product search for PROD001 failed"):
             service._convert_order_lines(order)
 
 
@@ -479,16 +479,16 @@ class TestGetCountryId:
 
     def test_get_country_id_raises_when_not_integer(self, service, mocker):
         """Test that TypeError is raised when country_id is not an integer."""
-        mocker.patch.object(OdooSaleService, "_call_search_single", return_value="not_an_int")
+        mocker.patch.object(OdooSaleService, "_call", return_value="not_an_int")
 
-        with pytest.raises(TypeError, match="country_id should be an integer"):
+        with pytest.raises(SaleError, match="Country code 'US' not found in Odoo"):
             service._get_country_id("US")
 
     def test_get_country_id_raises_when_id_is_string_numbers(self, service, mocker):
         """Test that TypeError is raised when country_id is string of numbers."""
-        mocker.patch.object(OdooSaleService, "_call_search_single", return_value=42.5)
+        mocker.patch.object(OdooSaleService, "_call", return_value=42.5)
 
-        with pytest.raises(TypeError, match="country_id should be an integer"):
+        with pytest.raises(SaleError, match="Country code 'US' not found in Odoo"):
             service._get_country_id("US")
 
 
@@ -536,19 +536,21 @@ class TestGetStateId:
 
         assert result == 0
 
-    def test_get_state_id_raises_when_not_integer(self, service, mocker):
-        """Test that TypeError is raised when state_id is not an integer."""
-        mocker.patch.object(OdooSaleService, "_call_search_single", return_value="not_an_int")
+    def test_get_state_id_returns_zero_when_not_integer(self, service, mocker):
+        """Test that 0 is returned when state_id is not an integer."""
+        mocker.patch.object(OdooSaleService, "_call", return_value="not_an_int")
 
-        with pytest.raises(TypeError, match="state_id should be an integer"):
-            service._get_state_id(42, "California")
+        result = service._get_state_id(42, "California")
 
-    def test_get_state_id_raises_when_id_is_float(self, service, mocker):
-        """Test that TypeError is raised when state_id is a float."""
-        mocker.patch.object(OdooSaleService, "_call_search_single", return_value=123.45)
+        assert result == 0
 
-        with pytest.raises(TypeError, match="state_id should be an integer"):
-            service._get_state_id(42, "California")
+    def test_get_state_id_returns_zero_when_id_is_float(self, service, mocker):
+        """Test that 0 is returned when state_id is a float."""
+        mocker.patch.object(OdooSaleService, "_call", return_value=123.45)
+
+        result = service._get_state_id(42, "California")
+
+        assert result == 0
 
 
 class TestGetCarrierId:
@@ -611,17 +613,17 @@ class TestGetCarrierId:
             service._get_carrier_id(order)
 
     def test_get_carrier_id_raises_when_not_integer(self, service, mocker, order):
-        """Test that TypeError is raised when carrier_id is not an integer."""
-        mocker.patch.object(OdooSaleService, "_call_search_single", return_value="not_an_int")
+        """Test that SaleError is raised when carrier_id is not an integer."""
+        mocker.patch.object(OdooSaleService, "_call", return_value="not_an_int")
 
-        with pytest.raises(TypeError, match="carrier_id should be an integer"):
+        with pytest.raises(SaleError, match="Carrier 'FedEx' not found in Odoo"):
             service._get_carrier_id(order)
 
     def test_get_carrier_id_raises_when_id_is_boolean(self, service, mocker, order):
-        """Test that TypeError is raised when carrier_id is a non-int type."""
-        mocker.patch.object(OdooSaleService, "_call_search_single", return_value=[1, 2])
+        """Test that SaleError is raised when carrier_id is a non-int type."""
+        mocker.patch.object(OdooSaleService, "_call", return_value=[1, 2])
 
-        with pytest.raises(TypeError, match="carrier_id should be an integer"):
+        with pytest.raises(SaleError, match="Carrier 'FedEx' not found in Odoo"):
             service._get_carrier_id(order)
 
 
@@ -673,7 +675,9 @@ class TestGetContactDataFromOrder:
         result = service._get_contact_data_from_order(order)
 
         assert result["name"] == "John Doe"
-        assert result["company_name"] == "ACME Corp"
+        # Odoo's "company_id" field is reserved for the Odoo company,
+        # so we map the customer's company name to "deonet_other_company"
+        assert result["deonet_other_company"] == "ACME Corp"
         assert result["country_id"] == 42
         assert result["state_id"] == 100
         assert result["parent_id"] == 100
@@ -1150,9 +1154,9 @@ class TestCall:
         mock_response.json.return_value = {
             "jsonrpc": "2.0",
             "error": {
-                "message": "Record not found",
+                "message": "Odoo Server Error",
                 "code": 1,
-                "data": "detail",
+                "data": {"message": "Record not found"},
             },
             "id": 1,
         }
@@ -1191,132 +1195,6 @@ class TestCall:
         id_1 = calls[0][1]["json"]["id"]
         id_2 = calls[1][1]["json"]["id"]
         assert id_2 > id_1
-
-
-class TestOdooSaleServiceCallSearchSingle:
-    """Tests for _call_search_single method."""
-
-    @pytest.fixture
-    def mock_auth(self):
-        """Provide a mocked OdooAuth."""
-        auth = Mock(spec=OdooAuth)
-        auth.database = "test_db"
-        auth.user_id = 1
-        auth.password = "test_password"
-        return auth
-
-    @pytest.fixture
-    def mock_client(self):
-        """Provide a mocked requests.Session."""
-        client = Mock(spec=requests.Session)
-        return client
-
-    @pytest.fixture
-    def service(self, mock_auth, mock_client):
-        """Provide a configured OdooSaleService."""
-        return OdooSaleService(auth=mock_auth, session=mock_client)
-
-    def test_call_search_single_with_missing_fields(self, service, mock_client):
-        """Test _call_search_single raises when requested fields are missing."""
-        # Mock response missing a requested field
-        mock_client.post.return_value = Mock(
-            json=lambda: {
-                "jsonrpc": "2.0",
-                "result": [{"id": 100, "name": "Test"}],  # missing 'state' field
-            }
-        )
-
-        with pytest.raises(SaleError, match="Partner not found"):
-            service._call_search_single(
-                model="res.partner",
-                query_data=[["id", "=", 100]],
-                fields=["id", "name", "state"],
-                error_message="Partner not found",
-            )
-
-    def test_call_search_single_with_all_fields_present(self, service, mock_client):
-        """Test _call_search_single succeeds when all requested fields are present."""
-        mock_client.post.return_value = Mock(
-            json=lambda: {
-                "jsonrpc": "2.0",
-                "result": [{"id": 100, "name": "Test Company", "email": "test@example.com"}],
-            }
-        )
-
-        result = service._call_search_single(
-            model="res.partner",
-            query_data=[["id", "=", 100]],
-            fields=["id", "name", "email"],
-        )
-
-        assert isinstance(result, dict)
-        assert result["id"] == 100
-        assert result["name"] == "Test Company"
-
-    def test_call_search_single_with_empty_result(self, service, mock_client):
-        """Test _call_search_single returns None for empty results when no error message."""
-        mock_client.post.return_value = Mock(json=lambda: {"jsonrpc": "2.0", "result": []})
-
-        result = service._call_search_single(
-            model="res.partner",
-            query_data=[["id", "=", 999]],
-            fields=["id"],
-        )
-
-        assert result is None
-
-    def test_call_search_single_with_id_field_only(self, service, mock_client):
-        """Test _call_search_single returns integer when only id field requested."""
-        mock_client.post.return_value = Mock(
-            json=lambda: {
-                "jsonrpc": "2.0",
-                "result": [{"id": 100}],
-            }
-        )
-
-        result = service._call_search_single(
-            model="res.partner",
-            query_data=[["id", "=", 100]],
-            fields=["id"],
-        )
-
-        assert isinstance(result, int)
-        assert result == 100
-
-    def test_call_search_single_returns_none_when_multi_field_missing(self, service, mock_client):
-        """Test _call_search_single returns None when multi-field request has missing fields."""
-        mock_client.post.return_value = Mock(
-            json=lambda: {
-                "jsonrpc": "2.0",
-                "result": [{"id": 100, "name": "Test"}],  # Missing "email" field
-            }
-        )
-
-        result = service._call_search_single(
-            model="res.partner",
-            query_data=[["id", "=", 100]],
-            fields=["id", "name", "email"],
-        )
-
-        # Should return None because email field is missing and no error_message
-        assert result is None
-
-    def test_call_search_single_raises_on_missing_field_with_error(self, service, mock_client):
-        """Test _call_search_single raises when field missing and error_message set."""
-        mock_client.post.return_value = Mock(
-            json=lambda: {
-                "jsonrpc": "2.0",
-                "result": [{"id": 100}],  # Missing "name" field
-            }
-        )
-
-        with pytest.raises(SaleError, match="Partner not found"):
-            service._call_search_single(
-                model="res.partner",
-                query_data=[["id", "=", 100]],
-                fields=["id", "name"],
-                error_message="Partner not found",
-            )
 
 
 class TestUpdateDeliveryInstructions:
