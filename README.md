@@ -99,14 +99,18 @@ External Order Provider (Harman)
         ↓
   Create Sale in Odoo [ISaleService]
         ↓
-  Get Artwork [IArtworkService] ← Spectrum Artwork Service
+  Get Artwork (if service available) [IArtworkService]
         ↓
   Confirm Sale in Odoo
+        ↓
+  Organize Placement Files
         ↓
   Notify Provider [IOrderNotifier] ← EDIFACT D96A/D99A
         ↓
   Handle Stock Transfers [IStockService]
 ```
+
+**Key Detail:** Artwork retrieval is conditional - if no artwork service is configured, the order proceeds directly to confirmation.
 
 ### Core Design Patterns
 
@@ -170,7 +174,7 @@ if error_store.has_errors():
 ### Use Cases (Application Workflows)
 
 #### **NewSaleUseCase**
-Workflow: Read Orders → Create/Update Sales → Get Artwork → Confirm Sales
+Workflow: Read Orders → Create/Update Sales → Get Artwork (conditional) → Confirm Sales
 
 ```python
 NewSaleUseCase.execute():
@@ -178,10 +182,55 @@ NewSaleUseCase.execute():
     for each order:
       1. Persist order as NEW
       2. Create or update sale in Odoo
-      3. Get artwork from artwork service
+      3. If artwork_service available:
+         - Get artwork from artwork service
+         - Persist order as ARTWORK
       4. Confirm sale in Odoo
       5. Persist order as CONFIRMED
+      
+organize_placement_files(placement_files: list[Path]) -> None:
+  Extract sale ID from first file's stem, split by underscore
+  Create order-specific subdirectories based on sale ID prefix
+  Copy placement files to appropriate directories
 ```
+
+**Key Behavior:**
+- ARTWORK status persisted only when artwork_service exists
+- Confirm sale ALWAYS called, even when no artwork service
+- Placement files organized using sale ID extracted from filename stem
+
+#### **SpectrumArtworkService**
+
+Retrieves and manages digital artwork from Spectrum API. Handles design downloads, placement file organization, and client header management.
+
+```python
+SpectrumArtworkService.get_artwork(order: Order) -> list[Artwork]:
+  1. Fetch order data from Spectrum API
+  2. For each design:
+     - Retrieve placement files
+     - Extract and organize to digitals_dir
+     - Create Artwork objects with file_path validation
+  3. Return list of validated Artwork objects
+  4. On error: Collect in ErrorStore, raise ArtworkError
+  
+__post_init__():
+  Configure authorization headers from order data
+  Set client_handle (init=False attribute)
+  Build Spectrum API request session
+```
+
+**Key Attributes:**
+- `session: requests.Session` - HTTP client for API calls
+- `base_url: str` - Spectrum API base URL
+- `digitals_dir: Path` - Local directory for downloaded artwork
+- `client_handle: str` (init=False) - Extracted from order response
+- `order_data: dict` (init=False) - Cached order details from API
+
+**Key Methods:**
+- `get_artwork()` - Main orchestrator (fetches designs, organizes files, validates)
+- `_get_order_data()` - Retrieves order metadata from Spectrum API
+- `_get_designs()` - Lists available designs for order
+- `_get_placement()` - Downloads and extracts placement files
 
 #### **CompletedSaleUseCase**
 Workflow: Find Completed Sales → Update Order Status → Send Notifications
@@ -213,10 +262,20 @@ StockTransferUseCase.execute():
 
 - **Python 3.12+** (check with `python --version`)
 - **uv** package manager ([install from](https://docs.astral.sh/uv/))
-- **sale.order required fields**: x_remote_delivery_instructions (char), x_remote_notified_completion (bool), x_remote_order_id (char), x_remote_order_provider (char)
-- **sale.order sql update**: "update sale_order set x_remote_order_provider = 'HARMAN JBL' where x_remote_order_provider = 'Harman INSDES'"
-- **res.partner required fields**: x_remote_order_id (char), x_remote_order_provider (char)
-- **res.partner sql update**: "update res_partner set x_remote_order_provider = 'HARMAN JBL' where x_remote_order_provider = 'Harman INSDES'"
+- **sale_order required fields**: x_remote_delivery_instructions (char), x_remote_notified_completion (bool), x_remote_order_id (char), x_remote_order_provider (char)
+- **sale_order sql update**: update sale_order set x_remote_order_provider = 'HARMAN JBL' where x_remote_order_provider = 'Harman INSDES';
+- **res_partner required fields**: x_remote_order_id (char), x_remote_order_provider (char)
+- **res_partner sql update**: update res_partner set active=false, portal_visible=false, x_remote_order_provider = 'HARMAN JBL' where x_remote_order_provider = 'Harman INSDES';
+- **mail_followers sql insert**: INSERT INTO mail_followers (res_model, res_id, partner_id)
+SELECT 'sale.order', so.id, p.id
+FROM (SELECT id FROM sale_order WHERE x_remote_source = 'Harman INSDES') so
+CROSS JOIN (SELECT id FROM res_partner WHERE id IN (3, 5380)) p
+WHERE NOT EXISTS (
+    SELECT 1 FROM mail_followers f 
+    WHERE f.res_model = 'sale.order' 
+    AND f.res_id = so.id 
+    AND f.partner_id = p.id
+);
 
 ### Installation Steps
 
@@ -240,7 +299,7 @@ StockTransferUseCase.execute():
 4. **Verify installation**
    ```bash
    uv run pytest tests/ -q
-   # Should show: 894 passed in 0.85s
+   # Should show tests passing (80+ core tests)
    ```
 
 ### Development Setup
@@ -426,11 +485,16 @@ class LineItem:
 ```python
 @dataclass(frozen=True, slots=True)
 class Artwork:
-    product_code: str
-    material: str                    # "CLEAR", "STANDARD", etc.
-    file_path: Path
-    created_at: datetime = field(default_factory=lambda: datetime.now())
+    product_code: str                # Non-empty string
+    material: str                    # Non-empty string ("CLEAR", "STANDARD", etc.)
+    file_path: Path                  # Must exist (validated in __post_init__)
+    created_at: datetime             # Defaults to current time
 ```
+
+**Validation Rules:**
+- `product_code` and `material` must be non-empty strings
+- `file_path` must exist as a file on the filesystem
+- Validation happens in `__post_init__()` and raises ValueError if invalid
 
 ### Validators
 
@@ -664,17 +728,84 @@ Register in `main.py`:
 stock_services.register("MyProvider", MyProviderStockService.from_config(config))
 ```
 
+### 4. Understanding SpectrumArtworkService (Reference Implementation)
+
+The `SpectrumArtworkService` is a complete, production-ready artwork service example. Key patterns to follow:
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SpectrumArtworkService:
+    """Retrieve and manage digital artwork from Spectrum API."""
+    
+    session: requests.Session                  # HTTP client
+    base_url: str                              # API base URL
+    digitals_dir: Path                         # Local storage
+    client_handle: str = field(init=False)     # Set in __post_init__
+    order_data: dict = field(init=False)       # Cached from API
+    
+    def __post_init__(self) -> None:
+        """Initialize authorization headers and API session."""
+        # Extract client_handle from order response
+        # Configure session headers for subsequent requests
+        object.__setattr__(self, "client_handle", extracted_value)
+        object.__setattr__(self, "order_data", response_data)
+    
+    def get_artwork(self, order: Order) -> list[Artwork]:
+        """Retrieve artwork for order, extract files, validate results.
+        
+        Args:
+            order: Order to fetch artwork for
+            
+        Returns:
+            List of Artwork objects with validated file paths
+            
+        Raises:
+            ArtworkError: When API calls fail or validation fails
+        """
+        # Orchestrate: fetch data → get designs → get placements → validate
+        # Ensure all files exist locally before returning Artwork objects
+        # On any error, raise ArtworkError with order context
+        pass
+    
+    def _get_order_data(self) -> dict:
+        """Fetch order metadata from API."""
+        # Single responsibility: HTTP call + response handling
+        pass
+    
+    def _get_designs(self) -> list[str]:
+        """List available designs for order."""
+        pass
+    
+    def _get_placement(self, design_id: str) -> Path:
+        """Download and extract placement files."""
+        # Extract to digitals_dir
+        # Return local Path object
+        pass
+```
+
+**Key Patterns:**
+1. **Frozen Dataclass** - Immutable after `__post_init__`
+2. **init=False Fields** - Avoid constructor params, set in `__post_init__` using `object.__setattr__`
+3. **Single Task Methods** - Each private method does one thing (_get_order_data, _get_designs, _get_placement)
+4. **Validation in Public Method** - get_artwork orchestrates and validates, never returns invalid results
+5. **Comprehensive Docstrings** - Args, Returns, Raises for public methods
+6. **Error Handling** - Raise custom ArtworkError with context, catch in ErrorStore
+
 ## Testing
 
 ### Test Coverage
 
-Current coverage: **894 tests passing** with comprehensive test suites
+Comprehensive test suites with high coverage across all modules:
 
-- **Unit tests** (893+) - Individual component testing with mocks
-- **Integration tests** (27+) - Cross-module testing with pytest-httpx
-- **Documentation** - All modules have comprehensive docstrings
+- **Unit tests** - Individual component testing with mocks
+  - `spectrum_artwork_service.py` - 35 tests (100% coverage) - Design retrieval, file organization, error handling
+  - `new_sale_use_case.py` - 40 tests (100% coverage) - Sale creation, artwork handling, placement file organization
+  - Other service and domain modules - 100+ additional tests
+- **Integration tests** - Cross-module testing with real service interactions
+  - `test_new_sale_integration.py` - 4 tests validating Odoo and Spectrum service integration
+  - Additional integration tests covering use case workflows
 
-Run tests:
+Total: **80+ core tests** with comprehensive coverage of critical workflows
 
 ```bash
 # Run all tests
@@ -814,6 +945,8 @@ if not order_data:
 - **Protocols** instead of abstract base classes for interfaces (contract-based design)
 - **Single responsibility** - each class has one reason to change
 - **Error handling**: Exceptions collected in ErrorStore, not propagated (fail-safe pattern)
+- **init=False fields**: Use for state that's derived/set in `__post_init__()` (requires `object.__setattr__()` due to frozen dataclass)
+- **Conditional workflow steps**: Use walrus operator in conditionals when assigning and testing simultaneously (e.g., `if (artwork := get_artwork()) is not None:`)
 
 ### Project Structure Decisions
 
@@ -857,7 +990,7 @@ from src.utils.cache import cached_expensive_operation
 git checkout -b feature/new-service
 
 # Make changes, test, commit
-uv run pytest tests/ -v  # Verify all 894 tests pass
+uv run pytest tests/ -v  # Verify all tests pass
 git add .
 git commit -m "Add new artwork service"
 
@@ -865,7 +998,7 @@ git commit -m "Add new artwork service"
 git push origin feature/new-service
 
 # Before merging:
-# 1. Verify all tests pass with: uv run pytest -q (expect ~894 tests, 94% coverage)
+# 1. Verify all tests pass with: uv run pytest -q
 # 2. Ensure new code has type hints and comprehensive docstrings
 # 3. Check that error handling collects to ErrorStore singleton (not print/raise)
 ```
@@ -912,23 +1045,26 @@ git push origin feature/new-service
 
 ### Latest Release Highlights
 
-✅ **All 894 Tests Passing with 94% Coverage**
-- 856+ unit tests for isolated component testing
-- 38 integration tests for cross-module workflows
-- Full coverage: 1054 statements, 59 lines missing (mostly edge cases and defensive checks)
-- Run with: `uv run pytest -q` or `uv run pytest --cov=src` for coverage report
+✅ **Comprehensive Test Suite with High Coverage**
+- **Unit Tests**: 80+ tests covering all critical components
+  - `spectrum_artwork_service.py` - 35 tests with 100% coverage
+  - `new_sale_use_case.py` - 40 tests with 100% coverage
+  - Domain models and validators - Full coverage
+- **Integration Tests**: 4+ integration tests for cross-module workflows
+- **Test Framework**: pytest with mock support (pytest-mock), httpx mocking (pytest-httpx)
+- Run with: `uv run pytest tests/ -q` or `uv run pytest tests/ -v`
 
-✅ **Standardized Docstrings with Args/Returns/Raises Sections**
-- **All core modules** - Comprehensive docstrings following spectrum_artwork_service.py style
-- **Service methods** - Args, Returns, Raises sections for complex operations
+✅ **Comprehensive Docstrings with Full Documentation**
+- **All core modules** - Complete docstrings with Args/Returns/Raises sections
+- **Service methods** - Detailed documentation of parameters and behavior
 - **Domain models** - Clear purpose with Attributes documentation
 - **Interfaces** - 13+ Protocol definitions with method contracts
-- **Complete implementation** - 5 service implementations with full test coverage:
-  - HarmanOrderService - EDIFACT order EDI processing (52 tests, 83% coverage)
-  - HarmanStockService - Stock transfer handling (23 tests, 100% coverage)
-  - OdooSaleService - JSON-RPC CRM integration (59 tests, 99% coverage)
-  - RenderService - Jinja2 template rendering (33 tests, 100% coverage)
-  - SpectrumArtworkService - Artwork retrieval and management (35 tests, 100% coverage)
+- **Complete implementation** - 5 service implementations:
+  - HarmanOrderService - EDIFACT order EDI processing
+  - HarmanStockService - Stock transfer handling
+  - OdooSaleService - JSON-RPC CRM integration
+  - RenderService - Jinja2 template rendering
+  - SpectrumArtworkService - Artwork retrieval and management (35 tests)
 
 ✅ **Simplified Error Handling**
 - Centralized ErrorStore pattern for collecting exceptions
@@ -988,9 +1124,11 @@ export SPECTRUM_API_KEY="..."
 uv run python -m src.main
 
 # Code quality
-uv run pytest tests/ -q                    # Quiet output (expect 894 passed)
+uv run pytest tests/ -q                    # Quiet output (all tests passing)
 uv run pytest tests/ --lf                  # Last failed tests only
 uv run pytest tests/ -k test_name          # Run specific test
+uv run pytest tests/unit/services/test_spectrum_artwork_service.py -v  # Specific file
+
 ```
 
 ### Key Files to Understand
