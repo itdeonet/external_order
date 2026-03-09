@@ -113,7 +113,9 @@ class IArtworkServiceProvider(Protocol):
 class IOrderService(IOrderReader, IOrderStore, IOrderNotifier, IArtworkServiceProvider, Protocol):
     """Composite Protocol aggregating order read/store/notify and artwork selection."""
 
-    ...
+    def should_update_sale(self, order: "Order") -> bool:
+        """Determine if an existing sale should be updated based on `order` data."""
+        ...
 
 
 # ============================================================================
