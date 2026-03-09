@@ -166,6 +166,7 @@ class TestCreateSalesNewSaleCreation:
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.is_sale_created.return_value = False
+        use_case.sale_service.create_sale.return_value = 12345
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -201,30 +202,42 @@ class TestCreateSalesNewSaleCreation:
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.is_sale_created.return_value = False
+        use_case.sale_service.create_sale.return_value = 999
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.execute()
 
         calls = order_service.persist_order.call_args_list
+        # When artwork_service is None, only NEW, CREATED, CONFIRMED are persisted
+        assert calls[0] == call(order, OrderStatus.NEW)
         assert calls[1] == call(order, OrderStatus.CREATED)
+        assert calls[2] == call(order, OrderStatus.CONFIRMED)
 
     def test_create_sales_persists_order_status_artwork(self, use_case, mocker):
-        """Test that order is persisted with ARTWORK status after getting artwork."""
+        """Test that order is persisted with ARTWORK status when artwork service exists."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
+        artwork_service = MagicMock(spec=IArtworkService)
+        artwork_service.get_artwork.return_value = []
+
         order_service.read_orders.return_value = iter([order])
-        order_service.get_artwork_service.return_value = None
+        order_service.get_artwork_service.return_value = artwork_service
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.is_sale_created.return_value = False
+        use_case.sale_service.create_sale.return_value = 999
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.execute()
 
         calls = order_service.persist_order.call_args_list
+        # When artwork_service exists: NEW, CREATED, ARTWORK, CONFIRMED
+        assert calls[0] == call(order, OrderStatus.NEW)
+        assert calls[1] == call(order, OrderStatus.CREATED)
         assert calls[2] == call(order, OrderStatus.ARTWORK)
+        assert calls[3] == call(order, OrderStatus.CONFIRMED)
 
     def test_create_sales_persists_order_status_confirmed(self, use_case, mocker):
         """Test that order is persisted with CONFIRMED status after confirming sale."""
@@ -235,23 +248,29 @@ class TestCreateSalesNewSaleCreation:
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.is_sale_created.return_value = False
+        use_case.sale_service.create_sale.return_value = 999
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.execute()
 
         calls = order_service.persist_order.call_args_list
-        assert calls[3] == call(order, OrderStatus.CONFIRMED)
+        # When artwork_service is None: NEW, CREATED, CONFIRMED
+        assert calls[2] == call(order, OrderStatus.CONFIRMED)
 
     def test_create_sales_confirms_sale_after_artwork(self, use_case, mocker):
         """Test that sale is confirmed after getting artwork."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
+        artwork_service = MagicMock(spec=IArtworkService)
+        artwork_service.get_artwork.return_value = []
+
         order_service.read_orders.return_value = iter([order])
-        order_service.get_artwork_service.return_value = None
+        order_service.get_artwork_service.return_value = artwork_service
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.is_sale_created.return_value = False
+        use_case.sale_service.create_sale.return_value = 999
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -470,78 +489,20 @@ class TestCreateSalesWithMultipleServices:
         order_service3.read_orders.assert_called_once()
 
 
-class TestGetArtworkBasic:
-    """Tests for get_artwork basic functionality."""
+class TestOrganizePlacementFiles:
+    """Tests for organize_placement_files method."""
 
-    def test_get_artwork_with_no_service(self, use_case, mocker):
-        """Test get_artwork returns empty list when no service provided."""
-        order = create_sample_order()
-
-        result = use_case.get_artwork(order, None)
-
-        assert result == []
-        mocker.patch("src.app.new_sale_use_case.logger")
-
-    def test_get_artwork_with_service_returning_no_files(self, use_case, mocker):
-        """Test get_artwork when service returns no files."""
-        order = create_sample_order()
-        artwork_service = MagicMock(spec=IArtworkService)
-        artwork_service.get_artwork.return_value = []
-
-        mocker.patch("src.app.new_sale_use_case.logger")
-
-        result = use_case.get_artwork(order, artwork_service)
-
-        assert result == []
-        artwork_service.get_artwork.assert_called_once_with(order)
-
-    def test_get_artwork_returns_list_of_paths(self, use_case, mocker):
-        """Test get_artwork returns list of Path objects."""
-        order = create_sample_order()
-        artwork_service = MagicMock(spec=IArtworkService)
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            temp_file = Path(tmpdir) / "test.pdf"
-            temp_file.write_text("test")
-            artwork_service.get_artwork.return_value = [temp_file]
-
-            mocker.patch("src.app.new_sale_use_case.logger")
-
-            result = use_case.get_artwork(order, artwork_service)
-
-            assert isinstance(result, list)
-            assert len(result) == 1
-            assert result[0] == temp_file
-
-    def test_get_artwork_calls_service_get_artwork(self, use_case, mocker):
-        """Test get_artwork calls the artwork service."""
-        order = create_sample_order()
-        artwork_service = MagicMock(spec=IArtworkService)
-        artwork_service.get_artwork.return_value = []
-
-        mocker.patch("src.app.new_sale_use_case.logger")
-
-        use_case.get_artwork(order, artwork_service)
-
-        artwork_service.get_artwork.assert_called_once_with(order)
-
-
-class TestGetArtworkPlacementHandling:
-    """Tests for placement file handling in get_artwork."""
-
-    def test_get_artwork_copies_placement_file(self, use_case, mocker):
+    def test_organize_placement_files_copies_placement_file(self, use_case, mocker):
         """Test that placement files are copied to order directory."""
         order = create_sample_order()
-        artwork_service = MagicMock(spec=IArtworkService)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             temp_file = Path(tmpdir) / "ABC123_placement.pdf"
             temp_file.write_text("placement content")
-            artwork_service.get_artwork.return_value = [temp_file]
 
             mocker.patch("src.app.new_sale_use_case.logger")
 
-            use_case.get_artwork(order, artwork_service)
+            use_case.organize_placement_files(order, [temp_file])
 
             # Check that file was copied to order directory
             expected_dir = use_case.open_orders_dir / "ABC123"
@@ -549,28 +510,25 @@ class TestGetArtworkPlacementHandling:
             assert (expected_dir / temp_file.name).exists()
             assert (expected_dir / temp_file.name).read_text() == "placement content"
 
-    def test_get_artwork_does_not_copy_non_placement_file(self, use_case, mocker):
+    def test_organize_placement_files_does_not_copy_non_placement_file(self, use_case, mocker):
         """Test that non-placement files are not copied."""
         order = create_sample_order()
-        artwork_service = MagicMock(spec=IArtworkService)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             temp_file = Path(tmpdir) / "ABC123_artwork.pdf"
             temp_file.write_text("artwork content")
-            artwork_service.get_artwork.return_value = [temp_file]
 
             mocker.patch("src.app.new_sale_use_case.logger")
 
-            use_case.get_artwork(order, artwork_service)
+            use_case.organize_placement_files(order, [temp_file])
 
             # Check that file was not copied
             expected_dir = use_case.open_orders_dir / "ABC123"
             assert not expected_dir.exists()
 
-    def test_get_artwork_placement_detection_case_insensitive(self, use_case, mocker):
+    def test_organize_placement_files_case_insensitive(self, use_case, mocker):
         """Test that placement detection is case insensitive."""
         order = create_sample_order()
-        artwork_service = MagicMock(spec=IArtworkService)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Test various case combinations
@@ -583,40 +541,36 @@ class TestGetArtworkPlacementHandling:
             for filename in test_cases:
                 temp_file = Path(tmpdir) / filename
                 temp_file.write_text("placement")
-                artwork_service.get_artwork.return_value = [temp_file]
 
                 mocker.patch("src.app.new_sale_use_case.logger")
 
-                use_case.get_artwork(order, artwork_service)
+                use_case.organize_placement_files(order, [temp_file])
 
                 name_parts = filename.split("_")
                 expected_dir = use_case.open_orders_dir / name_parts[0]
                 assert (expected_dir / filename).exists()
 
-    def test_get_artwork_creates_nested_order_directory(self, use_case, mocker):
+    def test_organize_placement_files_creates_nested_order_directory(self, use_case, mocker):
         """Test that order directory is created for placement files."""
         order = create_sample_order()
-        artwork_service = MagicMock(spec=IArtworkService)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create a file with underscore in the name
             temp_file = Path(tmpdir) / "ORDER_CODE_placement.pdf"
             temp_file.write_text("placement")
-            artwork_service.get_artwork.return_value = [temp_file]
 
             mocker.patch("src.app.new_sale_use_case.logger")
 
-            use_case.get_artwork(order, artwork_service)
+            use_case.organize_placement_files(order, [temp_file])
 
             # The order ID is extracted from the first part before underscore
             expected_dir = use_case.open_orders_dir / "ORDER"
             assert expected_dir.exists()
             assert (expected_dir / temp_file.name).exists()
 
-    def test_get_artwork_handles_multiple_files_mixed(self, use_case, mocker):
-        """Test get_artwork with mix of placement and non-placement files."""
+    def test_organize_placement_files_handles_multiple_files_mixed(self, use_case, mocker):
+        """Test organize_placement_files with mix of placement and non-placement files."""
         order = create_sample_order()
-        artwork_service = MagicMock(spec=IArtworkService)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             placement_file = Path(tmpdir) / "ABC_placement.pdf"
@@ -624,43 +578,36 @@ class TestGetArtworkPlacementHandling:
             placement_file.write_text("placement")
             artwork_file.write_text("artwork")
 
-            artwork_service.get_artwork.return_value = [placement_file, artwork_file]
-
             mocker.patch("src.app.new_sale_use_case.logger")
 
-            result = use_case.get_artwork(order, artwork_service)
+            result = use_case.organize_placement_files(order, [placement_file, artwork_file])
 
-            # Both files should be returned
-            assert len(result) == 2
-
-            # Only placement should be copied
+            # Only placement should be copied and returned
+            assert len(result) == 1
             expected_dir = use_case.open_orders_dir / "ABC"
             assert (expected_dir / placement_file.name).exists()
             assert not (expected_dir / artwork_file.name).exists()
 
-    def test_get_artwork_placement_with_underscore_in_name(self, use_case, mocker):
-        """Test placement detection with underscores in filename."""
+    def test_organize_placement_files_with_underscore_in_name(self, use_case, mocker):
+        """Test placement file with underscores in filename."""
         order = create_sample_order()
-        artwork_service = MagicMock(spec=IArtworkService)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # File with underscores: XYZ_ABC_DEF_placement.pdf
             temp_file = Path(tmpdir) / "XYZ_ABC_DEF_placement.pdf"
             temp_file.write_text("placement")
-            artwork_service.get_artwork.return_value = [temp_file]
 
             mocker.patch("src.app.new_sale_use_case.logger")
 
-            use_case.get_artwork(order, artwork_service)
+            use_case.organize_placement_files(order, [temp_file])
 
             # Should extract "XYZ" as the order ID (first part before underscore)
             expected_dir = use_case.open_orders_dir / "XYZ"
             assert (expected_dir / temp_file.name).exists()
 
-    def test_get_artwork_file_copy_preserves_attributes(self, use_case, mocker):
+    def test_organize_placement_files_preserves_attributes(self, use_case, mocker):
         """Test that copied file preserves original file attributes."""
         order = create_sample_order()
-        artwork_service = MagicMock(spec=IArtworkService)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             temp_file = Path(tmpdir) / "ABC_placement.pdf"
@@ -668,17 +615,25 @@ class TestGetArtworkPlacementHandling:
             # Get original modification time
             original_stat = temp_file.stat()
 
-            artwork_service.get_artwork.return_value = [temp_file]
-
             mocker.patch("src.app.new_sale_use_case.logger")
 
-            use_case.get_artwork(order, artwork_service)
+            use_case.organize_placement_files(order, [temp_file])
 
             copied_file = use_case.open_orders_dir / "ABC" / temp_file.name
             copied_stat = copied_file.stat()
 
             # shutil.copy2 preserves metadata
             assert copied_stat.st_mtime == original_stat.st_mtime
+
+    def test_organize_placement_files_returns_empty_list_when_no_files(self, use_case, mocker):
+        """Test that empty list is returned when no artwork files."""
+        order = create_sample_order()
+
+        mocker.patch("src.app.new_sale_use_case.logger")
+
+        result = use_case.organize_placement_files(order, [])
+
+        assert result == []
 
 
 class TestCreateSalesLogging:
@@ -741,31 +696,33 @@ class TestCreateSalesLogging:
 
             assert "Error processing order REMOTE001" in caplog.text
 
-    def test_get_artwork_logs_no_service_warning(self, use_case, mocker, caplog):
-        """Test that get_artwork logs warning when no service available."""
+    def test_organize_placement_files_logs_warning_when_no_files(self, use_case, caplog):
+        """Test that organize_placement_files logs warning when no files provided."""
         order = create_sample_order()
 
         with caplog.at_level(logging.WARNING):
-            use_case.get_artwork(order, None)
+            use_case.organize_placement_files(order, [])
 
-            assert "No artwork service found" in caplog.text
+            assert "No artwork files to organize" in caplog.text
 
-    def test_get_artwork_logs_download_info(self, use_case, mocker, caplog):
-        """Test that get_artwork logs download information."""
+    def test_organize_placement_files_logs_copy_info(self, use_case, caplog):
+        """Test that organize_placement_files logs file copy information."""
         order = create_sample_order()
-        artwork_service = MagicMock(spec=IArtworkService)
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            file1 = Path(tmpdir) / "file1.pdf"
-            file2 = Path(tmpdir) / "file2.pdf"
+            file1 = Path(tmpdir) / "S00001_file1_placement.pdf"
+            file2 = Path(tmpdir) / "S00001_file2.pdf"
             file1.write_text("content1")
             file2.write_text("content2")
-            artwork_service.get_artwork.return_value = [file1, file2]
 
             with caplog.at_level(logging.INFO):
-                use_case.get_artwork(order, artwork_service)
+                result = use_case.organize_placement_files(order, [file1, file2])
 
-                assert "Downloaded 2 files" in caplog.text
+                # Only file1 (placement) should be logged as copied
+                assert "Placement file" in caplog.text
+                assert "copied to" in caplog.text
+                # Result should only contain the placement file
+                assert len(result) == 1
 
 
 class TestSaleUseCaseIntegration:
@@ -787,6 +744,7 @@ class TestSaleUseCaseIntegration:
 
             use_case.order_services.items.return_value = [("integration_service", order_service)]
             use_case.sale_service.is_sale_created.return_value = False
+            use_case.sale_service.create_sale.return_value = 12345
 
             mocker.patch("src.app.new_sale_use_case.logger")
 

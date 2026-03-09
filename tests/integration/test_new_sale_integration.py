@@ -80,7 +80,7 @@ class TestNewSaleUseCaseIntegration:
         order_response = Mock(spec=requests.Response)
         order_response.json.return_value = {
             "clientHandle": "test_client",
-            "line_items": [
+            "lineItems": [
                 {
                     "recipeSetId": "RECIPE123",
                     "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
@@ -103,9 +103,9 @@ class TestNewSaleUseCaseIntegration:
 
         # Setup side_effect to return different responses based on URL
         def mock_get(url=None, **kwargs):
-            if "webtoprint" in url:
+            if "webtoprint" in str(url):
                 return design_response
-            elif "pdf" in url:
+            elif "pdf" in str(url):
                 return placement_response
             else:
                 return order_response

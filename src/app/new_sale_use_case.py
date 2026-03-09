@@ -45,24 +45,30 @@ class NewSaleUseCase:
 
                     if not self.sale_service.is_sale_created(order):
                         # no sale for this order, create it
-                        self.sale_service.create_sale(order)
-                    elif self.sale_service.has_expected_order_lines(order):
-                        # sale already exists and has expected order lines, update info
+                        order.set_sale_id(self.sale_service.create_sale(order))
+                    elif order_service.should_update_sale(order):
+                        # sale exists but order data has changed, update it
+                        if not self.sale_service.has_expected_order_lines(order):
+                            # order lines do not match expected lines for this order, raise error
+                            raise SaleError(
+                                "Existing sale order lines do not match expected lines",
+                                order.remote_order_id,
+                            )
                         self.sale_service.update_contact(order)
                         self.sale_service.update_delivery_instructions(order)
-                    else:
-                        # sale already exists but order lines do not match
-                        raise SaleError("Sale order lines do not match", order.remote_order_id)
 
                     # when we reach this point, the order is in an expected state
                     order_service.persist_order(order, OrderStatus.CREATED)
 
                     # get artwork for the order
-                    artwork_service = order_service.get_artwork_service(
+                    if artwork_service := order_service.get_artwork_service(
                         order, self.artwork_services
-                    )
-                    self.get_artwork(order, artwork_service)
-                    order_service.persist_order(order, OrderStatus.ARTWORK)
+                    ):
+                        artwork_files = artwork_service.get_artwork(order)
+                        self.organize_placement_files(order, artwork_files)
+                        order_service.persist_order(order, OrderStatus.ARTWORK)
+
+                    # confirm the sale in the sales system
                     self.sale_service.confirm_sale(order)
                     order_service.persist_order(order, OrderStatus.CONFIRMED)
 
@@ -74,20 +80,17 @@ class NewSaleUseCase:
                     )
                     ErrorStore().add(exc)
 
-    def get_artwork(self, order: Order, artwork_service: IArtworkService | None) -> list[Path]:
-        """Download artwork and organize placement files by customer ID.
+    def organize_placement_files(self, order: Order, artwork_files: list[Path]) -> list[Path]:
+        """Organize placement files by sale.
 
         Returns empty list if no artwork service is available.
         """
-        if not artwork_service:
-            logger.warning("No artwork service found for order %s.", order.remote_order_id)
+        if not artwork_files:
+            logger.warning("No artwork files to organize for order %s.", order.remote_order_id)
             return []
 
-        logger.info("Get artwork for order %s...", order.remote_order_id)
-        files = artwork_service.get_artwork(order)
-        logger.info("Downloaded %d files for order %s.", len(files), order.remote_order_id)
-        for file in files:
-            logger.info("File: %s", file)
+        placement_files: list[Path] = []
+        for file in artwork_files:
             name_parts = file.stem.split("_")
             if name_parts[-1].lower() == "placement":
                 # copy the file to the open orders directory with a subdirectory for the order
@@ -96,4 +99,5 @@ class NewSaleUseCase:
                 copy_path = order_dir / file.name
                 shutil.copy2(file, copy_path)
                 logger.info("Placement file %s copied to %s.", file, copy_path)
-        return files
+                placement_files.append(copy_path)
+        return placement_files
