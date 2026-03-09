@@ -4,6 +4,7 @@ import io
 from dataclasses import dataclass, field
 from logging import getLogger
 from pathlib import Path
+from typing import Any
 from zipfile import ZipFile
 
 import requests
@@ -23,13 +24,15 @@ class SpectrumArtworkService:
         session: requests.Session configured with auth headers.
         base_url: Spectrum API base URL (e.g., "https://api.spectrum.example.com/").
         digitals_dir: Directory where downloaded artwork files are saved.
-        client: Spectrum clientHandle, set from first API call.
+        client_handle: Spectrum clientHandle, set from first API call.
+        order_data: Cached order data from Spectrum API for the current order.
     """
 
     session: requests.Session
     base_url: str = field(default_factory=lambda: get_config().spectrum_base_url)
     digitals_dir: Path = field(default_factory=lambda: Path(get_config().digitals_dir))
     client_handle: str = field(default="", init=False)
+    order_data: dict[str, Any] = field(default_factory=dict, init=False)
 
     def __post_init__(self) -> None:
         """post init to ensure the object is valid."""
@@ -38,8 +41,9 @@ class SpectrumArtworkService:
     def get_artwork(self, order: Order) -> list[Path]:
         """Retrieve and download artwork assets for an order.
 
-        Queries Spectrum API for order artwork metadata, matches to line items by product code
-        and quantity, downloads design files and placement PDFs, and returns all file paths.
+        Matches Spectrum and order line items by product code and quantity,
+        then downloads design files and placement PDFs, and returns all file paths.
+        Updates line items with Artwork objects containing metadata and file paths.
 
         Args:
             order: Order with line_items. Must have remote_order_id and sale_id set.
@@ -52,34 +56,38 @@ class SpectrumArtworkService:
             requests.exceptions.RequestException: If API request fails.
         """
         logger.info(f"Getting artwork IDs for order {order.remote_order_id}")
-        endpoint = f"/api/order/order-number/{order.remote_order_id}/"
-        response = self.session.get(url=f"{self.base_url.rstrip('/')}{endpoint}", timeout=(5, 30))
-        response.raise_for_status()
-        object.__setattr__(self, "client_handle", response.json().get("clientHandle", ""))
+        self._get_order_data(order)
+        order_data = self.order_data
 
         # build a set of tuples containing the product code, quantity, and recipe set ID
         artwork_data: set[tuple[str, int, str]] = set()
-        for li in response.json().get("line_items", []):
+        for li in order_data.get("lineItems", []):
             for sku_qty in li.get("skuQuantities", []):
                 artwork_data.add((sku_qty["sku"], sku_qty["quantity"], li.get("recipeSetId")))
+        logger.debug(f"Artwork data extracted from Spectrum response: {artwork_data}")
 
         file_paths: list[Path] = []
         for li in order.line_items:
             for sku, qty, recipe_set_id in artwork_data:
                 if li.product_code == sku and li.quantity == qty:
+                    design_endpoint = f"/api/webtoprint/{recipe_set_id}/"
+                    placement_endpoint = f"/{self.client_handle}/specification/{recipe_set_id}/pdf/"
+
                     artwork = Artwork(
                         artwork_id=recipe_set_id,
                         line_id=li.line_id,
-                        design_url=f"{self.base_url.rstrip('/')}/api/webtoprint/{recipe_set_id}/",
+                        design_url=f"{self.base_url.rstrip('/')}{design_endpoint}",
                         design_paths=self._get_designs(
                             recipe_set_id=recipe_set_id, sale_id=order.sale_id
                         ),
-                        placement_url=f"{self.base_url.rstrip('/')}/{self.client_handle}/specification/{recipe_set_id}/pdf/",
+                        placement_url=f"{self.base_url.rstrip('/')}{placement_endpoint}",
                         placement_path=self._get_placement(
                             recipe_set_id=recipe_set_id, sale_id=order.sale_id
                         ),
                     )
                     li.set_artwork(artwork)
+                    logger.info(f"Artwork found for line item {li.line_id}: {artwork}")
+
                     file_paths.extend(artwork.design_paths)
                     file_paths.append(artwork.placement_path)
                     break
@@ -91,6 +99,26 @@ class SpectrumArtworkService:
                 )
 
         return file_paths
+
+    def _get_order_data(self, order: Order) -> None:
+        """Retrieve order data for an order from Spectrum API.
+
+        Args:
+            order: Order with remote_order_id.
+
+        Returns:
+            None, updates the instance with order data.
+
+        Raises:
+            requests.exceptions.RequestException: If API request fails.
+        """
+        logger.info(f"Get Spectrum order data for order {order.remote_order_id}")
+        endpoint = f"/api/order/order-number/{order.remote_order_id}/"
+        response = self.session.get(url=f"{self.base_url.rstrip('/')}{endpoint}", timeout=(5, 30))
+        response.raise_for_status()
+        order_data = response.json()
+        object.__setattr__(self, "order_data", order_data)
+        object.__setattr__(self, "client_handle", order_data.get("clientHandle", ""))
 
     def _get_designs(self, recipe_set_id: str, sale_id: int) -> list[Path]:
         """Download and extract design files from Spectrum.

@@ -152,7 +152,7 @@ class TestSpectrumArtworkServiceGetArtwork:
                 # Order API response
                 response.json.return_value = {
                     "clientHandle": "CLIENT123",
-                    "line_items": [
+                    "lineItems": [
                         {
                             "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
                             "recipeSetId": "RECIPE001",
@@ -181,7 +181,7 @@ class TestSpectrumArtworkServiceGetArtwork:
         mock_response = Mock(spec=requests.Response)
         mock_response.json.return_value = {
             "clientHandle": "SPECTRUM_CLIENT",
-            "line_items": [
+            "lineItems": [
                 {
                     "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
                     "recipeSetId": "RECIPE001",
@@ -207,7 +207,7 @@ class TestSpectrumArtworkServiceGetArtwork:
             else:
                 response.json.return_value = {
                     "clientHandle": "SPECTRUM_CLIENT",
-                    "line_items": [
+                    "lineItems": [
                         {
                             "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
                             "recipeSetId": "RECIPE001",
@@ -238,7 +238,7 @@ class TestSpectrumArtworkServiceGetArtwork:
         mock_response = Mock(spec=requests.Response)
         mock_response.json.return_value = {
             "clientHandle": "CLIENT123",
-            "line_items": [
+            "lineItems": [
                 {
                     "skuQuantities": [{"sku": "DIFFERENT_PROD", "quantity": 100}],
                     "recipeSetId": "RECIPE001",
@@ -257,7 +257,7 @@ class TestSpectrumArtworkServiceGetArtwork:
         mock_response = Mock(spec=requests.Response)
         mock_response.json.return_value = {
             "clientHandle": "CLIENT123",
-            "line_items": [],  # Empty list
+            "lineItems": [],  # Empty list
         }
         mock_client.get.return_value = mock_response
 
@@ -286,7 +286,7 @@ class TestSpectrumArtworkServiceGetArtwork:
             else:
                 response.json.return_value = {
                     "clientHandle": "CLIENT123",
-                    "line_items": [
+                    "lineItems": [
                         {
                             "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
                             "recipeSetId": None,  # Missing or null
@@ -307,7 +307,7 @@ class TestSpectrumArtworkServiceGetArtwork:
         mock_response = Mock(spec=requests.Response)
         mock_response.json.return_value = {
             "clientHandle": "CLIENT123",
-            "line_items": [
+            "lineItems": [
                 {
                     "skuQuantities": [],  # Empty list
                     "recipeSetId": "RECIPE001",
@@ -340,7 +340,7 @@ class TestSpectrumArtworkServiceGetArtwork:
             else:
                 # No clientHandle in response
                 response.json.return_value = {
-                    "line_items": [
+                    "lineItems": [
                         {
                             "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
                             "recipeSetId": "RECIPE001",
@@ -403,7 +403,7 @@ class TestSpectrumArtworkServiceGetArtwork:
             else:
                 response.json.return_value = {
                     "clientHandle": "CLIENT789",
-                    "line_items": [
+                    "lineItems": [
                         {
                             "skuQuantities": [
                                 {"sku": "PROD001", "quantity": 100},
@@ -453,7 +453,7 @@ class TestSpectrumArtworkServiceGetArtwork:
             else:
                 response.json.return_value = {
                     "clientHandle": "CLIENT123",
-                    "line_items": [
+                    "lineItems": [
                         {
                             "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
                             "recipeSetId": "RECIPE001",
@@ -493,7 +493,7 @@ class TestSpectrumArtworkServiceGetArtwork:
             else:
                 response.json.return_value = {
                     "clientHandle": "CLIENT123",
-                    "line_items": [
+                    "lineItems": [
                         {
                             "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
                             "recipeSetId": "RECIPE001",
@@ -559,7 +559,7 @@ class TestSpectrumArtworkServiceGetArtwork:
             else:
                 response.json.return_value = {
                     "clientHandle": "CLIENT456",
-                    "line_items": [
+                    "lineItems": [
                         {
                             "skuQuantities": [{"sku": "PROD001", "quantity": 50}],
                             "recipeSetId": "RECIPE101",
@@ -606,7 +606,7 @@ class TestSpectrumArtworkServiceGetArtwork:
                 # API returns exact quantity match
                 response.json.return_value = {
                     "clientHandle": "CLIENT789",
-                    "line_items": [
+                    "lineItems": [
                         {
                             "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
                             "recipeSetId": "RECIPE001",
