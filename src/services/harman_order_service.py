@@ -10,7 +10,6 @@ import json
 import random
 import re
 import string
-import uuid
 from collections.abc import Generator
 from dataclasses import asdict, dataclass, field
 from enum import Enum
@@ -212,6 +211,15 @@ class HarmanOrderService:
             return artwork_services.get("Spectrum")
         return None
 
+    def should_update_sale(self, order: Order) -> bool:
+        """Determine if an existing sale should be updated based on remote_order_id."""
+        logger.info("Check if sale should be updated for order: %s", order.remote_order_id)
+        # For Harman orders, we want to update a B2B sale
+        # A B2B sale is created in the sale system, but contact data and delivery instructions may
+        # be missing or incomplete
+        # A sale created in the sale system has a remote order ID in format S12345
+        return re.match(r"S\d+", order.remote_order_id) is not None
+
     def persist_order(self, order: Order, status: OrderStatus) -> None:
         """Persist `order` as JSON in `input_dir` and update file status."""
         logger.info("Persist order: %s with status: %s", order.remote_order_id, status)
@@ -221,7 +229,7 @@ class HarmanOrderService:
                 return obj.isoformat()
             if isinstance(obj, dt.date):
                 return obj.isoformat()
-            if isinstance(obj, uuid.UUID):
+            if isinstance(obj, Path):
                 return str(obj)
             if isinstance(obj, Enum):
                 return obj.value
