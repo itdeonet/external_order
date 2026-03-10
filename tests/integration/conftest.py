@@ -39,19 +39,19 @@ def odoo_client():
 @pytest.fixture
 def spectrum_client(httpx_mock):
     """Provide an httpx.Client for Spectrum with pytest_httpx mocking."""
-    with httpx.Client(base_url="https://spectrum.example.com") as client:
-        client.headers["SPECTRUM_API_TOKEN"] = "test_token"
-        yield client
+    with requests.Session() as session:
+        session.headers["SPECTRUM_API_TOKEN"] = "test_token"
+        yield session
 
 
 @pytest.fixture
 def error_store(mocker):
     """Provide a mock error store and patch it in modules that use it."""
     mock_store = Mock(spec=ErrorStore)
-    # Patch ErrorStore in all use case modules
-    mocker.patch("src.app.completed_sale_use_case.ErrorStore", return_value=mock_store)
-    mocker.patch("src.app.new_sale_use_case.ErrorStore", return_value=mock_store)
-    mocker.patch("src.app.stock_transfer_use_case.ErrorStore", return_value=mock_store)
+    # Patch get_error_store in all use case modules
+    mocker.patch("src.app.completed_sale_use_case.get_error_store", return_value=mock_store)
+    mocker.patch("src.app.new_sale_use_case.get_error_store", return_value=mock_store)
+    mocker.patch("src.app.stock_transfer_use_case.get_error_store", return_value=mock_store)
     return mock_store
 
 
