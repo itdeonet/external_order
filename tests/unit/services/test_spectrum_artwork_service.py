@@ -433,7 +433,7 @@ class TestSpectrumArtworkServiceGetArtwork:
         assert len(result) > 0
         assert all(isinstance(p, Path) for p in result)
 
-    def test_get_artwork_calls_get_designs(self, service, mock_client, basic_order, mocker):
+    def test_get_artwork_calls_download_designs(self, service, mock_client, basic_order, mocker):
         """Test that get_artwork successfully retrieves and sets design files."""
         # Setup mock to properly return responses with real design file
         zip_buffer = io.BytesIO()
@@ -473,7 +473,7 @@ class TestSpectrumArtworkServiceGetArtwork:
         # Verify the design file was saved
         assert artwork.design_paths[0].exists()
 
-    def test_get_artwork_calls_get_placement(self, service, mock_client, basic_order, mocker):
+    def test_get_artwork_calls_download_placement(self, service, mock_client, basic_order, mocker):
         """Test that get_artwork successfully retrieves and sets placement file."""
         # Setup mock to properly return responses
         zip_buffer = io.BytesIO()
@@ -623,7 +623,7 @@ class TestSpectrumArtworkServiceGetArtwork:
 
 
 class TestSpectrumArtworkServiceGetPlacement:
-    """Tests for the _get_placement method."""
+    """Tests for the _download_placement method."""
 
     @pytest.fixture
     def mock_client(self):
@@ -637,81 +637,81 @@ class TestSpectrumArtworkServiceGetPlacement:
             session=mock_client, base_url="https://spectrum.example.com", digitals_dir=tmp_path
         )
 
-    def test_get_placement_downloads_pdf(self, service, mock_client):
-        """Test that _get_placement downloads and saves PDF file."""
+    def test_download_placement_downloads_pdf(self, service, mock_client):
+        """Test that _download_placement downloads and saves PDF file."""
         placement_content = b"PDF content for placement"
         mock_response = Mock(spec=requests.Response)
         mock_response.content = placement_content
         mock_client.get.return_value = mock_response
 
-        placement_path = service._get_placement(recipe_set_id="RECIPE001", sale_id=12345)
+        placement_path = service._download_placement(recipe_set_id="RECIPE001", sale_id=12345)
 
         assert placement_path.exists()
         assert placement_path.read_bytes() == placement_content
         mock_response.raise_for_status.assert_called_once()
 
-    def test_get_placement_saves_with_correct_filename(self, service, mock_client, tmp_path):
+    def test_download_placement_saves_with_correct_filename(self, service, mock_client, tmp_path):
         """Test that placement file is saved with sale_id prefix."""
         placement_content = b"PDF content"
         mock_response = Mock(spec=requests.Response)
         mock_response.content = placement_content
         mock_client.get.return_value = mock_response
 
-        placement_path = service._get_placement(recipe_set_id="RECIPE001", sale_id=12345)
+        placement_path = service._download_placement(recipe_set_id="RECIPE001", sale_id=12345)
 
         assert "S12345_RECIPE001_placement.pdf" in str(placement_path)
         assert tmp_path in placement_path.parents
 
-    def test_get_placement_saves_to_digitals_dir(self, service, mock_client, tmp_path):
+    def test_download_placement_saves_to_digitals_dir(self, service, mock_client, tmp_path):
         """Test that placement is saved to digitals_dir."""
         placement_content = b"PDF content"
         mock_response = Mock(spec=requests.Response)
         mock_response.content = placement_content
         mock_client.get.return_value = mock_response
 
-        service._get_placement(recipe_set_id="RECIPE001", sale_id=999)
+        service._download_placement(recipe_set_id="RECIPE001", sale_id=999)
 
         assert (tmp_path / "S00999_RECIPE001_placement.pdf").exists()
 
-    def test_get_placement_raises_on_http_error(self, service, mock_client):
+    def test_download_placement_raises_on_http_error(self, service, mock_client):
         """Test that HTTP errors are raised."""
         mock_response = Mock(spec=requests.Response)
         mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("404 Not Found")
         mock_client.get.return_value = mock_response
 
         with pytest.raises(requests.exceptions.HTTPError):
-            service._get_placement(recipe_set_id="RECIPE001", sale_id=12345)
+            service._download_placement(recipe_set_id="RECIPE001", sale_id=12345)
 
-    def test_get_placement_returns_path(self, service, mock_client):
-        """Test that _get_placement returns a Path object."""
+    def test_download_placement_returns_path(self, service, mock_client):
+        """Test that _download_placement returns a Path object."""
         placement_content = b"PDF content"
         mock_response = Mock(spec=requests.Response)
         mock_response.content = placement_content
         mock_client.get.return_value = mock_response
 
-        result = service._get_placement(recipe_set_id="RECIPE001", sale_id=12345)
+        result = service._download_placement(recipe_set_id="RECIPE001", sale_id=12345)
 
         assert isinstance(result, Path)
 
-    def test_get_placement_with_different_recipe_ids(self, service, mock_client, tmp_path):
+    def test_download_placement_with_different_recipe_ids(self, service, mock_client, tmp_path):
         """Test that different recipe IDs create different filenames."""
         placement_content = b"PDF content"
         mock_response = Mock(spec=requests.Response)
         mock_response.content = placement_content
         mock_client.get.return_value = mock_response
 
-        service._get_placement(recipe_set_id="ART456", sale_id=111)
+        service._download_placement(recipe_set_id="ART456", sale_id=111)
 
         assert (tmp_path / "S00111_ART456_placement.pdf").exists()
 
-    def test_get_placement_calls_correct_endpoint(self, service, mock_client):
-        """Test that _get_placement calls API with correct endpoint structure."""
+    def test_download_placement_calls_correct_endpoint(self, service, mock_client):
+        """Test that _download_placement calls API with correct endpoint structure."""
         placement_content = b"PDF content"
         mock_response = Mock(spec=requests.Response)
         mock_response.content = placement_content
         mock_client.get.return_value = mock_response
 
-        service._get_placement(recipe_set_id="ART123", sale_id=456)
+        service._download_placement(recipe_set_id="ART123", sale_id=456)
 
         # Verify the endpoint was called - the exact URL depends on service.client which is empty by default
         # Verify get was called at least once with a URL containing the recipe ID
@@ -721,7 +721,7 @@ class TestSpectrumArtworkServiceGetPlacement:
 
 
 class TestSpectrumArtworkServiceGetDesigns:
-    """Tests for the _get_designs method."""
+    """Tests for the _download_designs method."""
 
     @pytest.fixture
     def mock_client(self):
@@ -735,8 +735,8 @@ class TestSpectrumArtworkServiceGetDesigns:
             session=mock_client, base_url="https://spectrum.example.com", digitals_dir=tmp_path
         )
 
-    def test_get_designs_downloads_zip(self, service, mock_client):
-        """Test that _get_designs downloads and extracts zip file."""
+    def test_download_designs_downloads_zip(self, service, mock_client):
+        """Test that _download_designs downloads and extracts zip file."""
         zip_buffer = io.BytesIO()
         with ZipFile(zip_buffer, "w") as zip_file:
             zip_file.writestr("design1.pdf", "design content 1")
@@ -747,7 +747,7 @@ class TestSpectrumArtworkServiceGetDesigns:
         mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 
-        saved_paths = service._get_designs(recipe_set_id="RECIPE001", sale_id=12345)
+        saved_paths = service._download_designs(recipe_set_id="RECIPE001", sale_id=12345)
 
         assert len(saved_paths) == 2
         mock_client.get.assert_called_once_with(
@@ -755,7 +755,7 @@ class TestSpectrumArtworkServiceGetDesigns:
         )
         mock_response.raise_for_status.assert_called_once()
 
-    def test_get_designs_saves_with_correct_filename(self, service, mock_client, tmp_path):
+    def test_download_designs_saves_with_correct_filename(self, service, mock_client, tmp_path):
         """Test that files are saved with sale_id prefix."""
         zip_buffer = io.BytesIO()
         with ZipFile(zip_buffer, "w") as zip_file:
@@ -766,13 +766,13 @@ class TestSpectrumArtworkServiceGetDesigns:
         mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 
-        saved_paths = service._get_designs(recipe_set_id="RECIPE001", sale_id=12345)
+        saved_paths = service._download_designs(recipe_set_id="RECIPE001", sale_id=12345)
 
         assert len(saved_paths) == 1
         assert "S12345_design.pdf" in str(saved_paths[0])
         assert tmp_path in saved_paths[0].parents
 
-    def test_get_designs_saves_to_digitals_dir(self, service, mock_client, tmp_path):
+    def test_download_designs_saves_to_digitals_dir(self, service, mock_client, tmp_path):
         """Test that designs are saved to digitals_dir."""
         zip_buffer = io.BytesIO()
         with ZipFile(zip_buffer, "w") as zip_file:
@@ -783,12 +783,12 @@ class TestSpectrumArtworkServiceGetDesigns:
         mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 
-        saved_paths = service._get_designs(recipe_set_id="RECIPE001", sale_id=999)
+        saved_paths = service._download_designs(recipe_set_id="RECIPE001", sale_id=999)
 
         assert len(saved_paths) == 1
         assert (tmp_path / "S00999_design.pdf").exists()
 
-    def test_get_designs_handles_multiple_files(self, service, mock_client):
+    def test_download_designs_handles_multiple_files(self, service, mock_client):
         """Test that multiple files in zip are all extracted."""
         zip_buffer = io.BytesIO()
         with ZipFile(zip_buffer, "w") as zip_file:
@@ -800,21 +800,21 @@ class TestSpectrumArtworkServiceGetDesigns:
         mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 
-        saved_paths = service._get_designs(recipe_set_id="RECIPE001", sale_id=12345)
+        saved_paths = service._download_designs(recipe_set_id="RECIPE001", sale_id=12345)
 
         assert len(saved_paths) == 5
 
-    def test_get_designs_raises_on_http_error(self, service, mock_client):
+    def test_download_designs_raises_on_http_error(self, service, mock_client):
         """Test that HTTP errors are raised."""
         mock_response = Mock(spec=requests.Response)
         mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("404 Not Found")
         mock_client.get.return_value = mock_response
 
         with pytest.raises(requests.exceptions.HTTPError):
-            service._get_designs(recipe_set_id="RECIPE001", sale_id=12345)
+            service._download_designs(recipe_set_id="RECIPE001", sale_id=12345)
 
-    def test_get_designs_calls_correct_endpoint(self, service, mock_client):
-        """Test that _get_designs calls the correct API endpoint."""
+    def test_download_designs_calls_correct_endpoint(self, service, mock_client):
+        """Test that _download_designs calls the correct API endpoint."""
         zip_buffer = io.BytesIO()
         with ZipFile(zip_buffer, "w") as zip_file:
             zip_file.writestr("design.pdf", "content")
@@ -824,14 +824,14 @@ class TestSpectrumArtworkServiceGetDesigns:
         mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 
-        service._get_designs(recipe_set_id="ART123", sale_id=456)
+        service._download_designs(recipe_set_id="ART123", sale_id=456)
 
         mock_client.get.assert_called_once_with(
             url="https://spectrum.example.com/api/webtoprint/ART123/", timeout=(5, 30)
         )
 
-    def test_get_designs_returns_list_of_paths(self, service, mock_client):
-        """Test that _get_designs returns list of Path objects."""
+    def test_download_designs_returns_list_of_paths(self, service, mock_client):
+        """Test that _download_designs returns list of Path objects."""
         zip_buffer = io.BytesIO()
         with ZipFile(zip_buffer, "w") as zip_file:
             zip_file.writestr("design.pdf", "content")
@@ -841,12 +841,12 @@ class TestSpectrumArtworkServiceGetDesigns:
         mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 
-        result = service._get_designs(recipe_set_id="RECIPE001", sale_id=12345)
+        result = service._download_designs(recipe_set_id="RECIPE001", sale_id=12345)
 
         assert isinstance(result, list)
         assert all(isinstance(p, Path) for p in result)
 
-    def test_get_designs_with_different_sale_ids(self, service, mock_client, tmp_path):
+    def test_download_designs_with_different_sale_ids(self, service, mock_client, tmp_path):
         """Test that different sale IDs create different filenames."""
         zip_buffer = io.BytesIO()
         with ZipFile(zip_buffer, "w") as zip_file:
@@ -857,6 +857,6 @@ class TestSpectrumArtworkServiceGetDesigns:
         mock_response.content = zip_buffer.getvalue()
         mock_client.get.return_value = mock_response
 
-        service._get_designs(recipe_set_id="RECIPE001", sale_id=111)
+        service._download_designs(recipe_set_id="RECIPE001", sale_id=111)
 
         assert (tmp_path / "S00111_design.pdf").exists()
