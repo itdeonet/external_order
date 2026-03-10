@@ -174,7 +174,9 @@ class TestHarmanStockServiceReadStockTransfers:
 
         # Mock ErrorStore singleton so we can verify add() was called
         mock_error_store = mocker.Mock(spec=ErrorStore)
-        mocker.patch("src.services.harman_stock_service.ErrorStore", return_value=mock_error_store)
+        mocker.patch(
+            "src.services.harman_stock_service.get_error_store", return_value=mock_error_store
+        )
 
         transfers = list(service.read_stock_transfers())
 

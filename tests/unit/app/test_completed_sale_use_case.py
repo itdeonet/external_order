@@ -27,7 +27,7 @@ def mock_sales_service():
 def mock_error_store(mocker):
     """Create a mock error store and patch it in the use case."""
     mock_store = mocker.Mock(spec=ErrorStore)
-    mocker.patch("src.app.completed_sale_use_case.ErrorStore", return_value=mock_store)
+    mocker.patch("src.app.completed_sale_use_case.get_error_store", return_value=mock_store)
     return mock_store
 
 

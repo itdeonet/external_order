@@ -650,7 +650,9 @@ class TestReadOrders:
         """Test that read_orders returns empty generator for empty directory."""
         # Mock ErrorStore to verify add() is not called
         mock_error_store = mocker.Mock(spec=ErrorStore)
-        mocker.patch("src.services.harman_order_service.ErrorStore", return_value=mock_error_store)
+        mocker.patch(
+            "src.services.harman_order_service.get_error_store", return_value=mock_error_store
+        )
 
         orders = list(service.read_orders())
 
@@ -688,7 +690,9 @@ class TestReadOrders:
 
         # Mock ErrorStore to verify add() is not called
         mock_error_store = mocker.Mock(spec=ErrorStore)
-        mocker.patch("src.services.harman_order_service.ErrorStore", return_value=mock_error_store)
+        mocker.patch(
+            "src.services.harman_order_service.get_error_store", return_value=mock_error_store
+        )
 
         orders = list(service.read_orders())
 
@@ -728,7 +732,9 @@ class TestReadOrders:
 
         # Mock ErrorStore to verify add() is not called
         mock_error_store = mocker.Mock(spec=ErrorStore)
-        mocker.patch("src.services.harman_order_service.ErrorStore", return_value=mock_error_store)
+        mocker.patch(
+            "src.services.harman_order_service.get_error_store", return_value=mock_error_store
+        )
 
         orders = list(service.read_orders())
 
@@ -789,7 +795,9 @@ class TestReadOrders:
 
         # Mock ErrorStore to verify add() is not called
         mock_error_store = mocker.Mock(spec=ErrorStore)
-        mocker.patch("src.services.harman_order_service.ErrorStore", return_value=mock_error_store)
+        mocker.patch(
+            "src.services.harman_order_service.get_error_store", return_value=mock_error_store
+        )
 
         orders = list(service.read_orders())
 
@@ -813,7 +821,9 @@ class TestReadOrders:
 
         # Mock ErrorStore class so we can verify add() was called
         mock_error_store = mocker.Mock(spec=ErrorStore)
-        mocker.patch("src.services.harman_order_service.ErrorStore", return_value=mock_error_store)
+        mocker.patch(
+            "src.services.harman_order_service.get_error_store", return_value=mock_error_store
+        )
 
         orders = list(service.read_orders())
 
@@ -844,7 +854,9 @@ class TestReadOrders:
 
         # Mock ErrorStore class so we can verify add() was called
         mock_error_store = mocker.Mock(spec=ErrorStore)
-        mocker.patch("src.services.harman_order_service.ErrorStore", return_value=mock_error_store)
+        mocker.patch(
+            "src.services.harman_order_service.get_error_store", return_value=mock_error_store
+        )
 
         orders = list(service.read_orders())
 
@@ -866,7 +878,9 @@ class TestReadOrders:
 
         # Mock ErrorStore class so we can verify add() was called
         mock_error_store = mocker.Mock(spec=ErrorStore)
-        mocker.patch("src.services.harman_order_service.ErrorStore", return_value=mock_error_store)
+        mocker.patch(
+            "src.services.harman_order_service.get_error_store", return_value=mock_error_store
+        )
 
         orders = list(service.read_orders())
 

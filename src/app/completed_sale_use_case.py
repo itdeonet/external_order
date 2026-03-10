@@ -6,7 +6,7 @@ Handle completion of sales orders across multiple service providers.
 from dataclasses import dataclass
 from logging import getLogger
 
-from src.app.errors import ErrorStore, SaleError
+from src.app.errors import ErrorStore, SaleError, get_error_store
 from src.domain import OrderStatus
 from src.interfaces import IOrderService, IRegistry, ISaleService
 
@@ -30,7 +30,7 @@ class CompletedSaleUseCase:
         Handle errors at provider and order levels without stopping processing.
         """
         logger.info("Complete sales for all order services...")
-        error_store = ErrorStore()
+        error_store: ErrorStore = get_error_store()
         for order_provider, order_service in self.order_services.items():
             try:
                 logger.info("Complete sales for %s service...", order_provider)
@@ -47,8 +47,8 @@ class CompletedSaleUseCase:
                                 order_id=remote_order_id,
                             )
                     except Exception as exc:
-                        logger.exception("Error completing sale for order %s", remote_order_id)
+                        logger.exception("Failed to complete sale for order %s", remote_order_id)
                         error_store.add(exc)
             except Exception as exc:
-                logger.exception("Error completing sales for %s service", order_provider)
+                logger.exception("Failed to complete sales for %s service", order_provider)
                 error_store.add(exc)

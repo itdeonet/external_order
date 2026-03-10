@@ -1,30 +1,32 @@
 """Unit tests for the errors module."""
 
+import contextlib
+
 import pytest
 
 from src.app.errors import (
     ArtworkError,
     BaseError,
-    ErrorStore,
     InsdesError,
     NotifyError,
     SaleError,
+    get_error_store,
 )
 
 
 class TestErrorStore:
-    """Tests for the ErrorStore class."""
+    """Tests for the get_error_store() class."""
 
     @pytest.fixture
     def error_store(self):
-        """Provide a fresh ErrorStore instance for each test."""
-        error_store = ErrorStore()
+        """Provide a fresh get_error_store() instance for each test."""
+        error_store = get_error_store()
         error_store.clear()  # Ensure clean state for test isolation
         return error_store
 
     def test_instantiation(self):
-        """Test creating an ErrorStore instance."""
-        error_store = ErrorStore()
+        """Test creating an get_error_store() instance."""
+        error_store = get_error_store()
         error_store.clear()
         assert error_store is not None
         assert hasattr(error_store, "_errors")
@@ -559,8 +561,8 @@ class TestCustomExceptionIntegration:
     """Tests for integration between custom exceptions."""
 
     def test_insdes_error_in_error_store(self):
-        """Test collecting InsdesError in ErrorStore."""
-        error_store = ErrorStore()
+        """Test collecting InsdesError in get_error_store()."""
+        error_store = get_error_store()
         error_store.clear()
         exc = InsdesError("INSDES processing failed", order_id="ORD-001")
 
@@ -570,8 +572,8 @@ class TestCustomExceptionIntegration:
         assert "InsdesError" in summary
 
     def test_sale_error_in_error_store(self):
-        """Test collecting OdooError in ErrorStore."""
-        error_store = ErrorStore()
+        """Test collecting OdooError in get_error_store()."""
+        error_store = get_error_store()
         error_store.clear()
         exc = SaleError("Odoo API error", order_id="ORD-002")
 
@@ -581,8 +583,8 @@ class TestCustomExceptionIntegration:
         assert "SaleError" in summary
 
     def test_mixed_exceptions_in_error_store(self):
-        """Test collecting different exception types in ErrorStore."""
-        error_store = ErrorStore()
+        """Test collecting different exception types in get_error_store()."""
+        error_store = get_error_store()
         error_store.clear()
         error_store.add(InsdesError("INSDES error", order_id="ORD-001"))
         error_store.add(SaleError("Odoo error", order_id="ORD-002"))
@@ -595,7 +597,7 @@ class TestCustomExceptionIntegration:
 
     def test_summarize_with_custom_exceptions(self):
         """Test summarize() with custom exceptions."""
-        error_store = ErrorStore()
+        error_store = get_error_store()
         error_store.clear()
         error_store.add(InsdesError("INSDES failed", order_id="ORD-001"))
         error_store.add(SaleError("API failed", order_id="ORD-002"))
@@ -620,7 +622,8 @@ class TestCustomExceptionIntegration:
 
     def test_custom_errors_with_traceback(self):
         """Test custom errors preserve traceback information."""
-        error_store = ErrorStore()
+        error_store = get_error_store()
+        error_store.clear()
 
         try:
             raise InsdesError("Custom error", order_id="ORD-123")
@@ -637,7 +640,7 @@ class TestErrorStoreEdgeCases:
 
     def test_exception_with_unicode_characters(self):
         """Test exception with Unicode characters."""
-        error_store = ErrorStore()
+        error_store = get_error_store()
         error_store.clear()
         exc = SaleError("Unicode error: café, 日本語, emoji 😀", order_id="ORD-123")
 
@@ -648,7 +651,7 @@ class TestErrorStoreEdgeCases:
 
     def test_exception_with_very_long_message(self):
         """Test exception with very long message."""
-        error_store = ErrorStore()
+        error_store = get_error_store()
         error_store.clear()
         long_message = "x" * 10000
         exc = InsdesError(long_message, order_id="ORD-123")
@@ -660,7 +663,7 @@ class TestErrorStoreEdgeCases:
 
     def test_large_number_of_exceptions(self):
         """Test handling large number of exceptions."""
-        error_store = ErrorStore()
+        error_store = get_error_store()
         error_store.clear()
 
         for i in range(1000):
@@ -802,17 +805,13 @@ class TestArtworkError:
         assert str(exc) == "Order ORD-12345: Artwork retrieval failed"
 
 
-class TestGetErrorStoreSingleton:
+class TestGetCachedErrorStore:
     """Tests for the get_error_store() cached singleton helper."""
 
     def setup_method(self):
         # Ensure cache is cleared before each test
-        try:
-            from src.app.errors import get_error_store
-
-            get_error_store.cache_clear()
-        except Exception:
-            pass
+        with contextlib.suppress(Exception):
+            get_error_store().clear()
 
     def test_returns_same_instance(self):
         """get_error_store() should return the same object on repeated calls."""
@@ -979,29 +978,29 @@ class TestNotifyError:
 
 
 class TestErrorStoreImmutability:
-    """Tests for ErrorStore immutability (frozen=True)."""
+    """Tests for get_error_store() immutability (frozen=True)."""
 
     def test_error_store_is_frozen(self):
-        """Test that ErrorStore is frozen and cannot be modified."""
-        error_store = ErrorStore()
+        """Test that get_error_store() is frozen and cannot be modified."""
+        error_store = get_error_store()
 
         with pytest.raises(TypeError):  # FrozenInstanceError
             error_store.new_attribute = "test"  # type: ignore
 
     def test_store_field_cannot_be_modified(self):
         """Test that _store field cannot be reassigned."""
-        error_store = ErrorStore()
+        error_store = get_error_store()
 
         with pytest.raises(TypeError):  # FrozenInstanceError
             error_store._store = None  # type: ignore
 
 
 class TestAllCustomErrorsInStore:
-    """Tests for all custom error types in ErrorStore."""
+    """Tests for all custom error types in get_error_store()."""
 
     def test_base_error_in_store(self):
-        """Test collecting BaseError in ErrorStore."""
-        error_store = ErrorStore()
+        """Test collecting BaseError in get_error_store()."""
+        error_store = get_error_store()
         error_store.clear()
         exc = BaseError("Base error", order_id="ORD-001")
 
@@ -1011,8 +1010,8 @@ class TestAllCustomErrorsInStore:
         assert "BaseError" in summary
 
     def test_artwork_error_in_store(self):
-        """Test collecting ArtworkError in ErrorStore."""
-        error_store = ErrorStore()
+        """Test collecting ArtworkError in get_error_store()."""
+        error_store = get_error_store()
         error_store.clear()
         exc = ArtworkError("Artwork error", order_id="ORD-001")
 
@@ -1022,8 +1021,8 @@ class TestAllCustomErrorsInStore:
         assert "ArtworkError" in summary
 
     def test_insdes_error_in_store(self):
-        """Test collecting InsdesError in ErrorStore."""
-        error_store = ErrorStore()
+        """Test collecting InsdesError in get_error_store()."""
+        error_store = get_error_store()
         error_store.clear()
         exc = InsdesError("Insdes error", order_id="ORD-002")
 
@@ -1033,8 +1032,8 @@ class TestAllCustomErrorsInStore:
         assert "InsdesError" in summary
 
     def test_notify_error_in_store(self):
-        """Test collecting NotifyError in ErrorStore."""
-        error_store = ErrorStore()
+        """Test collecting NotifyError in get_error_store()."""
+        error_store = get_error_store()
         error_store.clear()
         exc = NotifyError("Notify error", order_id="ORD-003")
 
@@ -1044,8 +1043,8 @@ class TestAllCustomErrorsInStore:
         assert "NotifyError" in summary
 
     def test_sale_error_in_store(self):
-        """Test collecting SaleError in ErrorStore."""
-        error_store = ErrorStore()
+        """Test collecting SaleError in get_error_store()."""
+        error_store = get_error_store()
         error_store.clear()
         exc = SaleError("Sale error", order_id="ORD-004")
 
@@ -1056,7 +1055,7 @@ class TestAllCustomErrorsInStore:
 
     def test_all_custom_errors_mixed_in_store(self):
         """Test collecting all custom error types together."""
-        error_store = ErrorStore()
+        error_store = get_error_store()
         error_store.clear()
         error_store.add(BaseError("Base", order_id="ORD-001"))
         error_store.add(ArtworkError("Artwork", order_id="ORD-002"))
@@ -1073,7 +1072,7 @@ class TestAllCustomErrorsInStore:
 
     def test_summarize_with_all_custom_errors(self):
         """Test summarize() with all custom exception types."""
-        error_store = ErrorStore()
+        error_store = get_error_store()
         error_store.clear()
         error_store.add(BaseError("Base error", order_id="ORD-001"))
         error_store.add(ArtworkError("Artwork error", order_id="ORD-002"))

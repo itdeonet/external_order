@@ -141,7 +141,9 @@ class TestStockTransferUseCaseExecute:
 
         # Mock ErrorStore to verify add() was called
         mock_error_store = mocker.Mock(spec=ErrorStore)
-        mocker.patch("src.app.stock_transfer_use_case.ErrorStore", return_value=mock_error_store)
+        mocker.patch(
+            "src.app.stock_transfer_use_case.get_error_store", return_value=mock_error_store
+        )
 
         stock_transfer_use_case.execute()
 
@@ -164,7 +166,9 @@ class TestStockTransferUseCaseExecute:
 
         # Mock ErrorStore to verify it was called
         mock_error_store = mocker.Mock(spec=ErrorStore)
-        mocker.patch("src.app.stock_transfer_use_case.ErrorStore", return_value=mock_error_store)
+        mocker.patch(
+            "src.app.stock_transfer_use_case.get_error_store", return_value=mock_error_store
+        )
 
         stock_transfer_use_case.execute()
 
@@ -190,7 +194,9 @@ class TestStockTransferUseCaseExecute:
 
         # Mock ErrorStore
         mock_error_store = mocker.Mock(spec=ErrorStore)
-        mocker.patch("src.app.stock_transfer_use_case.ErrorStore", return_value=mock_error_store)
+        mocker.patch(
+            "src.app.stock_transfer_use_case.get_error_store", return_value=mock_error_store
+        )
 
         stock_transfer_use_case.execute()
 

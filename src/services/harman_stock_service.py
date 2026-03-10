@@ -14,7 +14,7 @@ from typing import Any
 import xmltodict  # type: ignore
 from redmail.email.sender import EmailSender
 
-from src.app.errors import ErrorStore
+from src.app.errors import get_error_store
 from src.config import get_config
 
 logger = getLogger(__name__)
@@ -43,11 +43,11 @@ class HarmanStockService:
         """
         for file_path in self.input_dir.glob("*.xml", case_sensitive=False):
             try:
-                logger.info("Reading stock transfer file: %s", file_path.name)
+                logger.info("Read stock transfer file: %s", file_path.name)
                 transfer_data = xmltodict.parse(file_path.read_text(encoding="utf-8"))
                 yield self._get_transfer_info(transfer_data, file_path)
             except Exception as exc:
-                ErrorStore().add(exc)
+                get_error_store().add(exc)
 
     def _get_transfer_info(self, transfer_data: dict[str, Any], file_path: Path) -> dict[str, Any]:
         """Extract and normalize stock transfer info from parsed XML.

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
 
-from src.app.errors import ErrorStore, SaleError
+from src.app.errors import SaleError, get_error_store
 from src.domain import Order, OrderStatus
 from src.interfaces import IArtworkService, IOrderService, IRegistry, ISaleService
 
@@ -78,7 +78,7 @@ class NewSaleUseCase:
                         order.remote_order_id,
                         order_service_name,
                     )
-                    ErrorStore().add(exc)
+                    get_error_store().add(exc)
 
     def organize_placement_files(self, order: Order, artwork_files: list[Path]) -> list[Path]:
         """Organize placement files by sale.

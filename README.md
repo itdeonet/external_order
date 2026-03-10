@@ -154,10 +154,10 @@ Note: Error handling uses a singleton `ErrorStore` class, not an interface, to c
 Instead of throwing exceptions up the call stack, errors are collected in a singleton ErrorStore for centralized handling:
 
 ```python
-from src.app.errors import ErrorStore
+from src.app.errors import get_error_store
 
-# Get singleton instance
-error_store = ErrorStore()
+# Get cached instance
+error_store = get_error_store()
 
 for order in order_service.read_orders():
     try:
@@ -229,8 +229,8 @@ __post_init__():
 **Key Methods:**
 - `get_artwork()` - Main orchestrator (fetches designs, organizes files, validates)
 - `_get_order_data()` - Retrieves order metadata from Spectrum API
-- `_get_designs()` - Lists available designs for order
-- `_get_placement()` - Downloads and extracts placement files
+- `_download_designs()` - Lists available designs for order
+- `_download_placement()` - Downloads and extracts placement files
 
 #### **CompletedSaleUseCase**
 Workflow: Find Completed Sales → Update Order Status → Send Notifications
@@ -772,11 +772,11 @@ class SpectrumArtworkService:
         # Single responsibility: HTTP call + response handling
         pass
     
-    def _get_designs(self) -> list[str]:
+    def _download_designs(self) -> list[str]:
         """List available designs for order."""
         pass
     
-    def _get_placement(self, design_id: str) -> Path:
+    def _download_placement(self, design_id: str) -> Path:
         """Download and extract placement files."""
         # Extract to digitals_dir
         # Return local Path object
@@ -786,7 +786,7 @@ class SpectrumArtworkService:
 **Key Patterns:**
 1. **Frozen Dataclass** - Immutable after `__post_init__`
 2. **init=False Fields** - Avoid constructor params, set in `__post_init__` using `object.__setattr__`
-3. **Single Task Methods** - Each private method does one thing (_get_order_data, _get_designs, _get_placement)
+3. **Single Task Methods** - Each private method does one thing (_get_order_data, _download_designs, _download_placement)
 4. **Validation in Public Method** - get_artwork orchestrates and validates, never returns invalid results
 5. **Comprehensive Docstrings** - Args, Returns, Raises for public methods
 6. **Error Handling** - Raise custom ArtworkError with context, catch in ErrorStore
@@ -875,7 +875,7 @@ Instead of exceptions propagating up the stack and stopping execution, they're c
 
 ```python
 # In main.py
-error_store = ErrorStore()
+error_store = get_error_store()
 
 # Execute each use case, collecting errors
 for _, use_case in use_cases.items():

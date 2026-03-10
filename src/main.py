@@ -12,7 +12,7 @@ import requests
 from redmail.email.sender import EmailSender
 
 from src.app.completed_sale_use_case import CompletedSaleUseCase
-from src.app.errors import ErrorStore
+from src.app.errors import get_error_store
 from src.app.log_setup import configure_logging
 from src.app.new_sale_use_case import NewSaleUseCase
 from src.app.registry import Registry
@@ -46,7 +46,7 @@ def main() -> None:
 
     # make sure directories exist
     config: Config = get_config()
-    error_store = ErrorStore()
+    error_store = get_error_store()
     configure_logging(
         log_file=config.log_file,
         backup_count=config.log_backup_count,
@@ -89,10 +89,11 @@ def main() -> None:
         # execute use cases
         for use_case_name, use_case in use_cases.items():
             try:
+                logger.info(f"Execute use case: {use_case_name}")
                 use_case.execute()
             except Exception as exc:
                 error_store.add(exc)
-                logger.error(f"Error executing use case {use_case_name}: {exc!s}")
+                logger.error(f"Failed to execute use case {use_case_name}: {exc!s}")
 
     # After all use cases have executed, check if there were any errors and send email if so
     if error_store.has_errors():

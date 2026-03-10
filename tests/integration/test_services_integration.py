@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 import requests
 
-from src.app.errors import ErrorStore
+from src.app.errors import get_error_store
 from src.services.odoo_sale_service import OdooSaleService
 
 
@@ -113,7 +113,7 @@ class TestErrorStoreIntegration:
 
     def test_error_store_collects_multiple_errors(self):
         """Test that error store properly collects multiple errors."""
-        error_store = ErrorStore()
+        error_store = get_error_store()
         error_store.clear()  # Clear any previous errors
 
         error1 = Exception("Error 1")
@@ -134,7 +134,7 @@ class TestErrorStoreIntegration:
 
     def test_error_store_preserves_error_type(self):
         """Test that error store preserves exception types."""
-        error_store = ErrorStore()
+        error_store = get_error_store()
         error_store.clear()  # Clear any previous errors
 
         class CustomError(Exception):

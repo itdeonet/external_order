@@ -6,7 +6,7 @@ Process inbound stock transfer delivery notifications from multiple providers.
 from dataclasses import dataclass
 from logging import getLogger
 
-from src.app.errors import ErrorStore
+from src.app.errors import get_error_store
 from src.interfaces import IRegistry, IStockService
 
 logger = getLogger(__name__)
@@ -46,4 +46,4 @@ class StockTransferUseCase:
                         transfer_data.get("id"),
                         stock_service_name,
                     )
-                    ErrorStore().add(exc)
+                    get_error_store().add(exc)

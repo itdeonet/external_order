@@ -19,7 +19,7 @@ from typing import Any
 
 from pydifact import Parser, Segment, Serializer  # type: ignore
 
-from src.app.errors import ErrorStore, NotifyError
+from src.app.errors import NotifyError, get_error_store
 from src.config import Config, get_config
 from src.domain import LineItem, Order, OrderStatus, ShipTo
 from src.interfaces import IArtworkService, IRegistry
@@ -75,8 +75,8 @@ class HarmanOrderService:
                 order_data = self._read_order_data(file)
                 yield self._make_order(order_data)
             except Exception as exc:
-                logger.error("Error processing file: %s", file, exc_info=exc)
-                ErrorStore().add(exc)
+                logger.error("Failed to process file: %s", file, exc_info=exc)
+                get_error_store().add(exc)
 
     def _read_order_data(self, file: Path) -> dict[str, Any]:
         """Parse EDIFACT file and extract structured order data.
@@ -94,7 +94,7 @@ class HarmanOrderService:
         for segment in Parser().parse(file.read_text(encoding="utf-8")):
             # extract data from the segment and update the order data
             self._get_segment_data(segment, order_data)
-        logger.debug("Extracted order data: %s", json.dumps(order_data))
+        logger.info("Extracted order data: %s", order_data)
         return order_data
 
     def _get_segment_data(self, segment: Segment, order_data: dict[str, Any]) -> dict[str, Any]:
@@ -143,6 +143,7 @@ class HarmanOrderService:
                 order_data["line_items"][-1]["location"] = location
                 order_data["line_items"][-1]["stock_status"] = stock_status
 
+        logger.debug("Updated order data: %s", order_data)
         return order_data
 
     def _make_order(self, data: dict[str, Any]) -> Order:
@@ -154,7 +155,7 @@ class HarmanOrderService:
         Returns:
             Order instance with ShipTo and LineItems populated from data.
         """
-        logger.debug("Create Order instance from data: %s", json.dumps(data))
+        logger.info("Create Order instance from order_data")
         is_company = bool(data.get("ship_to", {}).get("company_name"))
         ship_to_data = data.get("ship_to", {})
         order = Order(
@@ -235,12 +236,14 @@ class HarmanOrderService:
                 return obj.value
             raise TypeError(f"Type {type(obj)} not serializable")
 
+        # update the order status and persist as JSON
         order.set_status(status)
         order_data = asdict(order)
         file_path = self.input_dir / f"{order.remote_order_id}.json"
         text = json.dumps(order_data, indent=4, ensure_ascii=False, default=custom_serializer)
         file_path.write_text(text, encoding="utf-8")
 
+        # rename the INSDES file to reflect the new status
         for file in self.input_dir.glob(f"{order.remote_order_id}.*"):
             if file.suffix.lower() != ".json":
                 file.rename(file.parent / f"{order.remote_order_id}.{order.status.value}".upper())
