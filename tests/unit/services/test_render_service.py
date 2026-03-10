@@ -241,7 +241,7 @@ Line 2"""
 
             service.render("logged.txt", {})
 
-            assert "Rendering template logged.txt" in caplog.text
+            assert "Render template logged.txt" in caplog.text
 
     def test_render_with_special_characters(self, service, tmp_path):
         """Test rendering with special characters."""
