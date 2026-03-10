@@ -4,8 +4,8 @@ Provides `RenderService` to load and render templates from a directory with
 safe auto-escaping and sensible environment defaults.
 """
 
-import logging
 from dataclasses import dataclass, field
+from logging import getLogger
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +13,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from src.config import get_config
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -44,6 +44,6 @@ class RenderService:
 
     def render(self, template_name: str, data: dict[str, Any]) -> str:
         """Render `template_name` with `data` and return the result string."""
-        logger.info(f"Rendering template {template_name}")
+        logger.info("Render template %s", template_name)
         template = self.env.get_template(template_name)
         return template.render(**data)
