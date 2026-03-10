@@ -55,16 +55,15 @@ class SpectrumArtworkService:
             ArtworkError: If any line item has no matching artwork in Spectrum.
             requests.exceptions.RequestException: If API request fails.
         """
-        logger.info(f"Getting artwork IDs for order {order.remote_order_id}")
-        self._get_order_data(order)
-        order_data = self.order_data
+        logger.info("Get artwork IDs for order %s", order.remote_order_id)
+        self._load_order_data(order)
 
         # build a set of tuples containing the product code, quantity, and recipe set ID
         artwork_data: set[tuple[str, int, str]] = set()
-        for li in order_data.get("lineItems", []):
+        for li in self.order_data.get("lineItems", []):
             for sku_qty in li.get("skuQuantities", []):
                 artwork_data.add((sku_qty["sku"], sku_qty["quantity"], li.get("recipeSetId")))
-        logger.debug(f"Artwork data extracted from Spectrum response: {artwork_data}")
+        logger.debug("Artwork data extracted from Spectrum response: %s", artwork_data)
 
         file_paths: list[Path] = []
         for li in order.line_items:
@@ -77,16 +76,16 @@ class SpectrumArtworkService:
                         artwork_id=recipe_set_id,
                         line_id=li.line_id,
                         design_url=f"{self.base_url.rstrip('/')}{design_endpoint}",
-                        design_paths=self._get_designs(
+                        design_paths=self._download_designs(
                             recipe_set_id=recipe_set_id, sale_id=order.sale_id
                         ),
                         placement_url=f"{self.base_url.rstrip('/')}{placement_endpoint}",
-                        placement_path=self._get_placement(
+                        placement_path=self._download_placement(
                             recipe_set_id=recipe_set_id, sale_id=order.sale_id
                         ),
                     )
                     li.set_artwork(artwork)
-                    logger.info(f"Artwork found for line item {li.line_id}: {artwork}")
+                    logger.info("Artwork found for line item %s: %s", li.line_id, artwork)
 
                     file_paths.extend(artwork.design_paths)
                     file_paths.append(artwork.placement_path)
@@ -100,7 +99,7 @@ class SpectrumArtworkService:
 
         return file_paths
 
-    def _get_order_data(self, order: Order) -> None:
+    def _load_order_data(self, order: Order) -> None:
         """Retrieve order data for an order from Spectrum API.
 
         Args:
@@ -120,7 +119,7 @@ class SpectrumArtworkService:
         object.__setattr__(self, "order_data", order_data)
         object.__setattr__(self, "client_handle", order_data.get("clientHandle", ""))
 
-    def _get_designs(self, recipe_set_id: str, sale_id: int) -> list[Path]:
+    def _download_designs(self, recipe_set_id: str, sale_id: int) -> list[Path]:
         """Download and extract design files from Spectrum.
 
         Queries webtoprint endpoint for recipe set, extracts ZIP contents to digitals_dir
@@ -136,7 +135,7 @@ class SpectrumArtworkService:
         Raises:
             requests.exceptions.RequestException: If API request fails.
         """
-        logger.info("Get designs for artwork %s and order %d", recipe_set_id, sale_id)
+        logger.info("Get designs for artwork %s with order id %d", recipe_set_id, sale_id)
         endpoint = f"/api/webtoprint/{recipe_set_id}/"
         response = self.session.get(url=f"{self.base_url.rstrip('/')}{endpoint}", timeout=(5, 30))
         response.raise_for_status()
@@ -152,7 +151,7 @@ class SpectrumArtworkService:
 
         return saved_as
 
-    def _get_placement(self, recipe_set_id: str, sale_id: int) -> Path:
+    def _download_placement(self, recipe_set_id: str, sale_id: int) -> Path:
         """Download placement specification PDF from Spectrum.
 
         Saves PDF to digitals_dir with filename format: S{sale_id:05}_{recipe_set_id}_placement.pdf
@@ -167,7 +166,7 @@ class SpectrumArtworkService:
         Raises:
             requests.exceptions.RequestException: If API request fails.
         """
-        logger.info("Get placement for artwork %s and order %d", recipe_set_id, sale_id)
+        logger.info("Get placement for artwork %s with order id %d", recipe_set_id, sale_id)
         endpoint = f"/{self.client_handle}/specification/{recipe_set_id}/pdf/"
         response = self.session.get(url=f"{self.base_url.rstrip('/')}{endpoint}", timeout=(5, 30))
         response.raise_for_status()
