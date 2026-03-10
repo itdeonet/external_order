@@ -3,7 +3,7 @@
 Utilities for mapping domain `Order` objects to Odoo `sale.order` records.
 """
 
-import json
+import copy
 from collections import defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -48,7 +48,7 @@ class OdooSaleService:
         Returns:
             Sale order record dict if found, else empty dict.
         """
-        logger.info("Get OdooSale for order: %s", order.remote_order_id)
+        logger.info("Get sale for order: %s", order.remote_order_id)
         result = self._call(
             model="sale.order",
             method="search_read",
@@ -76,7 +76,7 @@ class OdooSaleService:
         Returns:
             True if sale exists, False otherwise.
         """
-        logger.info("Is order %s created?", order.remote_order_id)
+        logger.info("Is sale created for order %s?", order.remote_order_id)
         if sale_id := int(self._get_sale_data(order).get("id", 0)):
             order.set_sale_id(sale_id)
         logger.info("Sale for order %s created: %s", order.remote_order_id, sale_id)
@@ -168,7 +168,7 @@ class OdooSaleService:
         )
         # Odoo's "company_id" field is reserved for the Odoo company,
         # so we map the customer's company name to "deonet_other_company"
-        return {
+        contact_data = {
             "company_id": int(order.administration_id),
             "parent_id": int(order.customer_id),
             "ref": ship_to.remote_customer_id,
@@ -188,6 +188,8 @@ class OdooSaleService:
             "active": False,  # archived, not loaded in client portal
             "portal_visible": False,
         }
+        logger.info("Built contact data for order %s: %s", order.remote_order_id, contact_data)
+        return contact_data
 
     def _create_contact(self, order: Order) -> int:
         """Create or return existing Odoo partner (contact) for order ship_to location.
@@ -207,6 +209,7 @@ class OdooSaleService:
         contact_data = self._get_contact_data_from_order(order)
 
         # check if a contact with the same fields already exists
+        logger.info("Check for existing contact for order %s", order.remote_order_id)
         result = self._call(
             model="res.partner",
             method="search_read",
@@ -220,6 +223,7 @@ class OdooSaleService:
             return contact_id
 
         # create a new contact if it doesn't exist
+        logger.info("Create new contact for order %s", order.remote_order_id)
         contact_id = self._call(model="res.partner", method="create", query_data=[contact_data])
         if not (contact_id and isinstance(contact_id, int)):
             raise SaleError(f"Failed to create contact for order {order.remote_order_id}")
@@ -274,7 +278,7 @@ class OdooSaleService:
                 }
             )
 
-        logger.info("Converted order lines: %s", json.dumps(order_lines))
+        logger.info("Converted order lines: %s", order_lines)
         return order_lines
 
     def _get_carrier_id(self, order: Order) -> int:
@@ -290,16 +294,18 @@ class OdooSaleService:
             ValueError: If shipment_type is empty.
             SaleError: If carrier not found in Odoo.
         """
-        carrier_name = order.shipment_type
-        if not carrier_name.strip():
+        if not order.shipment_type.strip():
             raise ValueError("Shipment type is required in order")
 
-        logger.info("Get carrier ID for name: %s", carrier_name)
+        logger.info("Get carrier ID for name: %s", order.shipment_type)
         result = self._call(
             model="delivery.carrier",
             method="search_read",
             query_data=[
-                [["company_id", "=", order.administration_id], ["name", "ilike", carrier_name]]
+                [
+                    ["company_id", "=", order.administration_id],
+                    ["name", "ilike", order.shipment_type],
+                ]
             ],
             query_options={"fields": ["id"], "limit": 1},
         )
@@ -312,9 +318,11 @@ class OdooSaleService:
             and isinstance(carrier_id, int)
             and carrier_id > 0
         ):
-            raise SaleError(f"Carrier '{carrier_name}' not found in Odoo", order.remote_order_id)
+            raise SaleError(
+                f"Carrier '{order.shipment_type}' not found in Odoo", order.remote_order_id
+            )
 
-        logger.info("Found carrier ID %d for name: %s", carrier_id, carrier_name)
+        logger.info("Found carrier ID %d for name: %s", carrier_id, order.shipment_type)
         return carrier_id
 
     def create_sale(self, order: Order) -> int:
@@ -329,6 +337,8 @@ class OdooSaleService:
         Raises:
             SaleError: If sale creation fails.
         """
+        logger.info("Create sale for order: %s", order.remote_order_id)
+        logger.info("Check if sale already exists for order %s", order.remote_order_id)
         if sale_data := self._get_sale_data(order):
             logger.info(
                 "Sale already exists for order %s from with ID %s",
@@ -337,7 +347,7 @@ class OdooSaleService:
             )
             return sale_data["id"]
 
-        logger.info("Create sale for order: %s", order.remote_order_id)
+        logger.info("No existing sale found for order %s, create new sale", order.remote_order_id)
         contact_id = self._create_contact(order)
         # Odoo expects order lines in a special format for creation: a list of (0, 0, {line_data}) tuples
         order_lines = [(0, 0, line) for line in self._convert_order_lines(order)]
@@ -370,6 +380,7 @@ class OdooSaleService:
 
     def confirm_sale(self, order: Order) -> None:
         """Call Odoo to confirm the sale for `order`; raise `SaleError` on failure."""
+        logger.info("Confirm sale for order: %s", order.remote_order_id)
         sale_data = self._get_sale_data(order)
         if not (sale_data and "id" in sale_data and sale_data["id"] != 0):
             raise SaleError("Cannot confirm non-existent sale", order.remote_order_id)
@@ -504,7 +515,7 @@ class OdooSaleService:
             "Found %d completed sales for order provider %s: %s",
             len(result),
             order_provider,
-            json.dumps(result),
+            result,
         )
         return [(item["id"], item["x_remote_order_id"]) for item in result]
 
@@ -560,9 +571,7 @@ class OdooSaleService:
             for item in result
         ]
         logger.info(
-            "Found shipping information for order %s: %s",
-            order.remote_order_id,
-            json.dumps(shipping_info),
+            "Found shipping information for order %s: %s", order.remote_order_id, shipping_info
         )
         return shipping_info
 
@@ -615,9 +624,7 @@ class OdooSaleService:
             ]
 
         logger.info(
-            "Found serial numbers for order %s: %s",
-            order.remote_order_id,
-            json.dumps(serials_by_line_item),
+            "Found serial numbers for order %s: %s", order.remote_order_id, serials_by_line_item
         )
         return serials_by_line_item
 
@@ -648,7 +655,9 @@ class OdooSaleService:
             "id": next(self._id_counter),
         }
 
-        logger.debug("Making JSON_RPC call with payload: %s", json.dumps(payload))
+        payload_copy: dict[str, Any] = copy.deepcopy(payload)
+        payload_copy.get("params", {}).get("args", [])[2] = "********"  # mask password for logging
+        logger.debug("Make JSON_RPC call with payload: %s", payload_copy)
         response = self.session.post(f"{self.base_url}/jsonrpc", json=payload, timeout=(5, 30))
         response.raise_for_status()
         data = response.json()
