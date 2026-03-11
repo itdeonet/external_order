@@ -16,7 +16,7 @@ class Artwork:
     """
 
     artwork_id: str
-    line_id: str
+    artwork_line_id: str
     design_url: str
     design_paths: list[Path]
     placement_url: str
@@ -28,9 +28,9 @@ class Artwork:
             raise ValueError("Artwork ID must be a non-empty string")
         object.__setattr__(self, "artwork_id", self.artwork_id.strip())
 
-        if not (isinstance(self.line_id, str) and self.line_id.strip()):
+        if not (isinstance(self.artwork_line_id, str) and self.artwork_line_id.strip()):
             raise ValueError("Line item ID must be a non-empty string")
-        object.__setattr__(self, "line_id", self.line_id.strip())
+        object.__setattr__(self, "artwork_line_id", self.artwork_line_id.strip())
 
         if not (isinstance(self.design_url, str) and self.design_url.strip()):
             raise ValueError("Design URL must be a non-empty string")
