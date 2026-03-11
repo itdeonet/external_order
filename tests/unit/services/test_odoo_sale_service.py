@@ -63,8 +63,8 @@ class TestOdooSaleServiceInstantiation:
         assert next(service._id_counter) == 2
 
 
-class TestGetSaleData:
-    """Tests for _get_sale_data method."""
+class TestSearchSaleData:
+    """Tests for search_sale method."""
 
     @pytest.fixture
     def service(self):
@@ -101,84 +101,30 @@ class TestGetSaleData:
         )
         return order
 
-    def test_get_sale_data_returns_sale_when_found(self, service, mocker, order):
-        """Test that _get_sale_data returns sale data when found."""
+    def test_search_sale_returns_sale_when_found(self, service, mocker, order):
+        """Test that search_sale returns sale data when found."""
         expected_sale = {"id": 100, "name": "SO-12345"}
         mocker.patch.object(OdooSaleService, "_call", return_value=[expected_sale])
 
-        result = service._get_sale_data(order)
+        result = service.search_sale(order)
 
         assert result == expected_sale
 
-    def test_get_sale_data_returns_empty_dict_when_not_found(self, service, mocker, order):
-        """Test that _get_sale_data returns empty dict when not found."""
+    def test_search_sale_returns_empty_dict_when_not_found(self, service, mocker, order):
+        """Test that search_sale returns empty dict when not found."""
         mocker.patch.object(OdooSaleService, "_call", return_value=[])
 
-        result = service._get_sale_data(order)
+        result = service.search_sale(order)
 
         assert result == {}
 
-    def test_get_sale_data_returns_empty_dict_on_invalid_result(self, service, mocker, order):
-        """Test that _get_sale_data returns empty dict on invalid result."""
+    def test_get_search_sale_returns_empty_dict_on_invalid_result(self, service, mocker, order):
+        """Test that search_sale returns empty dict on invalid result."""
         mocker.patch.object(OdooSaleService, "_call", return_value="invalid")
 
-        result = service._get_sale_data(order)
+        result = service.search_sale(order)
 
         assert result == {}
-
-
-class TestIsSaleCreated:
-    """Tests for is_sale_created method."""
-
-    @pytest.fixture
-    def service(self):
-        """Provide an OdooSaleService instance."""
-        mock_auth = Mock(spec=OdooAuth)
-        mock_client = Mock(spec=requests.Session)
-        return OdooSaleService(auth=mock_auth, session=mock_client)
-
-    @pytest.fixture
-    def order(self):
-        """Provide an Order instance."""
-        ship_to = ShipTo(
-            remote_customer_id="CUST123",
-            contact_name="John Doe",
-            email="john@example.com",
-            phone="555-0123",
-            street1="123 Main St",
-            city="Chicago",
-            postal_code="60601",
-            country_code="US",
-        )
-        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=10)
-        return Order(
-            administration_id=1,
-            customer_id=100,
-            order_provider="Harman",
-            pricelist_id=50,
-            remote_order_id="HA-EM-12345",
-            shipment_type="standard",
-            description="Test order",
-            delivery_instructions="Handle with care",
-            ship_to=ship_to,
-            line_items=[line_item],
-        )
-
-    def test_is_sale_created_returns_true_when_sale_exists(self, service, mocker, order):
-        """Test that is_sale_created returns True when sale exists."""
-        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={"id": 100})
-
-        result = service.is_sale_created(order)
-
-        assert result is True
-
-    def test_is_sale_created_returns_false_when_sale_not_found(self, service, mocker, order):
-        """Test that is_sale_created returns False when sale not found."""
-        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={})
-
-        result = service.is_sale_created(order)
-
-        assert result is False
 
 
 class TestCreateSale:
@@ -222,14 +168,14 @@ class TestCreateSale:
 
     def test_create_sale_successful(self, service, mocker, order):
         """Test successful sale creation."""
-        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={})
+        mocker.patch.object(OdooSaleService, "search_sale", return_value={})
         mocker.patch.object(OdooSaleService, "_create_contact", return_value=10)
         mocker.patch.object(
             OdooSaleService,
             "_convert_order_lines",
             return_value=[{"product_id": 1, "quantity": 10}],
         )
-        mocker.patch.object(OdooSaleService, "_get_carrier_id", return_value=5)
+        mocker.patch.object(OdooSaleService, "_search_carrier_id", return_value=5)
         mocker.patch.object(OdooSaleService, "_call", return_value=100)
 
         result = service.create_sale(order)
@@ -239,7 +185,7 @@ class TestCreateSale:
     def test_create_sale_returns_existing_sale_id(self, service, mocker, order):
         """Test that create_sale returns existing sale ID if already created."""
         existing_sale = {"id": 100}
-        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value=existing_sale)
+        mocker.patch.object(OdooSaleService, "search_sale", return_value=existing_sale)
 
         result = service.create_sale(order)
 
@@ -247,10 +193,10 @@ class TestCreateSale:
 
     def test_create_sale_raises_when_creation_fails(self, service, mocker, order):
         """Test that SaleError is raised when sale creation returns an int."""
-        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={})
+        mocker.patch.object(OdooSaleService, "search_sale", return_value={})
         mocker.patch.object(OdooSaleService, "_create_contact", return_value=10)
         mocker.patch.object(OdooSaleService, "_convert_order_lines", return_value=[])
-        mocker.patch.object(OdooSaleService, "_get_carrier_id", return_value=5)
+        mocker.patch.object(OdooSaleService, "_search_carrier_id", return_value=5)
         mocker.patch.object(OdooSaleService, "_call", return_value="100")
 
         with pytest.raises(SaleError, match="Failed to create sale"):
@@ -295,29 +241,29 @@ class TestConfirmSale:
 
     def test_confirm_sale_successful(self, service, mocker, order):
         """Test successful sale confirmation."""
-        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={"id": 100})
+        mocker.patch.object(OdooSaleService, "search_sale", return_value={"id": 100})
         mocker.patch.object(OdooSaleService, "_call", return_value=True)
 
         service.confirm_sale(order)
 
     def test_confirm_sale_raises_when_sale_not_found(self, service, mocker, order):
         """Test that SaleError is raised when sale not found."""
-        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={})
+        mocker.patch.object(OdooSaleService, "search_sale", return_value={})
 
-        with pytest.raises(SaleError, match="Cannot confirm non-existent sale"):
+        with pytest.raises(SaleError, match="Sale not found"):
             service.confirm_sale(order)
 
     def test_confirm_sale_raises_on_confirmation_failure(self, service, mocker, order):
         """Test that SaleError is raised when confirmation fails."""
-        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={"id": 100})
+        mocker.patch.object(OdooSaleService, "search_sale", return_value={"id": 100})
         mocker.patch.object(OdooSaleService, "_call", return_value=False)
 
         with pytest.raises(SaleError, match="Failed to confirm sale"):
             service.confirm_sale(order)
 
 
-class TestGetCompletedSales:
-    """Tests for get_completed_sales method."""
+class TestSearchCompletedSales:
+    """Tests for search_completed_sales method."""
 
     @pytest.fixture
     def service(self):
@@ -326,8 +272,8 @@ class TestGetCompletedSales:
         mock_client = Mock(spec=requests.Session)
         return OdooSaleService(auth=mock_auth, session=mock_client)
 
-    def test_get_completed_sales_returns_ids(self, service, mocker):
-        """Test that get_completed_sales returns list of (id, remote_order_id) tuples."""
+    def test_search_completed_sales_returns_ids(self, service, mocker):
+        """Test that search_completed_sales returns list of (id, remote_order_id) tuples."""
         mocker.patch.object(
             OdooSaleService,
             "_call",
@@ -338,23 +284,23 @@ class TestGetCompletedSales:
             ],
         )
 
-        result = service.get_completed_sales("Harman")
+        result = service.search_completed_sales("Harman")
 
         assert result == [(100, "HA-001"), (101, "HA-002"), (102, "HA-003")]
 
-    def test_get_completed_sales_returns_empty_list_when_not_found(self, service, mocker):
-        """Test that get_completed_sales returns empty list when not found."""
+    def test_search_completed_sales_returns_empty_list_when_not_found(self, service, mocker):
+        """Test that search_completed_sales returns empty list when not found."""
         mocker.patch.object(OdooSaleService, "_call", return_value=[])
 
-        result = service.get_completed_sales("Harman")
+        result = service.search_completed_sales("Harman")
 
         assert result == []
 
-    def test_get_completed_sales_returns_empty_list_on_invalid_result(self, service, mocker):
-        """Test that get_completed_sales returns empty list on invalid result."""
+    def test_search_completed_sales_returns_empty_list_on_invalid_result(self, service, mocker):
+        """Test that search_completed_sales returns empty list on invalid result."""
         mocker.patch.object(OdooSaleService, "_call", return_value=[100, "invalid"])
 
-        result = service.get_completed_sales("Harman")
+        result = service.search_completed_sales("Harman")
 
         assert result == []
 
@@ -436,8 +382,8 @@ class TestConvertOrderLines:
             service._convert_order_lines(order)
 
 
-class TestGetCountryId:
-    """Tests for _get_country_id method."""
+class TestSearchCountryId:
+    """Tests for _search_country_id method."""
 
     @pytest.fixture
     def service(self):
@@ -446,54 +392,54 @@ class TestGetCountryId:
         mock_client = Mock(spec=requests.Session)
         return OdooSaleService(auth=mock_auth, session=mock_client)
 
-    def test_get_country_id_successful(self, service, mocker):
+    def test_search_country_id_successful(self, service, mocker):
         """Test successful country ID retrieval."""
         mocker.patch.object(OdooSaleService, "_call", return_value=[{"id": 42}])
 
-        result = service._get_country_id("US")
+        result = service._search_country_id("US")
 
         assert result == 42
 
-    def test_get_country_id_strips_whitespace_and_uppercase(self, service, mocker):
+    def test_search_country_id_strips_whitespace_and_uppercase(self, service, mocker):
         """Test that whitespace is stripped and code is uppercased."""
         mocker.patch.object(OdooSaleService, "_call", return_value=[{"id": 42}])
 
-        result = service._get_country_id("  us  ")
+        result = service._search_country_id("  us  ")
 
         assert result == 42
 
-    def test_get_country_id_handles_long_codes(self, service, mocker):
+    def test_search_country_id_handles_long_codes(self, service, mocker):
         """Test that country codes are truncated to 2 characters."""
         mocker.patch.object(OdooSaleService, "_call", return_value=[{"id": 42}])
 
-        result = service._get_country_id("USA")
+        result = service._search_country_id("USA")
 
         assert result == 42
 
-    def test_get_country_id_raises_when_not_found(self, service, mocker):
+    def test_search_country_id_raises_when_not_found(self, service, mocker):
         """Test that SaleError is raised when country is not found."""
         mocker.patch.object(OdooSaleService, "_call", return_value=[])
 
         with pytest.raises(SaleError, match="Country code 'XX' not found"):
-            service._get_country_id("XX")
+            service._search_country_id("XX")
 
-    def test_get_country_id_raises_when_not_integer(self, service, mocker):
+    def test_search_country_id_raises_when_not_integer(self, service, mocker):
         """Test that TypeError is raised when country_id is not an integer."""
         mocker.patch.object(OdooSaleService, "_call", return_value="not_an_int")
 
-        with pytest.raises(SaleError, match="Country code 'US' not found in Odoo"):
-            service._get_country_id("US")
+        with pytest.raises(SaleError, match="Country code 'US' not found"):
+            service._search_country_id("US")
 
-    def test_get_country_id_raises_when_id_is_string_numbers(self, service, mocker):
+    def test_search_country_id_raises_when_id_is_string_numbers(self, service, mocker):
         """Test that TypeError is raised when country_id is string of numbers."""
         mocker.patch.object(OdooSaleService, "_call", return_value=42.5)
 
-        with pytest.raises(SaleError, match="Country code 'US' not found in Odoo"):
-            service._get_country_id("US")
+        with pytest.raises(SaleError, match="Country code 'US' not found"):
+            service._search_country_id("US")
 
 
-class TestGetStateId:
-    """Tests for _get_state_id method."""
+class TestSearchStateId:
+    """Tests for _search_state_id method."""
 
     @pytest.fixture
     def service(self):
@@ -502,59 +448,59 @@ class TestGetStateId:
         mock_client = Mock(spec=requests.Session)
         return OdooSaleService(auth=mock_auth, session=mock_client)
 
-    def test_get_state_id_successful(self, service, mocker):
+    def test_search_state_id_successful(self, service, mocker):
         """Test successful state ID retrieval."""
         mocker.patch.object(OdooSaleService, "_call", return_value=[{"id": 123}])
 
-        result = service._get_state_id(42, "California")
+        result = service._search_state_id(42, "California")
 
         assert result == 123
 
-    def test_get_state_id_returns_zero_for_empty_state(self, service, mocker):
+    def test_search_state_id_returns_zero_for_empty_state(self, service, mocker):
         """Test that 0 is returned for empty state."""
         spy = mocker.spy(OdooSaleService, "_call")
 
-        result = service._get_state_id(42, "")
+        result = service._search_state_id(42, "")
 
         assert result == 0
         spy.assert_not_called()
 
-    def test_get_state_id_returns_zero_for_whitespace_state(self, service, mocker):
+    def test_search_state_id_returns_zero_for_whitespace_state(self, service, mocker):
         """Test that 0 is returned for whitespace-only state."""
         spy = mocker.spy(OdooSaleService, "_call")
 
-        result = service._get_state_id(42, "   ")
+        result = service._search_state_id(42, "   ")
 
         assert result == 0
         spy.assert_not_called()
 
-    def test_get_state_id_returns_zero_when_not_found(self, service, mocker):
+    def test_search_state_id_returns_zero_when_not_found(self, service, mocker):
         """Test that 0 is returned when state is not found."""
         mocker.patch.object(OdooSaleService, "_call", return_value=[])
 
-        result = service._get_state_id(42, "NonExistent")
+        result = service._search_state_id(42, "NonExistent")
 
         assert result == 0
 
-    def test_get_state_id_returns_zero_when_not_integer(self, service, mocker):
+    def test_search_state_id_returns_zero_when_not_integer(self, service, mocker):
         """Test that 0 is returned when state_id is not an integer."""
         mocker.patch.object(OdooSaleService, "_call", return_value="not_an_int")
 
-        result = service._get_state_id(42, "California")
+        result = service._search_state_id(42, "California")
 
         assert result == 0
 
-    def test_get_state_id_returns_zero_when_id_is_float(self, service, mocker):
+    def test_search_state_id_returns_zero_when_id_is_float(self, service, mocker):
         """Test that 0 is returned when state_id is a float."""
         mocker.patch.object(OdooSaleService, "_call", return_value=123.45)
 
-        result = service._get_state_id(42, "California")
+        result = service._search_state_id(42, "California")
 
         assert result == 0
 
 
-class TestGetCarrierId:
-    """Tests for _get_carrier_id method."""
+class TestSearchCarrierId:
+    """Tests for _search_carrier_id method."""
 
     @pytest.fixture
     def service(self):
@@ -589,46 +535,46 @@ class TestGetCarrierId:
             line_items=[line_item],
         )
 
-    def test_get_carrier_id_successful(self, service, mocker, order):
+    def test_search_carrier_id_successful(self, service, mocker, order):
         """Test successful carrier ID retrieval."""
         mocker.patch.object(OdooSaleService, "_call", return_value=[{"id": 5}])
 
-        result = service._get_carrier_id(order)
+        result = service._search_carrier_id(order)
 
         assert result == 5
 
-    def test_get_carrier_id_raises_for_empty_carrier_name(self, service, mocker):
+    def test_search_carrier_id_raises_for_empty_carrier_name(self, service, mocker):
         """Test that ValueError is raised for empty carrier name."""
         order = Mock()
         order.shipment_type = ""
 
         with pytest.raises(ValueError, match="Shipment type is required in order"):
-            service._get_carrier_id(order)
+            service._search_carrier_id(order)
 
-    def test_get_carrier_id_raises_when_not_found(self, service, mocker, order):
+    def test_search_carrier_id_raises_when_not_found(self, service, mocker, order):
         """Test that SaleError is raised when carrier is not found."""
         mocker.patch.object(OdooSaleService, "_call", return_value=[])
 
-        with pytest.raises(SaleError, match="Carrier 'FedEx' not found"):
-            service._get_carrier_id(order)
+        with pytest.raises(SaleError, match="Carrier for search 'FedEx' not found"):
+            service._search_carrier_id(order)
 
-    def test_get_carrier_id_raises_when_not_integer(self, service, mocker, order):
+    def test_search_carrier_id_raises_when_not_integer(self, service, mocker, order):
         """Test that SaleError is raised when carrier_id is not an integer."""
         mocker.patch.object(OdooSaleService, "_call", return_value="not_an_int")
 
-        with pytest.raises(SaleError, match="Carrier 'FedEx' not found in Odoo"):
-            service._get_carrier_id(order)
+        with pytest.raises(SaleError, match="Carrier for search 'FedEx' not found"):
+            service._search_carrier_id(order)
 
-    def test_get_carrier_id_raises_when_id_is_boolean(self, service, mocker, order):
+    def test_search_carrier_id_raises_when_id_is_boolean(self, service, mocker, order):
         """Test that SaleError is raised when carrier_id is a non-int type."""
         mocker.patch.object(OdooSaleService, "_call", return_value=[1, 2])
 
-        with pytest.raises(SaleError, match="Carrier 'FedEx' not found in Odoo"):
-            service._get_carrier_id(order)
+        with pytest.raises(SaleError, match="Carrier for search 'FedEx' not found"):
+            service._search_carrier_id(order)
 
 
-class TestGetContactDataFromOrder:
-    """Tests for _get_contact_data_from_order method."""
+class TestLoadContactDataFromOrder:
+    """Tests for _load_contact_data_from_order method."""
 
     @pytest.fixture
     def service(self):
@@ -667,12 +613,12 @@ class TestGetContactDataFromOrder:
         )
         return order
 
-    def test_get_contact_data_from_order_successful(self, service, mocker, order):
+    def test_load_contact_data_from_order_successful(self, service, mocker, order):
         """Test successful contact data building."""
-        mocker.patch.object(OdooSaleService, "_get_country_id", return_value=42)
-        mocker.patch.object(OdooSaleService, "_get_state_id", return_value=100)
+        mocker.patch.object(OdooSaleService, "_search_country_id", return_value=42)
+        mocker.patch.object(OdooSaleService, "_search_state_id", return_value=100)
 
-        result = service._get_contact_data_from_order(order)
+        result = service._load_contact_data_from_order(order)
 
         assert result["name"] == "John Doe"
         # Odoo's "company_id" field is reserved for the Odoo company,
@@ -684,7 +630,7 @@ class TestGetContactDataFromOrder:
         assert result["company_id"] == 1
         assert result["ref"] == "CUST123"
 
-    def test_get_contact_data_from_order_handles_missing_state(self, service, mocker):
+    def test_load_contact_data_from_order_handles_missing_state(self, service, mocker):
         """Test that missing state is handled correctly."""
         ship_to = ShipTo(
             remote_customer_id="CUST123",
@@ -711,9 +657,9 @@ class TestGetContactDataFromOrder:
             ship_to=ship_to,
             line_items=[line_item],
         )
-        mocker.patch.object(OdooSaleService, "_get_country_id", return_value=42)
+        mocker.patch.object(OdooSaleService, "_search_country_id", return_value=42)
 
-        result = service._get_contact_data_from_order(order)
+        result = service._load_contact_data_from_order(order)
 
         assert result["state_id"] is None
 
@@ -759,7 +705,7 @@ class TestCreateContact:
 
     def test_create_contact_successful(self, service, mocker, order):
         """Test successful contact creation."""
-        mocker.patch.object(OdooSaleService, "_get_contact_data_from_order", return_value={})
+        mocker.patch.object(OdooSaleService, "_load_contact_data_from_order", return_value={})
         mocker.patch.object(OdooSaleService, "_call", side_effect=[[], 10])
 
         result = service._create_contact(order)
@@ -768,7 +714,7 @@ class TestCreateContact:
 
     def test_create_contact_returns_existing_contact(self, service, mocker, order):
         """Test that existing contact is returned if found."""
-        mocker.patch.object(OdooSaleService, "_get_contact_data_from_order", return_value={})
+        mocker.patch.object(OdooSaleService, "_load_contact_data_from_order", return_value={})
         mocker.patch.object(OdooSaleService, "_call", return_value=[{"id": 10}])
 
         result = service._create_contact(order)
@@ -777,7 +723,7 @@ class TestCreateContact:
 
     def test_create_contact_raises_on_failure(self, service, mocker, order):
         """Test that SaleError is raised when contact creation fails."""
-        mocker.patch.object(OdooSaleService, "_get_contact_data_from_order", return_value={})
+        mocker.patch.object(OdooSaleService, "_load_contact_data_from_order", return_value={})
         mocker.patch.object(OdooSaleService, "_call", side_effect=[[], "not_an_int"])
 
         with pytest.raises(SaleError, match="Failed to create contact"):
@@ -827,24 +773,24 @@ class TestUpdateContact:
         """Test successful contact update."""
         mocker.patch.object(
             OdooSaleService,
-            "_get_sale_data",
+            "search_sale",
             return_value={"id": 100, "partner_shipping_id": [10, "Shipping Address"]},
         )
-        mocker.patch.object(OdooSaleService, "_get_contact_data_from_order", return_value={})
+        mocker.patch.object(OdooSaleService, "_load_contact_data_from_order", return_value={})
         mocker.patch.object(OdooSaleService, "_call", return_value=True)
 
         service.update_contact(order)
 
     def test_update_contact_raises_when_sale_not_found(self, service, mocker, order):
         """Test that SaleError is raised when sale is not found."""
-        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={})
+        mocker.patch.object(OdooSaleService, "search_sale", return_value={})
 
-        with pytest.raises(SaleError, match="Cannot update contact for non-existent sale"):
+        with pytest.raises(SaleError, match="Sale not found"):
             service.update_contact(order)
 
     def test_update_contact_raises_when_no_shipping_contact(self, service, mocker, order):
         """Test that SaleError is raised when sale has no shipping contact."""
-        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={"id": 100})
+        mocker.patch.object(OdooSaleService, "search_sale", return_value={"id": 100})
 
         with pytest.raises(SaleError, match="Sale has no shipping contact to update"):
             service.update_contact(order)
@@ -853,18 +799,18 @@ class TestUpdateContact:
         """Test that SaleError is raised when write fails."""
         mocker.patch.object(
             OdooSaleService,
-            "_get_sale_data",
+            "search_sale",
             return_value={"id": 100, "partner_shipping_id": [10, "Shipping Address"]},
         )
-        mocker.patch.object(OdooSaleService, "_get_contact_data_from_order", return_value={})
+        mocker.patch.object(OdooSaleService, "_load_contact_data_from_order", return_value={})
         mocker.patch.object(OdooSaleService, "_call", return_value=False)
 
         with pytest.raises(SaleError, match="Failed to update contact"):
             service.update_contact(order)
 
 
-class TestHasExpectedOrderLines:
-    """Tests for has_expected_order_lines method."""
+class TestSaleHasExpectedOrderLines:
+    """Tests for sale_has_expected_order_lines method."""
 
     @pytest.fixture
     def service(self):
@@ -900,11 +846,11 @@ class TestHasExpectedOrderLines:
         )
         return order
 
-    def test_has_expected_order_lines_success(self, service, mocker, order):
+    def test_sale_has_expected_order_lines_success(self, service, mocker, order):
         """Test successful order line verification."""
         mocker.patch.object(
             OdooSaleService,
-            "_get_sale_data",
+            "search_sale",
             return_value={"id": 100, "order_line": [1, 2]},
         )
         mocker.patch.object(
@@ -918,15 +864,17 @@ class TestHasExpectedOrderLines:
             return_value=[{"product_id": 1, "product_uom_qty": 10}],
         )
 
-        result = service.has_expected_order_lines(order)
+        result = service.sale_has_expected_order_lines(order)
 
         assert result is True
 
-    def test_has_expected_order_lines_fails_for_mismatched_quantities(self, service, mocker, order):
+    def test_sale_has_expected_order_lines_fails_for_mismatched_quantities(
+        self, service, mocker, order
+    ):
         """Test that verification fails for mismatched quantities."""
         mocker.patch.object(
             OdooSaleService,
-            "_get_sale_data",
+            "search_sale",
             return_value={"id": 100, "order_line": [1]},
         )
         mocker.patch.object(
@@ -940,20 +888,20 @@ class TestHasExpectedOrderLines:
             return_value=[{"product_id": 1, "product_uom_qty": 10}],
         )
 
-        result = service.has_expected_order_lines(order)
+        result = service.sale_has_expected_order_lines(order)
 
         assert result is False
 
-    def test_has_expected_order_lines_raises_when_sale_not_found(self, service, mocker, order):
+    def test_sale_has_expected_order_lines_raises_when_sale_not_found(self, service, mocker, order):
         """Test that SaleError is raised when sale not found."""
-        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={})
+        mocker.patch.object(OdooSaleService, "search_sale", return_value={})
 
-        with pytest.raises(SaleError, match="Cannot check order lines"):
-            service.has_expected_order_lines(order)
+        with pytest.raises(SaleError, match="Sale not found"):
+            service.sale_has_expected_order_lines(order)
 
 
-class TestGetShippingInfo:
-    """Tests for get_shipping_info method."""
+class TestSearchShippingInfo:
+    """Tests for search_shipping_info method."""
 
     @pytest.fixture
     def service(self):
@@ -989,11 +937,11 @@ class TestGetShippingInfo:
         )
         return order
 
-    def test_get_shipping_info_successful(self, service, mocker, order):
+    def test_search_shipping_info_successful(self, service, mocker, order):
         """Test successful shipping info retrieval."""
         mocker.patch.object(
             OdooSaleService,
-            "_get_sale_data",
+            "search_sale",
             return_value={"id": 100, "company_id": 1},
         )
         mocker.patch.object(
@@ -1010,28 +958,28 @@ class TestGetShippingInfo:
             ],
         )
 
-        result = service.get_shipping_info(order)
+        result = service.search_shipping_info(order)
 
         assert len(result) == 1
         assert result[0]["carrier"] == "FedEx"
         assert result[0]["carrier_tracking_ref"] == "TRACK123"
         assert result[0]["weight"] == 5.5
 
-    def test_get_shipping_info_raises_error_when_not_found(self, service, mocker, order):
+    def test_search_shipping_info_raises_error_when_not_found(self, service, mocker, order):
         """Test that SaleError is raised when no shipping info found."""
         mocker.patch.object(
             OdooSaleService,
-            "_get_sale_data",
+            "search_sale",
             return_value={"id": 100, "company_id": 1},
         )
         mocker.patch.object(OdooSaleService, "_call", return_value=[])
 
         with pytest.raises(SaleError, match="No shipping information found"):
-            service.get_shipping_info(order)
+            service.search_shipping_info(order)
 
 
-class TestGetSerialsByLineItem:
-    """Tests for get_serials_by_line_item method."""
+class TestSearchSerialsByLineItem:
+    """Tests for search_serials_by_line_item method."""
 
     @pytest.fixture
     def service(self):
@@ -1066,9 +1014,9 @@ class TestGetSerialsByLineItem:
             line_items=[line_item],
         )
 
-    def test_get_serials_by_line_item_returns_serials(self, service, mocker, order):
+    def test_search_serials_by_line_item_returns_serials(self, service, mocker, order):
         """Test successful serial number retrieval by line item."""
-        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={"id": 100})
+        mocker.patch.object(OdooSaleService, "search_sale", return_value={"id": 100})
         mocker.patch.object(
             OdooSaleService,
             "_call",
@@ -1078,26 +1026,28 @@ class TestGetSerialsByLineItem:
             ],
         )
 
-        result = service.get_serials_by_line_item(order)
+        result = service.search_serials_by_line_item(order)
 
         assert result["LINE001"] == ["SN001", "SN002"]
 
-    def test_get_serials_by_line_item_returns_dict_when_not_found(self, service, mocker, order):
+    def test_search_serials_by_line_item_returns_dict_when_not_found(self, service, mocker, order):
         """Test that dict with empty lists is returned when no serials found."""
-        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={"id": 100})
+        mocker.patch.object(OdooSaleService, "search_sale", return_value={"id": 100})
         mocker.patch.object(OdooSaleService, "_call", return_value=[])
 
-        result = service.get_serials_by_line_item(order)
+        result = service.search_serials_by_line_item(order)
 
         assert len(result) == 1
         assert result["LINE001"] == []
 
-    def test_get_serials_by_line_item_returns_dict_on_invalid_result(self, service, mocker, order):
+    def test_search_serials_by_line_item_returns_dict_on_invalid_result(
+        self, service, mocker, order
+    ):
         """Test that empty dict is returned on invalid result."""
-        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={"id": 100})
+        mocker.patch.object(OdooSaleService, "search_sale", return_value={"id": 100})
         mocker.patch.object(OdooSaleService, "_call", return_value="invalid")
 
-        result = service.get_serials_by_line_item(order)
+        result = service.search_serials_by_line_item(order)
 
         assert len(result) == 1
         assert result["LINE001"] == []
@@ -1197,8 +1147,8 @@ class TestCall:
         assert id_2 > id_1
 
 
-class TestUpdateDeliveryInstructions:
-    """Tests for update_delivery_instructions method."""
+class TestSetDeliveryInstructions:
+    """Tests for set_delivery_instructions method."""
 
     @pytest.fixture
     def service(self):
@@ -1234,20 +1184,18 @@ class TestUpdateDeliveryInstructions:
             line_items=[line_item],
         )
 
-    def test_update_delivery_instructions_successful(self, service, mocker, order):
+    def test_set_delivery_instructions_successful(self, service, mocker, order):
         """Test successful delivery instructions update."""
         mocker.patch.object(
             OdooSaleService,
-            "_get_sale_data",
+            "search_sale",
             return_value={"id": 100},
         )
         mocker.patch.object(OdooSaleService, "_call", return_value=True)
 
-        service.update_delivery_instructions(order)
+        service.set_delivery_instructions(order)
 
-    def test_update_delivery_instructions_returns_early_on_empty_instructions(
-        self, service, mocker
-    ):
+    def test_set_delivery_instructions_returns_early_on_empty_instructions(self, service, mocker):
         """Test that update returns early when delivery instructions are empty."""
         ship_to = ShipTo(
             remote_customer_id="CUST123",
@@ -1272,15 +1220,15 @@ class TestUpdateDeliveryInstructions:
             ship_to=ship_to,
             line_items=[line_item],
         )
-        get_sale_spy = mocker.spy(OdooSaleService, "_get_sale_data")
+        get_sale_spy = mocker.spy(OdooSaleService, "search_sale")
         call_spy = mocker.spy(OdooSaleService, "_call")
 
-        service.update_delivery_instructions(order_empty)
+        service.set_delivery_instructions(order_empty)
 
         get_sale_spy.assert_not_called()
         call_spy.assert_not_called()
 
-    def test_update_delivery_instructions_returns_early_on_whitespace_instructions(
+    def test_set_delivery_instructions_returns_early_on_whitespace_instructions(
         self, service, mocker
     ):
         """Test that update returns early when delivery instructions are whitespace only."""
@@ -1307,67 +1255,59 @@ class TestUpdateDeliveryInstructions:
             ship_to=ship_to,
             line_items=[line_item],
         )
-        get_sale_spy = mocker.spy(OdooSaleService, "_get_sale_data")
+        get_sale_spy = mocker.spy(OdooSaleService, "search_sale")
         call_spy = mocker.spy(OdooSaleService, "_call")
 
-        service.update_delivery_instructions(order_whitespace)
+        service.set_delivery_instructions(order_whitespace)
 
         get_sale_spy.assert_not_called()
         call_spy.assert_not_called()
 
-    def test_update_delivery_instructions_raises_when_sale_not_found(self, service, mocker, order):
+    def test_set_delivery_instructions_raises_when_sale_not_found(self, service, mocker, order):
         """Test that SaleError is raised when sale is not found."""
-        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={})
+        mocker.patch.object(OdooSaleService, "search_sale", return_value={})
 
-        with pytest.raises(
-            SaleError, match="Cannot update delivery instructions for non-existent sale"
-        ):
-            service.update_delivery_instructions(order)
+        with pytest.raises(SaleError, match="Sale not found"):
+            service.set_delivery_instructions(order)
 
-    def test_update_delivery_instructions_raises_when_sale_id_is_zero(self, service, mocker, order):
+    def test_set_delivery_instructions_raises_when_sale_id_is_zero(self, service, mocker, order):
         """Test that SaleError is raised when sale ID is 0."""
-        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={"id": 0})
+        mocker.patch.object(OdooSaleService, "search_sale", return_value={"id": 0})
 
-        with pytest.raises(
-            SaleError, match="Cannot update delivery instructions for non-existent sale"
-        ):
-            service.update_delivery_instructions(order)
+        with pytest.raises(SaleError, match="Sale not found"):
+            service.set_delivery_instructions(order)
 
-    def test_update_delivery_instructions_raises_when_sale_missing_id_field(
+    def test_set_delivery_instructions_raises_when_sale_missing_id_field(
         self, service, mocker, order
     ):
         """Test that SaleError is raised when sale data missing id field."""
-        mocker.patch.object(OdooSaleService, "_get_sale_data", return_value={"name": "SO-123"})
+        mocker.patch.object(OdooSaleService, "search_sale", return_value={"name": "SO-123"})
 
-        with pytest.raises(
-            SaleError, match="Cannot update delivery instructions for non-existent sale"
-        ):
-            service.update_delivery_instructions(order)
+        with pytest.raises(SaleError, match="Sale not found"):
+            service.set_delivery_instructions(order)
 
-    def test_update_delivery_instructions_raises_on_write_failure(self, service, mocker, order):
+    def test_set_delivery_instructions_raises_on_write_failure(self, service, mocker, order):
         """Test that SaleError is raised when write fails."""
         mocker.patch.object(
             OdooSaleService,
-            "_get_sale_data",
+            "search_sale",
             return_value={"id": 100},
         )
         mocker.patch.object(OdooSaleService, "_call", return_value=False)
 
-        with pytest.raises(SaleError, match="Failed to update delivery instructions for sale 100"):
-            service.update_delivery_instructions(order)
+        with pytest.raises(SaleError, match="Failed to set delivery instructions for sale 100"):
+            service.set_delivery_instructions(order)
 
-    def test_update_delivery_instructions_calls_with_correct_parameters(
-        self, service, mocker, order
-    ):
+    def test_set_delivery_instructions_calls_with_correct_parameters(self, service, mocker, order):
         """Test that _call is invoked with correct parameters."""
         mocker.patch.object(
             OdooSaleService,
-            "_get_sale_data",
+            "search_sale",
             return_value={"id": 100},
         )
         call_mock = mocker.patch.object(OdooSaleService, "_call", return_value=True)
 
-        service.update_delivery_instructions(order)
+        service.set_delivery_instructions(order)
 
         call_mock.assert_called_once()
         call_args = call_mock.call_args
@@ -1378,7 +1318,7 @@ class TestUpdateDeliveryInstructions:
             {"x_remote_delivery_instructions": "Handle with care"},
         ]
 
-    def test_update_delivery_instructions_handles_long_instructions(self, service, mocker):
+    def test_set_delivery_instructions_handles_long_instructions(self, service, mocker):
         """Test that long delivery instructions are handled correctly."""
         long_instructions = "A" * 1000
         ship_to = ShipTo(
@@ -1406,17 +1346,17 @@ class TestUpdateDeliveryInstructions:
         )
         mocker.patch.object(
             OdooSaleService,
-            "_get_sale_data",
+            "search_sale",
             return_value={"id": 100},
         )
         call_mock = mocker.patch.object(OdooSaleService, "_call", return_value=True)
 
-        service.update_delivery_instructions(order_long)
+        service.set_delivery_instructions(order_long)
 
         call_args = call_mock.call_args
         assert call_args[1]["query_data"][1]["x_remote_delivery_instructions"] == long_instructions
 
-    def test_update_delivery_instructions_handles_special_characters(self, service, mocker):
+    def test_set_delivery_instructions_handles_special_characters(self, service, mocker):
         """Test that delivery instructions with special characters are handled correctly."""
         special_instructions = (
             "Handle with care! Include \n newlines and 'quotes' and \"double quotes\""
@@ -1446,12 +1386,12 @@ class TestUpdateDeliveryInstructions:
         )
         mocker.patch.object(
             OdooSaleService,
-            "_get_sale_data",
+            "search_sale",
             return_value={"id": 100},
         )
         call_mock = mocker.patch.object(OdooSaleService, "_call", return_value=True)
 
-        service.update_delivery_instructions(order_special)
+        service.set_delivery_instructions(order_special)
 
         call_args = call_mock.call_args
         assert (
