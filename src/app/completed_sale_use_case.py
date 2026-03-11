@@ -7,8 +7,7 @@ from dataclasses import dataclass
 from logging import getLogger
 
 from src.app.errors import ErrorStore, SaleError, get_error_store
-from src.domain import OrderStatus
-from src.interfaces import IOrderService, IRegistry, ISaleService
+from src.domain import IOrderService, IRegistry, ISaleService, OrderStatus
 
 logger = getLogger(__name__)
 
@@ -34,7 +33,7 @@ class CompletedSaleUseCase:
         for order_provider, order_service in self.order_services.items():
             try:
                 logger.info("Complete sales for %s service...", order_provider)
-                completed_sales = self.sale_service.get_completed_sales(order_provider)
+                completed_sales = self.sale_service.search_completed_sales(order_provider)
                 for _sale_id, remote_order_id in completed_sales:
                     try:
                         if order := order_service.load_order(remote_order_id):

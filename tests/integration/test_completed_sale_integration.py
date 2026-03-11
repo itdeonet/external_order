@@ -38,7 +38,7 @@ class TestCompletedSaleUseCaseIntegration:
     def sale_service_mock(self):
         """Provide a mock sale service that returns completed sales."""
         service = Mock()
-        service.get_completed_sales.return_value = [
+        service.search_completed_sales.return_value = [
             (100, "ORDER123"),  # (sale_id, remote_order_id)
             (101, "ORDER124"),
         ]
@@ -51,7 +51,7 @@ class TestCompletedSaleUseCaseIntegration:
     ):
         """Test that completed sales are properly marked as completed."""
         sale_service = Mock()
-        sale_service.get_completed_sales.return_value = [
+        sale_service.search_completed_sales.return_value = [
             (100, "ORDER123"),
         ]
 
@@ -88,7 +88,7 @@ class TestCompletedSaleUseCaseIntegration:
         order_services.register("TestOrderService", order_service)
 
         sale_service = Mock()
-        sale_service.get_completed_sales.return_value = [
+        sale_service.search_completed_sales.return_value = [
             (100, "ORDER123"),
             (101, "ORDER124"),
             (102, "ORDER125"),
@@ -118,7 +118,7 @@ class TestCompletedSaleUseCaseIntegration:
         order_services.register("TestOrderService", order_service)
 
         sale_service = Mock()
-        sale_service.get_completed_sales.return_value = [
+        sale_service.search_completed_sales.return_value = [
             (100, "NONEXISTENT_ORDER"),
         ]
 
@@ -147,7 +147,7 @@ class TestCompletedSaleUseCaseIntegration:
         order_services.register("TestOrderService", order_service)
 
         sale_service = Mock()
-        sale_service.get_completed_sales.return_value = [
+        sale_service.search_completed_sales.return_value = [
             (100, "ORDER123"),
         ]
 
@@ -175,7 +175,7 @@ class TestCompletedSaleUseCaseIntegration:
         order_services.register("TestOrderService", order_service)
 
         sale_service = Mock()
-        sale_service.get_completed_sales.return_value = []
+        sale_service.search_completed_sales.return_value = []
 
         use_case = CompletedSaleUseCase(
             order_services=order_services,
@@ -195,7 +195,7 @@ class TestCompletedSaleUseCaseIntegration:
     ):
         """Test when sale service itself raises an error."""
         sale_service = Mock()
-        sale_service.get_completed_sales.side_effect = Exception("Sale service error")
+        sale_service.search_completed_sales.side_effect = Exception("Sale service error")
 
         use_case = CompletedSaleUseCase(
             order_services=order_services,
