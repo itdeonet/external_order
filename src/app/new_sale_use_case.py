@@ -9,8 +9,7 @@ from logging import getLogger
 from pathlib import Path
 
 from src.app.errors import SaleError, get_error_store
-from src.domain import Order, OrderStatus
-from src.interfaces import IArtworkService, IOrderService, IRegistry, ISaleService
+from src.domain import IArtworkService, IOrderService, IRegistry, ISaleService, Order, OrderStatus
 
 logger = getLogger(__name__)
 
@@ -43,19 +42,19 @@ class NewSaleUseCase:
                     )
                     order_service.persist_order(order, OrderStatus.NEW)
 
-                    if not self.sale_service.is_sale_created(order):
+                    if not self.sale_service.search_sale(order):
                         # no sale for this order, create it
                         order.set_sale_id(self.sale_service.create_sale(order))
                     elif order_service.should_update_sale(order):
                         # sale exists but order data has changed, update it
-                        if not self.sale_service.has_expected_order_lines(order):
+                        if not self.sale_service.sale_has_expected_order_lines(order):
                             # order lines do not match expected lines for this order, raise error
                             raise SaleError(
                                 "Existing sale order lines do not match expected lines",
                                 order.remote_order_id,
                             )
                         self.sale_service.update_contact(order)
-                        self.sale_service.update_delivery_instructions(order)
+                        self.sale_service.set_delivery_instructions(order)
 
                     # when we reach this point, the order is in an expected state
                     order_service.persist_order(order, OrderStatus.CREATED)

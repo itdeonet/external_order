@@ -8,8 +8,16 @@ from unittest.mock import MagicMock, call
 import pytest
 
 from src.app.new_sale_use_case import NewSaleUseCase
-from src.domain import LineItem, Order, OrderStatus, ShipTo
-from src.interfaces import IArtworkService, IOrderService, IRegistry, ISaleService
+from src.domain import (
+    IArtworkService,
+    IOrderService,
+    IRegistry,
+    ISaleService,
+    LineItem,
+    Order,
+    OrderStatus,
+    ShipTo,
+)
 
 
 def create_sample_order(remote_order_id: str = "REMOTE001") -> Order:
@@ -165,14 +173,14 @@ class TestCreateSalesNewSaleCreation:
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.is_sale_created.return_value = False
+        use_case.sale_service.search_sale.return_value = {}
         use_case.sale_service.create_sale.return_value = 12345
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.execute()
 
-        use_case.sale_service.is_sale_created.assert_called_once_with(order)
+        use_case.sale_service.search_sale.assert_called_once_with(order)
         use_case.sale_service.create_sale.assert_called_once_with(order)
 
     def test_create_sales_persists_order_status_new(self, use_case, mocker):
@@ -183,7 +191,7 @@ class TestCreateSalesNewSaleCreation:
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.is_sale_created.return_value = False
+        use_case.sale_service.search_sale.return_value = {}
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -201,7 +209,7 @@ class TestCreateSalesNewSaleCreation:
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.is_sale_created.return_value = False
+        use_case.sale_service.search_sale.return_value = {}
         use_case.sale_service.create_sale.return_value = 999
 
         mocker.patch("src.app.new_sale_use_case.logger")
@@ -225,7 +233,7 @@ class TestCreateSalesNewSaleCreation:
         order_service.get_artwork_service.return_value = artwork_service
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.is_sale_created.return_value = False
+        use_case.sale_service.search_sale.return_value = {}
         use_case.sale_service.create_sale.return_value = 999
 
         mocker.patch("src.app.new_sale_use_case.logger")
@@ -247,7 +255,7 @@ class TestCreateSalesNewSaleCreation:
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.is_sale_created.return_value = False
+        use_case.sale_service.search_sale.return_value = {}
         use_case.sale_service.create_sale.return_value = 999
 
         mocker.patch("src.app.new_sale_use_case.logger")
@@ -269,7 +277,7 @@ class TestCreateSalesNewSaleCreation:
         order_service.get_artwork_service.return_value = artwork_service
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.is_sale_created.return_value = False
+        use_case.sale_service.search_sale.return_value = {}
         use_case.sale_service.create_sale.return_value = 999
 
         mocker.patch("src.app.new_sale_use_case.logger")
@@ -290,8 +298,8 @@ class TestCreateSalesExistingSaleUpdate:
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.is_sale_created.return_value = True
-        use_case.sale_service.has_expected_order_lines.return_value = True
+        use_case.sale_service.search_sale.return_value = {"id": 12345}
+        use_case.sale_service.sale_has_expected_order_lines.return_value = True
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -307,8 +315,8 @@ class TestCreateSalesExistingSaleUpdate:
         order_service.read_orders.return_value = iter([order])
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.is_sale_created.return_value = True
-        use_case.sale_service.has_expected_order_lines.return_value = False
+        use_case.sale_service.search_sale.return_value = {"id": 12345}
+        use_case.sale_service.sale_has_expected_order_lines.return_value = False
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -322,8 +330,8 @@ class TestCreateSalesExistingSaleUpdate:
         order_service.read_orders.return_value = iter([order])
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.is_sale_created.return_value = True
-        use_case.sale_service.has_expected_order_lines.return_value = False
+        use_case.sale_service.search_sale.return_value = {"id": 12345}
+        use_case.sale_service.sale_has_expected_order_lines.return_value = False
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -368,7 +376,7 @@ class TestCreateSalesExceptionHandling:
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.is_sale_created.return_value = False
+        use_case.sale_service.search_sale.return_value = {}
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -384,7 +392,7 @@ class TestCreateSalesExceptionHandling:
         order_service.read_orders.return_value = iter([order])
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.is_sale_created.return_value = False
+        use_case.sale_service.search_sale.return_value = {}
         use_case.sale_service.create_sale.side_effect = Exception("Sale creation failed")
 
         mocker.patch("src.app.new_sale_use_case.logger")
@@ -399,7 +407,7 @@ class TestCreateSalesExceptionHandling:
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.is_sale_created.return_value = False
+        use_case.sale_service.search_sale.return_value = {}
         use_case.sale_service.confirm_sale.side_effect = Exception("Confirm failed")
 
         mocker.patch("src.app.new_sale_use_case.logger")
@@ -427,7 +435,7 @@ class TestCreateSalesWithMultipleServices:
             ("service1", order_service1),
             ("service2", order_service2),
         ]
-        use_case.sale_service.is_sale_created.return_value = False
+        use_case.sale_service.search_sale.return_value = {}
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -453,7 +461,7 @@ class TestCreateSalesWithMultipleServices:
             ("service1", order_service1),
             ("service2", order_service2),
         ]
-        use_case.sale_service.is_sale_created.return_value = False
+        use_case.sale_service.search_sale.return_value = {}
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -659,7 +667,7 @@ class TestCreateSalesLogging:
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.is_sale_created.return_value = False
+        use_case.sale_service.search_sale.return_value = {}
 
         with caplog.at_level(logging.INFO):
             use_case.execute()
@@ -688,8 +696,8 @@ class TestCreateSalesLogging:
         order_service.read_orders.return_value = iter([order])
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.is_sale_created.return_value = True
-        use_case.sale_service.has_expected_order_lines.return_value = False
+        use_case.sale_service.search_sale.return_value = {"id": 12345}
+        use_case.sale_service.sale_has_expected_order_lines.return_value = False
 
         with caplog.at_level(logging.ERROR):
             use_case.execute()
@@ -743,7 +751,7 @@ class TestSaleUseCaseIntegration:
             order_service.get_artwork_service.return_value = artwork_service
 
             use_case.order_services.items.return_value = [("integration_service", order_service)]
-            use_case.sale_service.is_sale_created.return_value = False
+            use_case.sale_service.search_sale.return_value = {}
             use_case.sale_service.create_sale.return_value = 12345
 
             mocker.patch("src.app.new_sale_use_case.logger")
@@ -767,8 +775,8 @@ class TestSaleUseCaseIntegration:
         order_service.get_artwork_service.return_value = None
 
         use_case.order_services.items.return_value = [("update_service", order_service)]
-        use_case.sale_service.is_sale_created.return_value = True
-        use_case.sale_service.has_expected_order_lines.return_value = True
+        use_case.sale_service.search_sale.return_value = {"id": 54321}
+        use_case.sale_service.sale_has_expected_order_lines.return_value = True
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -794,8 +802,8 @@ class TestSaleUseCaseIntegration:
         # Order 1: New sale
         # Order 2: Existing sale with matching lines
         # Order 3: Exception during processing
-        use_case.sale_service.is_sale_created.side_effect = [False, True, False]
-        use_case.sale_service.has_expected_order_lines.return_value = True
+        use_case.sale_service.search_sale.side_effect = [False, True, False]
+        use_case.sale_service.sale_has_expected_order_lines.return_value = True
         order_service.persist_order.side_effect = [
             None,  # order1 NEW
             None,  # order1 CREATED

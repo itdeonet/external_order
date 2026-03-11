@@ -60,9 +60,9 @@ class TestNewSaleUseCaseIntegration:
         )
 
         # Just verify that is_sale_created works correctly
-        result = sale_service.is_sale_created(sample_order)
+        result = sale_service.search_sale(sample_order)
 
-        assert result is False
+        assert bool(result) is False
 
     def test_new_sale_with_artwork_service(
         self,
@@ -82,6 +82,7 @@ class TestNewSaleUseCaseIntegration:
             "clientHandle": "test_client",
             "lineItems": [
                 {
+                    "id": 1,
                     "recipeSetId": "RECIPE123",
                     "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
                 }
