@@ -40,7 +40,7 @@ class TestOdooServiceHttpIntegration:
         )
 
         # Check if the sale exists
-        exists = service.is_sale_created(sample_order)
+        exists = bool(service.search_sale(sample_order))
 
         assert exists is True
 
@@ -66,7 +66,7 @@ class TestOdooServiceHttpIntegration:
         )
 
         # Check if the sale exists
-        exists = service.is_sale_created(sample_order)
+        exists = bool(service.search_sale(sample_order))
 
         assert exists is False
 
