@@ -10,8 +10,7 @@ import pytest
 from pydifact import Segment  # type: ignore
 
 from src.app.errors import ErrorStore
-from src.domain import Order, OrderStatus
-from src.interfaces import IArtworkService
+from src.domain import IArtworkService, Order, OrderStatus
 from src.services.harman_order_service import HarmanOrderService
 from src.services.render_service import RenderService
 
