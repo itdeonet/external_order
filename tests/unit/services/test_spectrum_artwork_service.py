@@ -154,6 +154,7 @@ class TestSpectrumArtworkServiceGetArtwork:
                     "clientHandle": "CLIENT123",
                     "lineItems": [
                         {
+                            "id": 1,
                             "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
                             "recipeSetId": "RECIPE001",
                         }
@@ -183,6 +184,7 @@ class TestSpectrumArtworkServiceGetArtwork:
             "clientHandle": "SPECTRUM_CLIENT",
             "lineItems": [
                 {
+                    "id": 1,
                     "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
                     "recipeSetId": "RECIPE001",
                 }
@@ -209,6 +211,7 @@ class TestSpectrumArtworkServiceGetArtwork:
                     "clientHandle": "SPECTRUM_CLIENT",
                     "lineItems": [
                         {
+                            "id": 1,
                             "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
                             "recipeSetId": "RECIPE001",
                         }
@@ -240,6 +243,7 @@ class TestSpectrumArtworkServiceGetArtwork:
             "clientHandle": "CLIENT123",
             "lineItems": [
                 {
+                    "id": 1,
                     "skuQuantities": [{"sku": "DIFFERENT_PROD", "quantity": 100}],
                     "recipeSetId": "RECIPE001",
                 }
@@ -288,6 +292,7 @@ class TestSpectrumArtworkServiceGetArtwork:
                     "clientHandle": "CLIENT123",
                     "lineItems": [
                         {
+                            "id": 1,
                             "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
                             "recipeSetId": None,  # Missing or null
                         }
@@ -309,6 +314,7 @@ class TestSpectrumArtworkServiceGetArtwork:
             "clientHandle": "CLIENT123",
             "lineItems": [
                 {
+                    "id": 1,
                     "skuQuantities": [],  # Empty list
                     "recipeSetId": "RECIPE001",
                 }
@@ -342,6 +348,7 @@ class TestSpectrumArtworkServiceGetArtwork:
                 response.json.return_value = {
                     "lineItems": [
                         {
+                            "id": 1,
                             "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
                             "recipeSetId": "RECIPE001",
                         }
@@ -405,6 +412,7 @@ class TestSpectrumArtworkServiceGetArtwork:
                     "clientHandle": "CLIENT789",
                     "lineItems": [
                         {
+                            "id": 1,
                             "skuQuantities": [
                                 {"sku": "PROD001", "quantity": 100},
                                 {"sku": "PROD002", "quantity": 50},
@@ -455,6 +463,7 @@ class TestSpectrumArtworkServiceGetArtwork:
                     "clientHandle": "CLIENT123",
                     "lineItems": [
                         {
+                            "id": 1,
                             "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
                             "recipeSetId": "RECIPE001",
                         }
@@ -495,6 +504,7 @@ class TestSpectrumArtworkServiceGetArtwork:
                     "clientHandle": "CLIENT123",
                     "lineItems": [
                         {
+                            "id": 1,
                             "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
                             "recipeSetId": "RECIPE001",
                         }
@@ -561,10 +571,12 @@ class TestSpectrumArtworkServiceGetArtwork:
                     "clientHandle": "CLIENT456",
                     "lineItems": [
                         {
+                            "id": 1,
                             "skuQuantities": [{"sku": "PROD001", "quantity": 50}],
                             "recipeSetId": "RECIPE101",
                         },
                         {
+                            "id": 2,
                             "skuQuantities": [{"sku": "PROD002", "quantity": 75}],
                             "recipeSetId": "RECIPE102",
                         },
@@ -608,6 +620,7 @@ class TestSpectrumArtworkServiceGetArtwork:
                     "clientHandle": "CLIENT789",
                     "lineItems": [
                         {
+                            "id": 1,
                             "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
                             "recipeSetId": "RECIPE001",
                         }

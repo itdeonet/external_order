@@ -59,22 +59,24 @@ class SpectrumArtworkService:
         self._load_order_data(order)
 
         # build a set of tuples containing the product code, quantity, and recipe set ID
-        artwork_data: set[tuple[str, int, str]] = set()
+        artwork_data: set[tuple[int, str, int, str]] = set()
         for li in self.order_data.get("lineItems", []):
             for sku_qty in li.get("skuQuantities", []):
-                artwork_data.add((sku_qty["sku"], sku_qty["quantity"], li.get("recipeSetId")))
+                artwork_data.add(
+                    (li["id"], sku_qty["sku"], sku_qty["quantity"], li.get("recipeSetId"))
+                )
         logger.debug("Artwork data extracted from Spectrum response: %s", artwork_data)
 
         file_paths: list[Path] = []
         for li in order.line_items:
-            for sku, qty, recipe_set_id in artwork_data:
+            for li_id, sku, qty, recipe_set_id in artwork_data:
                 if li.product_code == sku and li.quantity == qty:
                     design_endpoint = f"/api/webtoprint/{recipe_set_id}/"
                     placement_endpoint = f"/{self.client_handle}/specification/{recipe_set_id}/pdf/"
 
                     artwork = Artwork(
                         artwork_id=recipe_set_id,
-                        line_id=li.line_id,
+                        artwork_line_id=str(li_id),
                         design_url=f"{self.base_url.rstrip('/')}{design_endpoint}",
                         design_paths=self._download_designs(
                             recipe_set_id=recipe_set_id, sale_id=order.sale_id
