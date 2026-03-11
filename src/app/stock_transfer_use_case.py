@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from logging import getLogger
 
 from src.app.errors import get_error_store
-from src.interfaces import IRegistry, IStockService
+from src.domain import IRegistry, IStockService
 
 logger = getLogger(__name__)
 
