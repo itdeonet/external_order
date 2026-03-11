@@ -126,10 +126,6 @@ class IOrderService(IOrderReader, IOrderStore, IOrderNotifier, IArtworkServicePr
 class ISaleService(Protocol):
     """Protocol for creating and managing sales for orders."""
 
-    def is_sale_created(self, order: "Order") -> bool:
-        """Return True if a sale exists for `order`, else False."""
-        ...
-
     def create_sale(self, order: "Order") -> int:
         """Create a sale for `order` and return its ID; may raise on errors."""
         ...
@@ -138,7 +134,7 @@ class ISaleService(Protocol):
         """Confirm the sale for `order` in the sales system."""
         ...
 
-    def has_expected_order_lines(self, order: "Order") -> bool:
+    def sale_has_expected_order_lines(self, order: "Order") -> bool:
         """Return True if sale lines match `order` lines, else False."""
         ...
 
@@ -146,19 +142,23 @@ class ISaleService(Protocol):
         """Update sale contact details to match `order`."""
         ...
 
-    def update_delivery_instructions(self, order: "Order") -> None:
+    def set_delivery_instructions(self, order: "Order") -> None:
         """Update sale delivery instructions from `order`."""
         ...
 
-    def get_completed_sales(self, order_provider: str) -> list[tuple[int, str]]:
+    def search_sale(self, order: "Order") -> dict[str, Any]:
+        """Return sale data for `order` if exists, else empty dict."""
+        ...
+
+    def search_completed_sales(self, order_provider: str) -> list[tuple[int, str]]:
         """Return list of completed sales as (sale_id, remote_order_id) tuples."""
         ...
 
-    def get_shipping_info(self, order: "Order") -> list[dict[str, Any]]:
+    def search_shipping_info(self, order: "Order") -> list[dict[str, Any]]:
         """Return shipping info for `order` as a list of dicts."""
         ...
 
-    def get_serials_by_line_item(self, order: "Order") -> dict[str, list[str]]:
+    def search_serials_by_line_item(self, order: "Order") -> dict[str, list[str]]:
         """Return serial numbers per line item for `order`."""
         ...
 
