@@ -18,7 +18,7 @@ from src.app.new_sale_use_case import NewSaleUseCase
 from src.app.registry import Registry
 from src.app.stock_transfer_use_case import StockTransferUseCase
 from src.config import Config, get_config
-from src.interfaces import (
+from src.domain import (
     IArtworkService,
     IOrderService,
     ISaleService,
@@ -28,11 +28,10 @@ from src.interfaces import (
 from src.services.harman_order_service import HarmanOrderService
 from src.services.harman_stock_service import HarmanStockService
 from src.services.odoo_sale_service import OdooSaleService
-from src.services.render_service import RenderService
 from src.services.spectrum_artwork_service import SpectrumArtworkService
 
 if TYPE_CHECKING:
-    from src.interfaces import IRegistry, ISaleService
+    from src.domain import IRegistry, ISaleService
 
 logger = getLogger(__name__)
 
@@ -57,7 +56,6 @@ def main() -> None:
     artwork_services: IRegistry[IArtworkService] = Registry[IArtworkService]()
     order_services: IRegistry[IOrderService] = Registry[IOrderService]()
     order_services.register(config.harman_order_provider, HarmanOrderService())
-    RenderService()
     stock_services: IRegistry[IStockService] = Registry[IStockService]()
     stock_services.register(config.harman_stock_supplier_name, HarmanStockService())
     use_cases: IRegistry[IUseCase] = Registry[IUseCase]()  # type: ignore[type-arg]
