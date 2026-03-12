@@ -1,7 +1,6 @@
 """Integration tests for main.py application setup and execution."""
 
 import contextlib
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 from src.app.registry import Registry
@@ -66,15 +65,15 @@ class TestMainApplicationSetup:
             items = dict(registry.items())
             assert items["TestService"] == mock_service
 
-    def test_main_error_handling(self):
+    def test_main_error_handling(self, tmp_path):
         """Test that main() handles errors during use case execution."""
         with patch("src.main.get_config") as mock_get_config:
             mock_config = Mock(spec=Config)
-            mock_config.harman_input_dir = Path("/tmp/in")
-            mock_config.harman_output_dir = Path("/tmp/out")
-            mock_config.digitals_dir = Path("/tmp/digitals")
-            mock_config.open_orders_dir = Path("/tmp/open")
-            mock_config.templates_dir = Path("/tmp/templates")
+            mock_config.harman_input_dir = tmp_path / "harman" / "in"
+            mock_config.harman_output_dir = tmp_path / "harman" / "out"
+            mock_config.digitals_dir = tmp_path / "digitals"
+            mock_config.open_orders_dir = tmp_path / "open_orders"
+            mock_config.templates_dir = tmp_path / "templates"
             mock_config.harman_administration_id = 1
             mock_config.harman_customer_id = 100
             mock_config.harman_pricelist_id = 50
@@ -87,6 +86,8 @@ class TestMainApplicationSetup:
             mock_config.odoo_database = "test_db"
             mock_config.spectrum_base_url = "https://spectrum.example.com"
             mock_config.spectrum_api_key = "test_key"
+            mock_config.log_file = tmp_path / "external_order.log"
+            mock_config.log_file_level = "DEBUG"
 
             mock_get_config.return_value = mock_config
 
