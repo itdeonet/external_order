@@ -64,6 +64,9 @@ class OdooSaleService:
 
         if not (result and isinstance(result, list) and isinstance(result[0], dict)):
             return {}
+
+        sale_id: int = result[0].get("id", 0)
+        order.set_sale_id(sale_id)
         return result[0]
 
     def _search_country_id(self, country_code: str) -> int:
@@ -347,7 +350,7 @@ class OdooSaleService:
                     "pricelist_id": order.pricelist_id,
                     "order_line": order_lines,
                     "state": "draft",
-                    "commitment_date": order.ship_at.strftime("%Y-%m-%d"),
+                    "commitment_date": order.ship_at,
                     "carrier_id": self._search_carrier_id(order),
                     "x_remote_delivery_instructions": order.delivery_instructions or None,
                     "x_remote_order_id": order.remote_order_id,
@@ -368,6 +371,9 @@ class OdooSaleService:
         sale_data = self.search_sale(order)
         if not (sale_data and "id" in sale_data and sale_data["id"] != 0):
             raise SaleError("Sale not found", order.remote_order_id)
+        if sale_data.get("state") == "sale":
+            logger.info("Sale for order %s is already confirmed", order.remote_order_id)
+            return
 
         sale_id = sale_data["id"]
         logger.info("Confirm sale with id: %s for order: %s", sale_id, order.remote_order_id)
@@ -440,13 +446,9 @@ class OdooSaleService:
 
         logger.info("Contact ID %d updated (order %s)", contact_id, order.remote_order_id)
 
-    def set_delivery_instructions(self, order: Order) -> None:
-        """Write `order.delivery_instructions` to the sale if present."""
-        if not order.delivery_instructions.strip():
-            logger.info("No delivery instructions for order %s", order.remote_order_id)
-            return
-
-        logger.info("Update delivery instructions for order %s", order.remote_order_id)
+    def update_sale(self, order: Order) -> None:
+        """Update sale from `order` data."""
+        logger.info("Update sale for order %s", order.remote_order_id)
         sale_data = self.search_sale(order)
         if not (sale_data and "id" in sale_data and sale_data["id"] != 0):
             raise SaleError("Sale not found", order.remote_order_id)
@@ -455,7 +457,14 @@ class OdooSaleService:
         result = self._call(
             model="sale.order",
             method="write",
-            query_data=[[sale_id], {"x_remote_delivery_instructions": order.delivery_instructions}],
+            query_data=[
+                [sale_id],
+                {
+                    "x_remote_delivery_instructions": order.delivery_instructions or None,
+                    "x_remote_order_id": order.remote_order_id,
+                    "x_remote_order_provider": order.order_provider,
+                },
+            ],
         )
         if not bool(result):
             raise SaleError(

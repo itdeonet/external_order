@@ -54,7 +54,7 @@ class NewSaleUseCase:
                                 order.remote_order_id,
                             )
                         self.sale_service.update_contact(order)
-                        self.sale_service.set_delivery_instructions(order)
+                        self.sale_service.update_sale(order)
 
                     # when we reach this point, the order is in an expected state
                     order_service.persist_order(order, OrderStatus.CREATED)

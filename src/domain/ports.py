@@ -142,8 +142,8 @@ class ISaleService(Protocol):
         """Update sale contact details to match `order`."""
         ...
 
-    def set_delivery_instructions(self, order: "Order") -> None:
-        """Update sale delivery instructions from `order`."""
+    def update_sale(self, order: "Order") -> None:
+        """Update sale from `order`."""
         ...
 
     def search_sale(self, order: "Order") -> dict[str, Any]:
