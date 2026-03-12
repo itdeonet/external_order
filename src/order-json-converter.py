@@ -17,7 +17,7 @@ def convert_json(file: Path) -> dict[str, Any]:
     assert len(name_lines) >= 2, "Expected at least 2 name lines"
 
     converted_data: dict[str, Any] = {
-        "order_id": re.sub(r"S0+", "", data.get("order_number", "")),
+        "sale_id": re.sub(r"S0*", "", data.get("order_number", "")),
         "administration_id": 2,
         "customer_id": 5380,
         "order_provider": "HARMAN JBL",
@@ -47,13 +47,13 @@ def convert_json(file: Path) -> dict[str, Any]:
                 "quantity": item.get("quantity", 0),
                 "artwork": {
                     "artwork_id": item.get("artwork_id", ""),
-                    "line_id": item.get("line_number", ""),
-                    "design_url": f"https://api.spectrumcustomizer.com/{item.get('artwork_endpoint', '')}",
+                    "artwork_line_id": item.get("line_number", ""),
+                    "design_url": f"https://api.spectrumcustomizer.com/{item.get('artwork_endpoint', '').lstrip('/')}/",
                     "design_paths": [
                         re.sub(r"file:///", "", path)
                         for path in item.get("downloaded_artwork_urls", [])
                     ],
-                    "placement_url": f"https://api.spectrumcustomizer.com/{item.get('placement_endpoint', '')}",
+                    "placement_url": f"https://api.spectrumcustomizer.com/{item.get('placement_endpoint', '').lstrip('/')}/",
                     "placement_path": re.sub(
                         r"file:///", "", item.get("downloaded_placement_url", "")
                     ),
@@ -62,7 +62,7 @@ def convert_json(file: Path) -> dict[str, Any]:
             for item in data.get("items", [])
         ],
         "created_at": (dt.datetime.now() - dt.timedelta(days=2)).isoformat(),
-        "ship_at": dt.datetime.now().isoformat(),
+        "ship_at": (dt.date.today() + dt.timedelta(days=2)).isoformat(),
     }
     return converted_data
 
