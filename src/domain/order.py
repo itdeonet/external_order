@@ -43,9 +43,9 @@ class Order:
     status: OrderStatus = field(default=OrderStatus.NEW, init=False)
     ship_to: ShipTo
     line_items: list[LineItem] = field(default_factory=list)
-    created_at: dt.datetime = field(default_factory=lambda: dt.datetime.now(), init=False)
-    ship_at: dt.date = field(
-        default_factory=lambda: dt.date.today() + dt.timedelta(days=7), init=False
+    created_at: str = field(default_factory=lambda: dt.datetime.now().isoformat(), init=False)
+    ship_at: str = field(
+        default_factory=lambda: (dt.date.today() + dt.timedelta(days=7)).isoformat(), init=False
     )
 
     def __post_init__(self) -> None:
@@ -101,8 +101,14 @@ class Order:
                 workdays -= 1
         return delivery_date
 
+    def set_created_at(self, created_at: dt.datetime) -> None:
+        """Set the created at date."""
+        if not isinstance(created_at, dt.datetime):
+            raise ValueError("Created at must be a datetime instance.")
+        object.__setattr__(self, "created_at", created_at.isoformat())
+
     def set_ship_at(self, ship_at: dt.date) -> None:
         """Set the ship at date."""
-        if not isinstance(ship_at, dt.date) or ship_at <= dt.date.today():
+        if not isinstance(ship_at, dt.date) or ship_at < dt.date.today():
             raise ValueError("Ship at must be a date in the future.")
-        object.__setattr__(self, "ship_at", ship_at)
+        object.__setattr__(self, "ship_at", ship_at.isoformat())

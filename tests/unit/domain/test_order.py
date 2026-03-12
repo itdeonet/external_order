@@ -86,8 +86,8 @@ class TestOrderInstantiation:
 
         assert order.sale_id == 0
         assert order.status == OrderStatus.NEW
-        assert isinstance(order.created_at, dt.datetime)
-        assert isinstance(order.ship_at, dt.date)
+        assert isinstance(order.created_at, str)
+        assert isinstance(order.ship_at, str)
 
     def test_id_not_settable_via_init(self, valid_order_data):
         """Test that id cannot be set via __init__."""
@@ -758,7 +758,7 @@ class TestOrderSetShipAt:
         """Test setting a valid ship_at date."""
         future_date = dt.date.today() + dt.timedelta(days=5)
         order.set_ship_at(future_date)
-        assert order.ship_at == future_date
+        assert order.ship_at == future_date.isoformat()
 
     def test_set_ship_at_past_date_raises_error(self, order):
         """Test that setting ship_at to past date raises ValueError."""
@@ -766,9 +766,9 @@ class TestOrderSetShipAt:
         with pytest.raises(ValueError, match="Ship at must be a date in the future"):
             order.set_ship_at(past_date)
 
-    def test_set_ship_at_today_raises_error(self, order):
-        """Test that setting ship_at to today raises ValueError."""
-        today = dt.date.today()
+    def test_set_ship_at_yesterday_raises_error(self, order):
+        """Test that setting ship_at to yesterday raises ValueError."""
+        today = dt.date.today() - dt.timedelta(days=1)
         with pytest.raises(ValueError, match="Ship at must be a date in the future"):
             order.set_ship_at(today)
 
@@ -973,7 +973,7 @@ class TestOrderImmutability:
 
         future_date = dt.date.today() + dt.timedelta(days=5)
         order.set_ship_at(future_date)
-        assert order.ship_at == future_date
+        assert order.ship_at == future_date.isoformat()
 
 
 class TestOrderEquality:
@@ -1162,12 +1162,12 @@ class TestOrderCreatedAtDefault:
         order = Order(**valid_order_data)
         after = dt.datetime.now()
 
-        assert before <= order.created_at <= after
+        assert before <= dt.datetime.fromisoformat(order.created_at) <= after
 
     def test_created_at_is_datetime(self, valid_order_data):
         """Test that created_at is a datetime object."""
         order = Order(**valid_order_data)
-        assert isinstance(order.created_at, dt.datetime)
+        assert isinstance(dt.datetime.fromisoformat(order.created_at), dt.datetime)
 
     def test_created_at_cannot_be_initialized_directly(self, valid_order_data):
         """Test that created_at cannot be passed as init parameter."""
@@ -1208,13 +1208,13 @@ class TestOrderShipAtDefault:
         """Test that ship_at defaults to 7 days from today."""
         order = Order(**valid_order_data)
         expected_date = dt.date.today() + dt.timedelta(days=7)
-        assert order.ship_at == expected_date
+        assert order.ship_at == expected_date.isoformat()
 
     def test_ship_at_is_date(self, valid_order_data):
         """Test that ship_at is a date object."""
         order = Order(**valid_order_data)
-        assert isinstance(order.ship_at, dt.date)
-        assert not isinstance(order.ship_at, dt.datetime)
+        assert isinstance(dt.date.fromisoformat(order.ship_at), dt.date)
+        assert "." not in order.ship_at  # Ensure it's a date, not datetime string
 
     def test_ship_at_cannot_be_initialized_directly(self, valid_order_data):
         """Test that ship_at cannot be passed as init parameter."""
