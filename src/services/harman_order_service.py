@@ -252,8 +252,30 @@ class HarmanOrderService:
         logger.info("Load order by remote ID: %s", remote_order_id)
         file_path = self.input_dir / f"{remote_order_id}.json"
         text = file_path.read_text(encoding="utf-8")
+
         data = json.loads(text)
-        return Order(**data)
+        sale_id = data.pop("sale_id", 0)
+        status = data.pop("status", OrderStatus.NEW.value)
+        created_at = dt.datetime.fromisoformat(
+            data.pop("created_at", (dt.datetime.now() - dt.timedelta(days=2)).isoformat())
+        )
+        data.pop("ship_at", None)  # ship_at will be current date
+        ship_at = dt.date.today()
+        data["ship_to"] = ShipTo(**data.get("ship_to", {}))
+        items = []
+        for item in data.get("line_items", []):
+            # we don't care about artwork data when loading an order
+            item["artwork"] = None
+            item = LineItem(**item)
+            items.append(item)
+        data["line_items"] = items
+
+        order = Order(**data)
+        order.set_sale_id(sale_id)
+        order.set_status(OrderStatus(status))
+        order.set_created_at(created_at)
+        order.set_ship_at(ship_at)
+        return order
 
     def notify_completed_sale(self, order: Order) -> None:
         """Notify Harman of a completed sale by generating DESADV messages.
@@ -275,7 +297,7 @@ class HarmanOrderService:
         """
         logger.info("Notify completed sale for order: %s", order.remote_order_id)
         # The notification exists of 2 desdav files, one in D96A format and one in D99A format.
-        for file in self.renderer.directory.glob("desadv-*.j2"):
+        for file in self.renderer.directory.glob("desadv*.j2"):
             doc_type = "D96A" if "D96A" in file.name.upper() else "D99A"
             notify_data = self._get_notify_data(order, doc_type)
 

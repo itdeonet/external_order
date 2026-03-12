@@ -4,7 +4,6 @@ import contextlib
 import datetime as dt
 import json
 import pathlib
-from unittest.mock import patch
 
 import pytest
 from pydifact import Segment  # type: ignore
@@ -971,7 +970,7 @@ class TestLoadOrder:
             renderer=mock_renderer,
         )
 
-    def test_load_order_returns_order_when_file_exists(self, service, tmp_path, mocker):
+    def test_load_order_returns_order_when_file_exists(self, service):
         """Test that load_order returns an Order when JSON file exists."""
         order_file = service.input_dir / "ORD-123.json"
         order_data = {
@@ -980,23 +979,46 @@ class TestLoadOrder:
             "pricelist_id": 50,
             "order_provider": "Harman",
             "remote_order_id": "ORD-123",
-            "shipment_type": "standard",
-            "ship_to": {},
-            "line_items": [],
+            "shipment_type": "standardb2b%",
+            "description": "Test order",
+            "delivery_instructions": "Test instructions",
+            "status": "created",
+            "sale_id": 42,
+            "created_at": "2025-02-14T10:30:45",
+            "ship_at": "2025-02-21",
+            "ship_to": {
+                "remote_customer_id": "CUST123",
+                "company_name": "Test Corp",
+                "contact_name": "John Doe",
+                "email": "john@test.com",
+                "phone": "+1-555-0001",
+                "street1": "123 Main St",
+                "street2": "Suite 100",
+                "city": "Chicago",
+                "state": "IL",
+                "postal_code": "60601",
+                "country_code": "US",
+            },
+            "line_items": [
+                {
+                    "line_id": "1",
+                    "product_code": "PROD001",
+                    "quantity": 100,
+                    "artwork": None,
+                }
+            ],
         }
         order_file.write_text(json.dumps(order_data), encoding="utf-8")
 
-        # Mock ShipTo to handle empty dict initialization
-        mock_ship_to = mocker.Mock()
-        mocker.patch("src.domain.order.ShipTo", return_value=mock_ship_to)
+        result = service.load_order("ORD-123")
 
-        with patch("src.services.harman_order_service.Order") as mock_order_class:
-            mock_order = mocker.Mock(spec=Order)
-            mock_order_class.return_value = mock_order
-
-            result = service.load_order("ORD-123")
-
-            assert result is mock_order
+        # Verify it returns an Order instance
+        assert isinstance(result, Order)
+        # Verify key fields are restored
+        assert result.remote_order_id == "ORD-123"
+        assert result.sale_id == 42
+        assert result.status == OrderStatus.CREATED
+        assert len(result.line_items) == 1
 
     def test_load_order_raises_error_when_file_not_found(self, service):
         """Test that load_order raises an error when JSON file doesn't exist."""
