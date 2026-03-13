@@ -23,13 +23,13 @@ class Config:
     """
 
     # Application settings
-    templates_dir: Path = Path(__file__).parent / "templates"
-    work_dir: Path = Path(os.getenv("WORK_DIR", Path.home() / "projects_data" / "external_order"))
+    default_box_size: tuple[int, int, int] = (24, 21, 6)  # L, W, H in cm
     digitals_dir: Path = field(init=False)
     open_orders_dir: Path = field(init=False)
-    default_box_size: tuple[int, int, int] = (24, 21, 6)  # L, W, H in cm
     sale_company_name: str = "Deonet Production B.V."
     ssl_verify: bool = os.getenv("SSL_VERIFY", "true").lower() == "true"
+    templates_dir: Path = Path(__file__).parent / "templates"
+    work_dir: Path = Path(os.getenv("WORK_DIR", Path.home() / "projects_data" / "external_order"))
 
     # Email settings
     smtp_host: str = os.getenv("SMTP_HOST", "smtp-relay.gmail.com")
