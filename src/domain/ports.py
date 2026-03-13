@@ -95,7 +95,11 @@ class IOrderStore(Protocol):
 class IOrderNotifier(Protocol):
     """Protocol to notify providers that an order's sale is complete."""
 
-    def notify_completed_sale(self, order: "Order") -> None:
+    def get_notify_data(self, order: "Order", sale_service: "ISaleService") -> dict[str, Any]:
+        """Return data dict for notifying completed sale of `order`."""
+        ...
+
+    def notify_completed_sale(self, order: "Order", notify_data: dict[str, Any]) -> None:
         """Send completion notification for `order` to its provider."""
         ...
 
@@ -152,6 +156,10 @@ class ISaleService(Protocol):
 
     def search_completed_sales(self, order_provider: str) -> list[tuple[int, str]]:
         """Return list of completed sales as (sale_id, remote_order_id) tuples."""
+        ...
+
+    def mark_sale_notified(self, sale_id: int) -> None:
+        """Mark sale with `sale_id` as having its completion notified to provider."""
         ...
 
     def search_shipping_info(self, order: "Order") -> list[dict[str, Any]]:
