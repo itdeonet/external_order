@@ -350,7 +350,7 @@ class TestSetStrippedString:
         """Test that string is properly stripped and set."""
 
         class TestObj:
-            field: str = ""
+            field: str = ""  # type: ignore
 
         obj = TestObj()
         validators.set_stripped_string(obj, "field", "  hello world  ")
@@ -360,7 +360,7 @@ class TestSetStrippedString:
         """Test that leading whitespace is stripped."""
 
         class TestObj:
-            field: str = ""
+            field: str = ""  # type: ignore
 
         obj = TestObj()
         validators.set_stripped_string(obj, "field", "  test")
@@ -370,7 +370,7 @@ class TestSetStrippedString:
         """Test that trailing whitespace is stripped."""
 
         class TestObj:
-            field: str = ""
+            field: str = ""  # type: ignore
 
         obj = TestObj()
         validators.set_stripped_string(obj, "field", "test  ")
@@ -380,7 +380,7 @@ class TestSetStrippedString:
         """Test that whitespace is stripped from both ends."""
 
         class TestObj:
-            field: str = ""
+            field: str = ""  # type: ignore
 
         obj = TestObj()
         validators.set_stripped_string(obj, "field", "  test  ")
@@ -390,7 +390,7 @@ class TestSetStrippedString:
         """Test that internal whitespace is preserved."""
 
         class TestObj:
-            field: str = ""
+            field: str = ""  # type: ignore
 
         obj = TestObj()
         validators.set_stripped_string(obj, "field", "  hello  world  ")
@@ -400,7 +400,7 @@ class TestSetStrippedString:
         """Test that empty string results after stripping whitespace."""
 
         class TestObj:
-            field: str = ""
+            field: str = ""  # type: ignore
 
         obj = TestObj()
         validators.set_stripped_string(obj, "field", "    ")
@@ -412,7 +412,7 @@ class TestSetStrippedString:
 
         @dataclass(frozen=True)
         class TestObj:
-            field: str
+            field: str = ""  # type: ignore
 
         obj = TestObj(field="original")
         validators.set_stripped_string(obj, "field", "  updated  ")
