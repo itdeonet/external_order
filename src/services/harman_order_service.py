@@ -21,7 +21,16 @@ from pydifact import Parser, Segment, Serializer  # type: ignore
 
 from src.app.errors import NotifyError, get_error_store
 from src.config import Config, get_config
-from src.domain import IArtworkService, IRegistry, LineItem, Order, OrderStatus, ShipTo
+from src.domain import (
+    Artwork,
+    IArtworkService,
+    IRegistry,
+    ISaleService,
+    LineItem,
+    Order,
+    OrderStatus,
+    ShipTo,
+)
 from src.services.render_service import RenderService
 
 logger = getLogger(__name__)
@@ -133,7 +142,7 @@ class HarmanOrderService:
                 )
             case ["QTY", ["113", quantity, unit_of_measure]]:
                 assert order_data["line_items"], "QTY segment must be preceded by a LIN segment."
-                order_data["line_items"][-1]["quantity"] = quantity
+                order_data["line_items"][-1]["quantity"] = int(quantity)
                 order_data["line_items"][-1]["unit_of_measure"] = unit_of_measure
             case ["FTX", "DEL", "3", "", delivery_instructions]:
                 order_data["delivery_instructions"] = delivery_instructions
@@ -198,7 +207,7 @@ class HarmanOrderService:
     def read_order_data_by_remote_order_id(self, remote_order_id: str) -> dict[str, Any] | None:
         """Find and parse the file for `remote_order_id`, returning parsed data."""
         logger.info("Get order data for remote order ID: %s", remote_order_id)
-        for file in self.input_dir.glob(f"{remote_order_id}.*"):
+        for file in self.input_dir.glob(f"{remote_order_id}.confirmed", case_sensitive=False):
             return self._read_order_data(file)
         return None
 
@@ -252,8 +261,9 @@ class HarmanOrderService:
         logger.info("Load order by remote ID: %s", remote_order_id)
         file_path = self.input_dir / f"{remote_order_id}.json"
         text = file_path.read_text(encoding="utf-8")
-
         data = json.loads(text)
+
+        # pop all non init fields and prepare the data for Order initialization
         sale_id = data.pop("sale_id", 0)
         status = data.pop("status", OrderStatus.NEW.value)
         created_at = dt.datetime.fromisoformat(
@@ -261,11 +271,20 @@ class HarmanOrderService:
         )
         data.pop("ship_at", None)  # ship_at will be current date
         ship_at = dt.date.today()
+
+        # convert ship_to and line_items back to their respective domain models
         data["ship_to"] = ShipTo(**data.get("ship_to", {}))
         items = []
         for item in data.get("line_items", []):
-            # we don't care about artwork data when loading an order
-            item["artwork"] = None
+            artwork_data: dict[str, Any] = item.pop("artwork", {})
+            item["artwork"] = Artwork(
+                artwork_id=artwork_data.get("artwork_id", ""),
+                artwork_line_id=artwork_data.get("artwork_line_id", ""),
+                design_url=artwork_data.get("design_url", ""),
+                design_paths=[Path(p) for p in artwork_data.get("design_paths", [])],
+                placement_url=artwork_data.get("placement_url", ""),
+                placement_path=Path(artwork_data.get("placement_path", "")),
+            )
             item = LineItem(**item)
             items.append(item)
         data["line_items"] = items
@@ -277,7 +296,7 @@ class HarmanOrderService:
         order.set_ship_at(ship_at)
         return order
 
-    def notify_completed_sale(self, order: Order) -> None:
+    def notify_completed_sale(self, order: Order, notify_data: dict[str, Any]) -> None:
         """Notify Harman of a completed sale by generating DESADV messages.
 
         Creates delivery advice (DESADV) notifications in both D96A and D99A
@@ -290,7 +309,7 @@ class HarmanOrderService:
 
         Args:
             order: The Order instance that has been completed
-
+            notify_data: The data used to generate the notification
         Raises:
             NotifyError: If required order data cannot be found
             May raise exceptions if file writing fails
@@ -298,9 +317,6 @@ class HarmanOrderService:
         logger.info("Notify completed sale for order: %s", order.remote_order_id)
         # The notification exists of 2 desdav files, one in D96A format and one in D99A format.
         for file in self.renderer.directory.glob("desadv*.j2"):
-            doc_type = "D96A" if "D96A" in file.name.upper() else "D99A"
-            notify_data = self._get_notify_data(order, doc_type)
-
             # build the notification message using the renderer and clean it up
             message = self.renderer.render(file.name, notify_data)
             segments = Parser().parse(message)
@@ -310,7 +326,7 @@ class HarmanOrderService:
             notify_path = self.output_dir / f"{order.remote_order_id}.{file.stem}".upper()
             notify_path.write_text(content, encoding="utf-8")
 
-    def _get_notify_data(self, order: Order, doc_type: str) -> dict[str, Any]:
+    def get_notify_data(self, order: Order, sale_service: ISaleService) -> dict[str, Any]:
         """Get the data needed for DESADV notification generation.
 
         Prepares all data required to render DESADV notification templates,
@@ -319,7 +335,7 @@ class HarmanOrderService:
 
         Args:
             order: The Order being notified about
-            doc_type: Format type ('D96A' or 'D99A')
+            sale_service: The service used to interact with sales data
 
         Returns:
             Dictionary with notification data for template rendering:
@@ -332,27 +348,40 @@ class HarmanOrderService:
         Raises:
             NotifyError: If required order data cannot be retrieved
         """
-        logger.info(
-            "Get notify data for order: %s with doc type: %s", order.remote_order_id, doc_type
-        )
+        logger.info("Get notify data for order: %s", order.remote_order_id)
+
+        # get info from INSDES file to include in the notification
         order_data = self.read_order_data_by_remote_order_id(order.remote_order_id)
         if not (order_data and order_data.get("ship_to") and order_data.get("line_items")):
             raise NotifyError("No valid order data found", order_id=order.remote_order_id)
 
-        segments_d96a = [
-            35,  # Header and trailer segments
-            4 * len(order_data["line_items"]),  # 4 segment lines per line item
-            sum(item.get("quantity", 0) for item in order_data["line_items"]),  # Serial segments
-            1
-            + sum(item.get("quantity", 0) for item in order_data["line_items"])
-            // 10,  # PCI segments (1 per 10 products)
-        ]
-        segments_d99a = [
-            9,  # Header and trailer segments
-            4 * len(order_data["line_items"]),  # 4 segment lines per line item
-            sum(item.get("quantity", 0) for item in order_data["line_items"]),  # Serial segments
-            1,  # FTX segment
-        ]
+        num_segments = {
+            "D96A": sum(
+                [
+                    # header and trailer segements
+                    35,
+                    # segments per line item: 4 fixed
+                    4 * len(order_data["line_items"]),
+                    # serial segments per quantity: 1 per quantity unit
+                    sum(item.get("quantity", 0) for item in order_data["line_items"]),
+                    # PCI segments: 1 per 10 products, at least 1
+                    1,
+                    sum(item.get("quantity", 0) for item in order_data["line_items"]) // 10,
+                ]
+            ),
+            "D99A": sum(
+                [
+                    # header and trailer segments
+                    9,
+                    # segments per line item: 4 fixed
+                    4 * len(order_data["line_items"]),
+                    # serial segments per quantity: 1 per quantity unit
+                    sum(item.get("quantity", 0) for item in order_data["line_items"]),
+                    # FTX segments: 1
+                    1,
+                ]
+            ),
+        }
 
         config: Config = get_config()
         box_length, box_width, box_height = config.default_box_size
@@ -363,9 +392,17 @@ class HarmanOrderService:
             "box_length": box_length,
             "box_width": box_width,
             "box_height": box_height,
+            "sale_name": f"S{order.sale_id:05}",
             "sscc": "".join(random.choices(string.digits, k=20)),
-            "segments": sum(segments_d96a) if doc_type == "D96A" else sum(segments_d99a),
-            "item_description": "CLEAR",
+            "num_segments": num_segments,
             "order": order_data,
         }
+
+        # get shipping info and serials from the sale service to include in the notification
+        shipping_info: dict[str, Any] = sale_service.search_shipping_info(order)[0]
+        carrier_tracking_ref = shipping_info["carrier_tracking_ref"].split(", ")
+        shipping_info["carrier_tracking_ref"] = carrier_tracking_ref
+        notify_data["shipping_info"] = shipping_info
+        notify_data["serials_by_line"] = sale_service.search_serials_by_line_item(order)
+
         return notify_data

@@ -171,7 +171,7 @@ class TestReadOrderData:
         service._get_segment_data(segment_lin, order_data)
         service._get_segment_data(segment_qty, order_data)
 
-        assert order_data["line_items"][0]["quantity"] == "100"
+        assert order_data["line_items"][0]["quantity"] == 100
         assert order_data["line_items"][0]["unit_of_measure"] == "PCE"
 
     def test_get_segment_data_qty_segment_no_line_item_raises_assertion(self, service, mocker):
@@ -970,8 +970,14 @@ class TestLoadOrder:
             renderer=mock_renderer,
         )
 
-    def test_load_order_returns_order_when_file_exists(self, service):
+    def test_load_order_returns_order_when_file_exists(self, service, tmp_path):
         """Test that load_order returns an Order when JSON file exists."""
+        # Create temporary files for artwork validation
+        design_file = tmp_path / "design.pdf"
+        design_file.write_text("design")
+        placement_file = tmp_path / "placement.pdf"
+        placement_file.write_text("placement")
+
         order_file = service.input_dir / "ORD-123.json"
         order_data = {
             "administration_id": 1,
@@ -1004,7 +1010,14 @@ class TestLoadOrder:
                     "line_id": "1",
                     "product_code": "PROD001",
                     "quantity": 100,
-                    "artwork": None,
+                    "artwork": {
+                        "artwork_id": "ART001",
+                        "artwork_line_id": "AL001",
+                        "design_url": "http://example.com/design.pdf",
+                        "design_paths": [str(design_file)],
+                        "placement_url": "http://example.com/placement.pdf",
+                        "placement_path": str(placement_file),
+                    },
                 }
             ],
         }
@@ -1079,9 +1092,10 @@ class TestNotifyCompletedSale:
         """Test that notify_completed_sale handles no templates gracefully."""
         order = mocker.Mock(spec=Order)
         order.remote_order_id = "ORD-123"
+        notify_data = {}
 
         # No templates in directory, so no files should be written
-        service.notify_completed_sale(order)
+        service.notify_completed_sale(order, notify_data)
 
         # Just verify the method completes without error
         # and that the output directory still exists
