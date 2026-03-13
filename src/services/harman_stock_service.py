@@ -41,7 +41,7 @@ class HarmanStockService:
         Note:
             Parsing errors are added to ErrorStore and iteration continues.
         """
-        for file_path in self.input_dir.glob("*.xml", case_sensitive=False):
+        for file_path in self.input_dir.glob("*in04*.xml", case_sensitive=False):
             try:
                 logger.info("Read stock transfer file: %s", file_path.name)
                 transfer_data = xmltodict.parse(file_path.read_text(encoding="utf-8"))

@@ -404,7 +404,7 @@ Provided to templates:
 ### Input Format (DELVRY03 IDOC)
 ```
 Location: {work_dir}/harman/in/
-Filename: *.xml
+Filename: *in04*.xml (must contain 'in04' in filename stem)
 
 Structure:
 <?xml>

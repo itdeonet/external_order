@@ -99,7 +99,7 @@ class TestHarmanStockServiceReadStockTransfers:
         input_dir.mkdir()
         output_dir.mkdir()
 
-        xml_file = input_dir / "transfer.xml"
+        xml_file = input_dir / "harman_in04_transfer.xml"
         xml_file.write_text(sample_xml_data)
 
         service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
@@ -122,7 +122,7 @@ class TestHarmanStockServiceReadStockTransfers:
 
         # Create multiple XML files
         for i in range(3):
-            xml_file = input_dir / f"transfer_{i}.xml"
+            xml_file = input_dir / f"harman_in04_transfer_{i}.xml"
             xml_file.write_text(sample_xml_data)
 
         service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
@@ -142,12 +142,12 @@ class TestHarmanStockServiceReadStockTransfers:
         input_dir.mkdir()
         output_dir.mkdir()
 
-        xml_file = input_dir / "transfer.xml"
+        xml_file = input_dir / "harman_in04_transfer.xml"
         xml_file.write_text(sample_xml_data)
 
-        # Create non-XML files
-        (input_dir / "readme.txt").write_text("Not XML")
-        (input_dir / "data.json").write_text("{}")
+        # Create non-XML files with in04 in name but wrong extension
+        (input_dir / "harman_in04_readme.txt").write_text("Not XML")
+        (input_dir / "readme.json").write_text("{}")
 
         service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
 
@@ -167,7 +167,7 @@ class TestHarmanStockServiceReadStockTransfers:
         output_dir.mkdir()
 
         # Create invalid XML file
-        xml_file = input_dir / "invalid.xml"
+        xml_file = input_dir / "harman_in04_invalid.xml"
         xml_file.write_text("Not valid XML <unclosed>")
 
         service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
@@ -191,7 +191,7 @@ class TestHarmanStockServiceReadStockTransfers:
         input_dir.mkdir()
         output_dir.mkdir()
 
-        xml_file = input_dir / "transfer.xml"
+        xml_file = input_dir / "harman_in04_transfer.xml"
         xml_file.write_text(sample_xml_data)
 
         service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
@@ -213,8 +213,8 @@ class TestHarmanStockServiceReadStockTransfers:
         input_dir.mkdir()
         output_dir.mkdir()
 
-        # Create file with uppercase extension
-        xml_file = input_dir / "transfer.XML"
+        # Create file with uppercase extension and in04 in name
+        xml_file = input_dir / "harman_in04_transfer.XML"
         xml_file.write_text(sample_xml_data)
 
         service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
