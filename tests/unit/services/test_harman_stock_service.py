@@ -422,11 +422,11 @@ class TestHarmanStockServiceGetTransferInfo:
         assert result["idoc_datetime"].second == 0
 
 
-class TestHarmanStockServiceReplyStockTransfer:
-    """Tests for reply_stock_transfer method."""
+class TestHarmanStockServiceCreateStockTransferReply:
+    """Tests for create_stock_transfer_reply method."""
 
-    def test_reply_stock_transfer_creates_output_file(self, tmp_path):
-        """Test that reply_stock_transfer creates an output file."""
+    def test_create_stock_transfer_reply_creates_output_file(self, tmp_path):
+        """Test that create_stock_transfer_reply creates an output file."""
         input_dir = tmp_path / "input"
         output_dir = tmp_path / "output"
         input_dir.mkdir()
@@ -449,19 +449,14 @@ class TestHarmanStockServiceReplyStockTransfer:
             ],
         }
 
-        # Create the input file first
-        file_path = Path(transfer_data["file_path"])
-        file_path.write_text("<xml></xml>")
-
-        service.reply_stock_transfer(transfer_data)
+        reply_path = service.create_stock_transfer_reply(transfer_data)
 
         # Check that output file was created with uppercase filename
-        output_files = list(output_dir.glob("*.XML"))
-        assert len(output_files) == 1
-        assert "HARMAN_IN05_DEL-001" in output_files[0].name
+        assert reply_path.exists()
+        assert "HARMAN_IN05_DEL-001" in reply_path.name
 
-    def test_reply_stock_transfer_creates_valid_xml(self, tmp_path):
-        """Test that reply_stock_transfer creates valid XML output."""
+    def test_create_stock_transfer_reply_returns_path(self, tmp_path):
+        """Test that create_stock_transfer_reply returns the created file path."""
         input_dir = tmp_path / "input"
         output_dir = tmp_path / "output"
         input_dir.mkdir()
@@ -469,11 +464,30 @@ class TestHarmanStockServiceReplyStockTransfer:
 
         service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
 
-        file_path = tmp_path / "transfer.xml"
-        file_path.write_text("<xml></xml>")
+        transfer_data = {
+            "file_path": str(input_dir / "transfer.xml"),
+            "idoc_number": "123456",
+            "idoc_datetime": dt.datetime(2024, 3, 15, 14, 30, 0),
+            "delivery_number": "DEL-001",
+            "items": [],
+        }
+
+        reply_path = service.create_stock_transfer_reply(transfer_data)
+
+        assert isinstance(reply_path, Path)
+        assert reply_path.parent == output_dir
+
+    def test_create_stock_transfer_reply_creates_valid_xml(self, tmp_path):
+        """Test that create_stock_transfer_reply creates valid XML output."""
+        input_dir = tmp_path / "input"
+        output_dir = tmp_path / "output"
+        input_dir.mkdir()
+        output_dir.mkdir()
+
+        service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
 
         transfer_data = {
-            "file_path": str(file_path),
+            "file_path": str(tmp_path / "transfer.xml"),
             "idoc_number": "123456",
             "idoc_datetime": dt.datetime(2024, 3, 15, 14, 30, 0),
             "delivery_number": "DEL-001",
@@ -487,19 +501,16 @@ class TestHarmanStockServiceReplyStockTransfer:
             ],
         }
 
-        service.reply_stock_transfer(transfer_data)
-
-        output_files = list(output_dir.glob("*.XML"))
-        assert len(output_files) == 1
-        output_content = output_files[0].read_text()
+        reply_path = service.create_stock_transfer_reply(transfer_data)
+        output_content = reply_path.read_text()
 
         assert "<?xml" in output_content
         assert "HARMAN" in output_content
         assert "123456" in output_content
         assert "DEL-001" in output_content
 
-    def test_reply_stock_transfer_renames_input_file(self, tmp_path):
-        """Test that reply_stock_transfer renames the input file."""
+    def test_create_stock_transfer_reply_with_multiple_items(self, tmp_path):
+        """Test create_stock_transfer_reply with multiple items."""
         input_dir = tmp_path / "input"
         output_dir = tmp_path / "output"
         input_dir.mkdir()
@@ -507,38 +518,8 @@ class TestHarmanStockServiceReplyStockTransfer:
 
         service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
 
-        input_file = input_dir / "transfer.xml"
-        input_file.write_text("<xml></xml>")
-
         transfer_data = {
-            "file_path": str(input_file),
-            "idoc_number": "123456",
-            "idoc_datetime": dt.datetime(2024, 3, 15, 14, 30, 0),
-            "delivery_number": "DEL-001",
-            "items": [],
-        }
-
-        service.reply_stock_transfer(transfer_data)
-
-        # Original file should be renamed
-        assert not input_file.exists()
-        replied_file = input_dir / "transfer.replied"
-        assert replied_file.exists()
-
-    def test_reply_stock_transfer_with_multiple_items(self, tmp_path):
-        """Test reply_stock_transfer with multiple items."""
-        input_dir = tmp_path / "input"
-        output_dir = tmp_path / "output"
-        input_dir.mkdir()
-        output_dir.mkdir()
-
-        service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
-
-        input_file = input_dir / "transfer.xml"
-        input_file.write_text("<xml></xml>")
-
-        transfer_data = {
-            "file_path": str(input_file),
+            "file_path": str(tmp_path / "transfer.xml"),
             "idoc_number": "123456",
             "idoc_datetime": dt.datetime(2024, 3, 15, 14, 30, 0),
             "delivery_number": "DEL-001",
@@ -558,13 +539,140 @@ class TestHarmanStockServiceReplyStockTransfer:
             ],
         }
 
-        service.reply_stock_transfer(transfer_data)
+        reply_path = service.create_stock_transfer_reply(transfer_data)
 
-        output_files = list(output_dir.glob("*.XML"))
-        assert len(output_files) == 1
+        assert reply_path.exists()
+        output_content = reply_path.read_text()
+        assert "PROD-001" in output_content
+        assert "PROD-002" in output_content
 
-    def test_reply_stock_transfer_handles_missing_input_file(self, tmp_path):
-        """Test that reply_stock_transfer handles missing input file gracefully."""
+
+class TestHarmanStockServiceEmailStockTransferReply:
+    """Tests for email_stock_transfer_reply method."""
+
+    def test_email_stock_transfer_reply_sends_email(self, tmp_path, mocker):
+        """Test that email_stock_transfer_reply sends an email."""
+        input_dir = tmp_path / "input"
+        output_dir = tmp_path / "output"
+        input_dir.mkdir()
+        output_dir.mkdir()
+
+        service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
+
+        # Create a reply file
+        reply_file = output_dir / "harman_in05_test.xml"
+        reply_file.write_text("<xml></xml>")
+
+        transfer_data = {
+            "delivery_number": "DEL-001",
+            "items": [
+                {
+                    "item_number": "001",
+                    "product_code": "PROD-001",
+                    "quantity": 50,
+                }
+            ],
+        }
+
+        # Mock the email sender
+        mock_email_sender = mocker.Mock()
+        mocker.patch(
+            "src.services.harman_stock_service.EmailSender",
+            return_value=mock_email_sender,
+        )
+
+        service.email_stock_transfer_reply(reply_file, transfer_data)
+
+        assert mock_email_sender.send.called
+
+    def test_email_stock_transfer_reply_uses_correct_template(self, tmp_path, mocker):
+        """Test that email_stock_transfer_reply uses the configured template."""
+        input_dir = tmp_path / "input"
+        output_dir = tmp_path / "output"
+        input_dir.mkdir()
+        output_dir.mkdir()
+
+        service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
+
+        reply_file = output_dir / "harman_in05_test.xml"
+        reply_file.write_text("<xml></xml>")
+
+        transfer_data = {
+            "delivery_number": "DEL-001",
+            "items": [],
+        }
+
+        mock_email_sender = mocker.Mock()
+        mocker.patch(
+            "src.services.harman_stock_service.EmailSender",
+            return_value=mock_email_sender,
+        )
+
+        service.email_stock_transfer_reply(reply_file, transfer_data)
+
+        # Verify email was called with html_template parameter
+        call_kwargs = mock_email_sender.send.call_args[1]
+        assert "html_template" in call_kwargs
+
+    def test_email_stock_transfer_reply_includes_attachment(self, tmp_path, mocker):
+        """Test that email_stock_transfer_reply includes the reply file as attachment."""
+        input_dir = tmp_path / "input"
+        output_dir = tmp_path / "output"
+        input_dir.mkdir()
+        output_dir.mkdir()
+
+        service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
+
+        reply_file = output_dir / "harman_in05_test.xml"
+        reply_file.write_text("<xml></xml>")
+
+        transfer_data = {
+            "delivery_number": "DEL-001",
+            "items": [],
+        }
+
+        mock_email_sender = mocker.Mock()
+        mocker.patch(
+            "src.services.harman_stock_service.EmailSender",
+            return_value=mock_email_sender,
+        )
+
+        service.email_stock_transfer_reply(reply_file, transfer_data)
+
+        # Verify attachments were included
+        call_kwargs = mock_email_sender.send.call_args[1]
+        assert "attachments" in call_kwargs
+        assert reply_file.name in call_kwargs["attachments"]
+
+
+class TestHarmanStockServiceMarkTransferAsProcessed:
+    """Tests for mark_transfer_as_processed method."""
+
+    def test_mark_transfer_as_processed_renames_input_file(self, tmp_path):
+        """Test that mark_transfer_as_processed renames the input file."""
+        input_dir = tmp_path / "input"
+        output_dir = tmp_path / "output"
+        input_dir.mkdir()
+        output_dir.mkdir()
+
+        service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
+
+        input_file = input_dir / "transfer.xml"
+        input_file.write_text("<xml></xml>")
+
+        transfer_data = {
+            "file_path": str(input_file),
+        }
+
+        service.mark_transfer_as_processed(transfer_data)
+
+        # Original file should be renamed
+        assert not input_file.exists()
+        processed_file = input_dir / "transfer.xml.PROCESSED"
+        assert processed_file.exists()
+
+    def test_mark_transfer_as_processed_handles_missing_file(self, tmp_path):
+        """Test that mark_transfer_as_processed handles missing input file gracefully."""
         input_dir = tmp_path / "input"
         output_dir = tmp_path / "output"
         input_dir.mkdir()
@@ -574,14 +682,29 @@ class TestHarmanStockServiceReplyStockTransfer:
 
         transfer_data = {
             "file_path": str(input_dir / "nonexistent.xml"),
-            "idoc_number": "123456",
-            "idoc_datetime": dt.datetime(2024, 3, 15, 14, 30, 0),
-            "delivery_number": "DEL-001",
-            "items": [],
         }
 
         # Should not raise an error
-        service.reply_stock_transfer(transfer_data)
+        service.mark_transfer_as_processed(transfer_data)
 
-        output_files = list(output_dir.glob("*.XML"))
-        assert len(output_files) == 1
+    def test_mark_transfer_as_processed_with_uppercase_extension(self, tmp_path):
+        """Test that mark_transfer_as_processed creates uppercase .PROCESSED extension."""
+        input_dir = tmp_path / "input"
+        output_dir = tmp_path / "output"
+        input_dir.mkdir()
+        output_dir.mkdir()
+
+        service = HarmanStockService(input_dir=input_dir, output_dir=output_dir)
+
+        input_file = input_dir / "transfer.xml"
+        input_file.write_text("<xml></xml>")
+
+        transfer_data = {
+            "file_path": str(input_file),
+        }
+
+        service.mark_transfer_as_processed(transfer_data)
+
+        # Check that .PROCESSED extension is uppercase
+        processed_files = list(input_dir.glob("*.PROCESSED"))
+        assert len(processed_files) == 1

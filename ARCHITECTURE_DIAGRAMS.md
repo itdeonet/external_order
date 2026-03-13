@@ -16,7 +16,7 @@ graph TD
     
     ArtSvc["SpectrumArtworkService<br/>- get_artwork()<br/>- _load_order_data()<br/>- _download_designs()"]
     
-    StockSvc["HarmanStockService<br/>- read_transfers()<br/>- reply_transfer()"]
+    StockSvc["HarmanStockService<br/>- read_stock_transfers()<br/>- create_stock_transfer_reply()<br/>- email_stock_transfer_reply()<br/>- mark_transfer_as_processed()"]
     
     Odoo["ODOO SYSTEM<br/>(JSON-RPC 2.0)<br/>- sale.order<br/>- res.partner<br/>- product.product<br/>- delivery.carrier"]
     
@@ -174,34 +174,41 @@ graph TD
     XML["Harman XML File<br/>(DELVRY03 IDOC)"]
     Read["HarmanStockService.read_stock_transfers()"]
     Parse["xmltodict.parse()"]
-    Extract["Extract delivery info"]
+    Extract["Extract delivery info,<br/>idoc_number, items"]
     
     Execute["StockTransferUseCase.execute()"]
-    Reply["HarmanStockService.reply_stock_transfer()"]
-    Build["Build IN05 IDOC dict"]
-    Unparse["xmltodict.unparse()"]
-    WriteXML["Write harman/out/<br/>HARMAN_IN05_{id}.XML"]
     
-    Email["EmailSender.send()"]
+    CreateReply["HarmanStockService.create_stock_transfer_reply()"]
+    Build["Build IN05 IDOC dict<br/>from transfer_data"]
+    Unparse["xmltodict.unparse()"]
+    WriteXML["Write harman/out/<br/>HARMAN_IN05_{delivery_id}.XML"]
+    ReturnPath["Return Path to reply file"]
+    
+    EmailReply["HarmanStockService.email_stock_transfer_reply()"]
     Template["Template: stock_email.html"]
     Attach["Attach: IN05 reply file"]
+    Send["EmailSender.send()<br/>to configured recipients"]
     
-    Rename["Rename input file<br/>to .replied"]
+    MarkProcessed["HarmanStockService.mark_transfer_as_processed()"]
+    Rename["Rename input file<br/>to .PROCESSED"]
     
-    Output["✓ IN05 reply file +<br/>Confirmation email sent"]
+    Output["✓ IN05 reply created +<br/>Confirmation email sent +<br/>Input file marked processed"]
     
     XML --> Read
     Read --> Parse
     Parse --> Extract
     Extract --> Execute
-    Execute --> Reply
-    Reply --> Build
+    Execute --> CreateReply
+    CreateReply --> Build
     Build --> Unparse
     Unparse --> WriteXML
-    WriteXML --> Email
-    Email --> Template
-    Email --> Attach
-    Attach --> Rename
+    WriteXML --> ReturnPath
+    ReturnPath --> EmailReply
+    EmailReply --> Template
+    EmailReply --> Attach
+    Attach --> Send
+    Send --> MarkProcessed
+    MarkProcessed --> Rename
     Rename --> Output
 ```
 

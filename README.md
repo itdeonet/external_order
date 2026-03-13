@@ -128,9 +128,11 @@ Harman Stock Transfer Requests (XML)
         ↓
   Read Transfers [IStockService.read_stock_transfers()]
         ↓
-  Process & Validate Transfer
+  Create Reply [IStockService.create_stock_transfer_reply()]
         ↓
-  Reply to Provider [IStockService.reply_stock_transfer()]
+  Email Reply [IStockService.email_stock_transfer_reply()]
+        ↓
+  Mark Processed [IStockService.mark_transfer_as_processed()]
 ```
 
 ### Core Design Patterns
@@ -160,6 +162,9 @@ Services implement Python Protocol interfaces (like TypeScript interfaces). Each
 - `IOrderNotifier` - Send notifications
 - `IArtworkServiceProvider` - Select artwork service for order
 - `IOrderService` - Full-featured order provider (combines all above)
+- `ISaleService` - Create and manage sales in Odoo
+- `IArtworkService` - Retrieve artwork from a provider
+- `IStockService` - Handle stock transfers (read transfers, create replies, email replies, mark as processed)
 
 Note: Error handling uses a singleton `ErrorStore` class, not an interface, to centralize error collection across all operations.
 
@@ -323,7 +328,7 @@ CompletedSaleUseCase.execute():
 - If persist fails, mark_sale_notified was already called (no rollback)
 
 #### **StockTransferUseCase**
-Workflow: Read Stock Requests → Process Transfers → Reply to Provider with Status
+Workflow: Read Stock Requests → Create Reply → Email Reply → Mark as Processed
 
 ```python
 StockTransferUseCase.execute():
@@ -331,24 +336,27 @@ StockTransferUseCase.execute():
   for each stock_service in stock_services.items():
     for each transfer in stock_service.read_stock_transfers():
       try:
-        # 1. Read and validate transfer request
-        transfer_id = transfer["id"]  # e.g., from XML/file
+        # 1. Create reply file for the stock transfer
+        reply_path = stock_service.create_stock_transfer_reply(transfer)
         
-        # 2. Process transfer (logic varies by provider)
-        stock_service.process_transfer(transfer)
+        # 2. Email the reply
+        stock_service.email_stock_transfer_reply(reply_path, transfer)
         
-        # 3. Reply to provider with status
-        stock_service.reply_stock_transfer(transfer_id, status="completed")
+        # 3. Mark transfer as processed (rename input file)
+        stock_service.mark_transfer_as_processed(transfer)
         
       except Exception as exc:
         error_store.add(exc)  # Collect error, continue with next transfer
-        # Can attempt to reply with error status
 ```
 
 **Key Behavior:**
-- Stock services implement `IStockService` for both reading requests and sending replies
+- Stock services implement `IStockService` with three separate operations (SOLID principle)
+- `create_stock_transfer_reply()` - Creates XML reply file and returns its Path
+- `email_stock_transfer_reply()` - Sends the reply file as an email attachment
+- `mark_transfer_as_processed()` - Renames input file to mark as processed
 - Currently HarmanStockService handles XML-based IDOC requests
 - Errors are collected per-transfer; one failure doesn't block others
+- If any step fails, the transfer remains unprocessed (input file not renamed)
 
 ## Setup and Installation
 
@@ -861,7 +869,9 @@ artwork_services.register("LocalFS", LocalFilesystemArtworkService(
 Create `src/services/myprovider_stock_service.py`:
 
 ```python
-from src.interfaces import IStockService, IErrorQueue
+from src.interfaces import IStockService
+from pathlib import Path
+from typing import Any, Generator
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class MyProviderStockService:
@@ -869,18 +879,65 @@ class MyProviderStockService:
     
     api_url: str
     api_key: str
+    output_dir: Path
     
-    def read_stock_transfers(self) -> Generator[dict, None, None]:
+    def read_stock_transfers(self) -> Generator[dict[str, Any], None, None]:
         """Read pending stock transfer requests."""
         response = httpx.get(f"{self.api_url}/stock_transfers",
                            headers={"Authorization": f"Bearer {self.api_key}"})
         for transfer in response.json()["transfers"]:
             yield transfer
     
-    def reply_stock_transfer(self, transfer_data: dict[str, Any]) -> None:
-        """Confirm stock transfer completion."""
-        httpx.post(f"{self.api_url}/stock_transfers/{transfer_data['id']}/confirm",
-                  json={"status": "completed"})
+    def create_stock_transfer_reply(self, transfer_data: dict[str, Any]) -> Path:
+        """Create a reply file for the stock transfer.
+        
+        Args:
+            transfer_data: Stock transfer request data
+            
+        Returns:
+            Path to the created reply file
+        """
+        # Create reply content (format depends on provider)
+        reply_content = self._build_reply(transfer_data)
+        
+        # Write to output directory
+        reply_path = self.output_dir / f"reply_{transfer_data['id']}.xml"
+        reply_path.write_text(reply_content)
+        
+        return reply_path
+    
+    def email_stock_transfer_reply(self, reply_path: Path, transfer_data: dict[str, Any]) -> None:
+        """Email the stock transfer reply file.
+        
+        Args:
+            reply_path: Path to the reply file to send
+            transfer_data: Original transfer request data (for context)
+        """
+        # Configure email client and send
+        emailer = EmailSender(host=config.smtp_host, port=config.smtp_port)
+        emailer.send(
+            subject=f"Stock Transfer Reply {transfer_data['id']}",
+            sender=config.email_sender,
+            receivers=config.email_stock_to,
+            attachments={reply_path.name: reply_path.read_bytes()},
+        )
+    
+    def mark_transfer_as_processed(self, transfer_data: dict[str, Any]) -> None:
+        """Mark the stock transfer as processed.
+        
+        Args:
+            transfer_data: Stock transfer request data
+        """
+        # Rename input file or update status in provider system
+        input_path = Path(transfer_data["file_path"])
+        if input_path.exists():
+            processed_path = input_path.parent / f"{input_path.name}.processed"
+            input_path.rename(processed_path)
+    
+    def _build_reply(self, transfer_data: dict[str, Any]) -> str:
+        """Build reply content for the transfer."""
+        # Format reply according to provider specification
+        pass
 ```
 
 Register in `main.py`:
@@ -888,6 +945,14 @@ Register in `main.py`:
 ```python
 stock_services.register("MyProvider", MyProviderStockService.from_config(config))
 ```
+
+**Key Points:**
+- `read_stock_transfers()` yields transfer request dictionaries
+- `create_stock_transfer_reply()` creates a reply file and returns its Path
+- `email_stock_transfer_reply()` sends the reply file to configured recipients
+- `mark_transfer_as_processed()` marks the transfer as processed (e.g., renames input file)
+- If any step fails, the transfer remains unprocessed (no file rename)
+- Use StockTransferUseCase to orchestrate all three steps
 
 ### 4. Understanding SpectrumArtworkService (Reference Implementation)
 

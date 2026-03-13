@@ -90,21 +90,24 @@ class HarmanStockService:
         )
         return transfer_info
 
-    def reply_stock_transfer(self, transfer_data: dict[str, Any]) -> None:
-        """Generate IN05 reply, email confirmation, and mark input file as processed.
+    def create_stock_transfer_reply(self, transfer_data: dict[str, Any]) -> Path:
+        """Create a reply for the stock transfer received.
 
         Args:
             transfer_data: Stock transfer data with delivery_number, items, etc.
 
+        Returns:
+            Path: Path to the created reply file.
+
         Raises:
-            Exception: If file writing or email sending fails.
+            Exception: If file writing fails.
         """
         # create reply file with same name as input but with .reply extension
         logger.info(
             "Processing stock transfer data for delivery: %s",
             transfer_data.get("delivery_number"),
         )
-        create_time: dt.datetime = transfer_data.get("idoc_datetime", dt.datetime.now())
+        created_at: dt.datetime = transfer_data.get("idoc_datetime", dt.datetime.now())
         reply_data = {
             "HARMAN": {
                 "IDOC": {
@@ -112,8 +115,8 @@ class HarmanStockService:
                         "DOCNUM": transfer_data.get("idoc_number"),
                         "DIRECT": "2",
                         "INTCODE": "IN05",
-                        "CREDAT": create_time.strftime("%Y-%m-%d"),
-                        "CRETIM": create_time.strftime("%H:%M:%S"),
+                        "CREDAT": created_at.strftime("%Y-%m-%d"),
+                        "CRETIM": created_at.strftime("%H:%M:%S"),
                     },
                     "E1EDL20": {
                         "VBELN": transfer_data.get("delivery_number"),
@@ -132,14 +135,27 @@ class HarmanStockService:
             },
         }
 
-        logger.info("Generated reply data for delivery: %s", transfer_data.get("delivery_number"))
+        logger.info("Created reply data for delivery: %s", transfer_data.get("delivery_number"))
         reply = xmltodict.unparse(reply_data, pretty=True)
         reply_path = (
             self.output_dir / f"harman_in05_{transfer_data.get('delivery_number')}.xml".upper()
         )
         reply_path.write_text(reply, encoding="utf-8")
         logger.info("Written reply file for delivery: %s", transfer_data.get("delivery_number"))
+        return reply_path
 
+    def email_stock_transfer_reply(self, reply_path: Path, transfer_data: dict[str, Any]) -> None:
+        """Email the stock transfer reply.
+
+        Args:
+            reply_path: Path to the reply file.
+            transfer_data: Stock transfer data with delivery_number, items, etc.
+
+        Raises:
+            Exception: If file reading or email sending fails.
+        """
+        # create reply file with same name as input but with .reply extension
+        logger.info("Emailing stock transfer reply for file: %s", reply_path.name)
         # email the reply file to the configured recipient
         config = get_config()
         emailer = EmailSender(host=config.smtp_host, port=config.smtp_port, use_starttls=True)
@@ -159,8 +175,9 @@ class HarmanStockService:
             attachments={reply_path.name: reply_path.read_bytes()},
         )
 
-        # Rename the processed input file, to prevent reprocessing.
+    def mark_transfer_as_processed(self, transfer_data: dict[str, Any]) -> None:
+        """Mark the stock transfer as processed by renaming the input file."""
         input_file_path = Path(transfer_data.get("file_path", ""))
         if input_file_path.exists():
-            replied_path = input_file_path.parent / f"{input_file_path.stem}.replied"
-            input_file_path.rename(replied_path)
+            processed_path = input_file_path.parent / f"{input_file_path.name}.processed".upper()
+            input_file_path.rename(processed_path)

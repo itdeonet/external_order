@@ -183,6 +183,14 @@ class IStockService(Protocol):
         """Yield stock transfer dicts; may raise on errors."""
         ...
 
-    def reply_stock_transfer(self, transfer_data: dict[str, Any]) -> None:
-        """Acknowledge `transfer_data` to supplier; may raise on errors."""
+    def create_stock_transfer_reply(self, transfer_data: dict[str, Any]) -> Path:
+        """Create a reply file for the given stock transfer data and return its Path."""
+        ...
+
+    def email_stock_transfer_reply(self, reply_path: Path, transfer_data: dict[str, Any]) -> None:
+        """Email the stock transfer reply."""
+        ...
+
+    def mark_transfer_as_processed(self, transfer_data: dict[str, Any]) -> None:
+        """Mark the stock transfer as processed by renaming the input file."""
         ...

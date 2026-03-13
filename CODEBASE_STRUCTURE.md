@@ -140,7 +140,9 @@ Reads and processes stock transfer notifications.
 ```python
 class IStockService(Protocol):
     def read_stock_transfers(self) -> Generator[dict[str, Any], None, None]
-    def reply_stock_transfer(self, transfer_data: dict[str, Any]) -> None
+    def create_stock_transfer_reply(self, transfer_data: dict[str, Any]) -> Path
+    def email_stock_transfer_reply(self, reply_path: Path, transfer_data: dict[str, Any]) -> None
+    def mark_transfer_as_processed(self, transfer_data: dict[str, Any]) -> None
 ```
 
 ---
@@ -297,8 +299,10 @@ Implements: `IStockService`
 - `output_dir: Path` - Reply output directory (harman/out)
 
 **Public methods:**
-- `read_stock_transfers() -> Generator[dict[str, Any], None, None]` - Parse XML files
-- `reply_stock_transfer(transfer_data) -> None` - Generate IN05 reply, email, rename file
+- `read_stock_transfers() -> Generator[dict[str, Any], None, None]` - Parse XML files and yield transfer data
+- `create_stock_transfer_reply(transfer_data) -> Path` - Create IN05 reply XML file and return its path
+- `email_stock_transfer_reply(reply_path, transfer_data) -> None` - Send reply file as email attachment
+- `mark_transfer_as_processed(transfer_data) -> None` - Rename input file to mark as processed
 
 **Private methods:**
 - `_get_transfer_info(transfer_data, file_path) -> dict[str, Any]` - Extract transfer metadata

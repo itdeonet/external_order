@@ -39,7 +39,9 @@ class StockTransferUseCase:
                         transfer_data.get("id"),
                         stock_service_name,
                     )
-                    stock_service.reply_stock_transfer(transfer_data)
+                    reply_path = stock_service.create_stock_transfer_reply(transfer_data)
+                    stock_service.email_stock_transfer_reply(reply_path, transfer_data)
+                    stock_service.mark_transfer_as_processed(transfer_data)
                 except Exception as exc:
                     logger.exception(
                         "Error processing stock transfer request %s from %s service.",

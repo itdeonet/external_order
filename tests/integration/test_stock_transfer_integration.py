@@ -19,7 +19,9 @@ class TestStockTransferUseCaseIntegration:
             {"id": "XFER001", "location": "Warehouse A", "quantity": 100},
             {"id": "XFER002", "location": "Warehouse B", "quantity": 50},
         ]
-        service.reply_stock_transfer = Mock()
+        service.create_stock_transfer_reply = Mock(return_value="/path/to/reply.xml")
+        service.email_stock_transfer_reply = Mock()
+        service.mark_transfer_as_processed = Mock()
         return service
 
     @pytest.fixture
@@ -46,8 +48,10 @@ class TestStockTransferUseCaseIntegration:
         stock_service = stock_services.get("TestStockService")
         stock_service.read_stock_transfers.assert_called_once()
 
-        # Verify that replies were sent
-        assert stock_service.reply_stock_transfer.call_count >= 1
+        # Verify that replies were created, emailed, and marked as processed
+        assert stock_service.create_stock_transfer_reply.call_count >= 1
+        assert stock_service.email_stock_transfer_reply.call_count >= 1
+        assert stock_service.mark_transfer_as_processed.call_count >= 1
 
     def test_stock_transfer_multiple_services(
         self,
@@ -58,13 +62,17 @@ class TestStockTransferUseCaseIntegration:
         service1.read_stock_transfers.return_value = [
             {"id": "XFER001", "location": "A"},
         ]
-        service1.reply_stock_transfer = Mock()
+        service1.create_stock_transfer_reply = Mock(return_value="/path/to/reply1.xml")
+        service1.email_stock_transfer_reply = Mock()
+        service1.mark_transfer_as_processed = Mock()
 
         service2 = Mock()
         service2.read_stock_transfers.return_value = [
             {"id": "XFER002", "location": "B"},
         ]
-        service2.reply_stock_transfer = Mock()
+        service2.create_stock_transfer_reply = Mock(return_value="/path/to/reply2.xml")
+        service2.email_stock_transfer_reply = Mock()
+        service2.mark_transfer_as_processed = Mock()
 
         stock_services = Registry()
         stock_services.register("Service1", service1)
@@ -80,8 +88,12 @@ class TestStockTransferUseCaseIntegration:
         # Verify both services were processed
         service1.read_stock_transfers.assert_called_once()
         service2.read_stock_transfers.assert_called_once()
-        service1.reply_stock_transfer.assert_called_once()
-        service2.reply_stock_transfer.assert_called_once()
+        service1.create_stock_transfer_reply.assert_called_once()
+        service2.create_stock_transfer_reply.assert_called_once()
+        service1.email_stock_transfer_reply.assert_called_once()
+        service2.email_stock_transfer_reply.assert_called_once()
+        service1.mark_transfer_as_processed.assert_called_once()
+        service2.mark_transfer_as_processed.assert_called_once()
 
     def test_stock_transfer_no_transfers(
         self,
@@ -99,9 +111,11 @@ class TestStockTransferUseCaseIntegration:
         # Execute the use case
         use_case.execute()
 
-        # Verify the service was called but no replies were sent
+        # Verify the service was called but no replies were created/sent/processed
         stock_service.read_stock_transfers.assert_called_once()
-        stock_service.reply_stock_transfer.assert_not_called()
+        stock_service.create_stock_transfer_reply.assert_not_called()
+        stock_service.email_stock_transfer_reply.assert_not_called()
+        stock_service.mark_transfer_as_processed.assert_not_called()
 
     def test_stock_transfer_error_handling(
         self,
@@ -110,7 +124,7 @@ class TestStockTransferUseCaseIntegration:
     ):
         """Test error handling during stock transfer reply."""
         stock_service = stock_services.get("TestStockService")
-        stock_service.reply_stock_transfer.side_effect = Exception("Shipping failure")
+        stock_service.email_stock_transfer_reply.side_effect = Exception("Email failure")
 
         use_case = StockTransferUseCase(
             stock_services=stock_services,
@@ -152,13 +166,18 @@ class TestStockTransferUseCaseIntegration:
 
         stock_service = Mock()
         stock_service.read_stock_transfers.return_value = transfers
+        stock_service.create_stock_transfer_reply = Mock(return_value="/path/to/reply.xml")
 
-        # Make the second transfer fail
-        def reply_side_effect(transfer):
+        # Make the email fail for the second transfer
+        call_count = [0]
+
+        def email_side_effect(reply_path, transfer):
+            call_count[0] += 1
             if transfer["id"] == "XFER002":
-                raise Exception("Transfer failed")
+                raise Exception("Transfer email failed")
 
-        stock_service.reply_stock_transfer.side_effect = reply_side_effect
+        stock_service.email_stock_transfer_reply.side_effect = email_side_effect
+        stock_service.mark_transfer_as_processed = Mock()
 
         stock_services = Registry()
         stock_services.register("TestStockService", stock_service)
@@ -170,8 +189,8 @@ class TestStockTransferUseCaseIntegration:
         # Execute the use case
         use_case.execute()
 
-        # Verify all transfers were attempted (3 calls total, one of which failed)
-        assert stock_service.reply_stock_transfer.call_count == 3
+        # Verify all transfers were attempted (3 calls to email, one of which failed)
+        assert stock_service.email_stock_transfer_reply.call_count == 3
 
         # Verify error was stored
         error_store.add.assert_called()
