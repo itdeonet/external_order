@@ -343,6 +343,82 @@ class TestValidateListOfInstances:
         validators.validate_list_of_instances([42], int, "numbers")  # Should not raise
 
 
+class TestSetStrippedString:
+    """Tests for set_stripped_string."""
+
+    def test_sets_stripped_string(self):
+        """Test that string is properly stripped and set."""
+
+        class TestObj:
+            field: str = ""
+
+        obj = TestObj()
+        validators.set_stripped_string(obj, "field", "  hello world  ")
+        assert obj.field == "hello world"
+
+    def test_strips_leading_whitespace(self):
+        """Test that leading whitespace is stripped."""
+
+        class TestObj:
+            field: str = ""
+
+        obj = TestObj()
+        validators.set_stripped_string(obj, "field", "  test")
+        assert obj.field == "test"
+
+    def test_strips_trailing_whitespace(self):
+        """Test that trailing whitespace is stripped."""
+
+        class TestObj:
+            field: str = ""
+
+        obj = TestObj()
+        validators.set_stripped_string(obj, "field", "test  ")
+        assert obj.field == "test"
+
+    def test_strips_both_ends(self):
+        """Test that whitespace is stripped from both ends."""
+
+        class TestObj:
+            field: str = ""
+
+        obj = TestObj()
+        validators.set_stripped_string(obj, "field", "  test  ")
+        assert obj.field == "test"
+
+    def test_preserves_internal_whitespace(self):
+        """Test that internal whitespace is preserved."""
+
+        class TestObj:
+            field: str = ""
+
+        obj = TestObj()
+        validators.set_stripped_string(obj, "field", "  hello  world  ")
+        assert obj.field == "hello  world"
+
+    def test_empty_string_after_strip(self):
+        """Test that empty string results after stripping whitespace."""
+
+        class TestObj:
+            field: str = ""
+
+        obj = TestObj()
+        validators.set_stripped_string(obj, "field", "    ")
+        assert obj.field == ""
+
+    def test_sets_on_frozen_dataclass(self):
+        """Test that set_stripped_string works on frozen dataclasses."""
+        from dataclasses import dataclass
+
+        @dataclass(frozen=True)
+        class TestObj:
+            field: str
+
+        obj = TestObj(field="original")
+        validators.set_stripped_string(obj, "field", "  updated  ")
+        assert obj.field == "updated"
+
+
 class TestSetNormalizedString:
     """Tests for set_normalized_string."""
 
