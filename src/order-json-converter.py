@@ -6,18 +6,14 @@ from pathlib import Path
 from typing import Any
 
 
-def convert_json(file: Path) -> dict[str, Any]:
-    if not file.is_file():
-        raise FileNotFoundError(f"File {file} does not exist.")
-
-    data: dict[str, Any] = json.loads(file.read_text(encoding="utf-8"))
-    recipient = data.get("recipient", {})
-    name_lines = recipient.get("name_lines", [])
-    street_lines = recipient.get("street_lines", [])
+def convert_json(data: dict[str, Any]) -> dict[str, Any]:
+    recipient: dict[str, Any] = data.get("recipient", {})
+    name_lines: list[str] = recipient.get("name_lines", [])
+    street_lines: list[str] = recipient.get("street_lines", [])
     assert len(name_lines) >= 2, "Expected at least 2 name lines"
 
     converted_data: dict[str, Any] = {
-        "sale_id": re.sub(r"S0*", "", data.get("order_number", "")),
+        "sale_id": int(re.sub(r"S0*", "", data.get("order_number", ""))),
         "administration_id": 2,
         "customer_id": 5380,
         "order_provider": "HARMAN JBL",
@@ -67,6 +63,22 @@ def convert_json(file: Path) -> dict[str, Any]:
     return converted_data
 
 
+def update_paths(data: dict[str, Any]) -> None:
+    digitals_dir = Path(data["line_items"][0]["artwork"]["design_paths"][0]).parent
+    if not digitals_dir.is_dir():
+        digitals_dir = Path.home() / "projects_data/external_order/digitals"
+    for item in data["line_items"]:
+        item["artwork"]["design_paths"] = [
+            str(digitals_dir / Path(path).name) for path in item["artwork"]["design_paths"]
+        ]
+        item["artwork"]["placement_path"] = str(
+            digitals_dir / Path(item["artwork"]["placement_path"]).name
+        )
+        for path in item["artwork"]["design_paths"] + [item["artwork"]["placement_path"]]:
+            if not Path(path).is_file():
+                Path(path).touch()
+
+
 def main():
     # read folder name from command line argument
     import sys
@@ -82,10 +94,13 @@ def main():
 
     for file in folder_path.glob("*.json"):
         try:
+            data: dict[str, Any] = json.loads(file.read_text(encoding="utf-8"))  # type: ignore
             backup_file = file.with_suffix(".json.bak")
+            new_file = file.parent / f"{data.get('remote_number', file.stem)}.json"
             shutil.copy(file, backup_file)
-            converted = convert_json(file)
-            file.write_text(json.dumps(converted, indent=2, default=str), encoding="utf-8")
+            converted = convert_json(data)
+            update_paths(converted)
+            new_file.write_text(json.dumps(converted, indent=2, default=str), encoding="utf-8")
         except Exception as e:
             print(f"Error processing {file}: {e}")
 
