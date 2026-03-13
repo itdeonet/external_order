@@ -38,7 +38,9 @@ class CompletedSaleUseCase:
                     try:
                         if order := order_service.load_order(remote_order_id):
                             logger.debug("Notify completed sale for order %s", remote_order_id)
-                            order_service.notify_completed_sale(order)
+                            notify_data = order_service.get_notify_data(order, self.sale_service)
+                            order_service.notify_completed_sale(order, notify_data)
+                            self.sale_service.mark_sale_notified(_sale_id)
                             order_service.persist_order(order, OrderStatus.COMPLETED)
                         else:
                             raise SaleError(
