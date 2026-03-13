@@ -516,6 +516,19 @@ class OdooSaleService:
         )
         return [(item["id"], item["x_remote_order_id"]) for item in result]
 
+    def mark_sale_notified(self, sale_id: int) -> None:
+        """Mark sale as notified for completed sale notifications."""
+        logger.info("Mark sale ID %d as notified", sale_id)
+        result = self._call(
+            model="sale.order",
+            method="write",
+            query_data=[[sale_id], {"x_remote_notified_completion": True}],
+        )
+        if not bool(result):
+            raise SaleError(f"Failed to mark sale {sale_id} as notified")
+
+        logger.info("Sale ID %d marked as notified", sale_id)
+
     def search_shipping_info(self, order: Order) -> list[dict[str, Any]]:
         """Search for shipment records and return simplified shipping info list."""
         logger.info("Search shipping information for order: %s", order.remote_order_id)
@@ -525,10 +538,9 @@ class OdooSaleService:
             method="search_read",
             query_data=[
                 [
-                    ["company_id", "=", sale_data["company_id"]],
-                    ["picking_type_code", "=", "outgoing"],
                     ["sale_id", "=", sale_data.get("id", 0)],
                     ["state", "=", "done"],
+                    ["picking_type_code", "=", "outgoing"],
                 ]
             ],
             query_options={

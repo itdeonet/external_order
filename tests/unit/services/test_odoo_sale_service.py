@@ -305,6 +305,57 @@ class TestSearchCompletedSales:
         assert result == []
 
 
+class TestMarkSaleNotified:
+    """Tests for mark_sale_notified method."""
+
+    @pytest.fixture
+    def service(self):
+        """Provide an OdooSaleService instance."""
+        mock_auth = Mock(spec=OdooAuth)
+        mock_client = Mock(spec=requests.Session)
+        return OdooSaleService(auth=mock_auth, session=mock_client)
+
+    def test_mark_sale_notified_calls_write_with_correct_params(self, service, mocker):
+        """Test that mark_sale_notified calls _call with correct parameters."""
+        mocker.patch.object(OdooSaleService, "_call", return_value=True)
+
+        service.mark_sale_notified(42)
+
+        service._call.assert_called_once_with(
+            model="sale.order",
+            method="write",
+            query_data=[[42], {"x_remote_notified_completion": True}],
+        )
+
+    def test_mark_sale_notified_succeeds_with_true_result(self, service, mocker):
+        """Test that mark_sale_notified succeeds when _call returns True."""
+        mocker.patch.object(OdooSaleService, "_call", return_value=True)
+
+        # Should not raise
+        service.mark_sale_notified(42)
+
+    def test_mark_sale_notified_raises_sale_error_on_false_result(self, service, mocker):
+        """Test that mark_sale_notified raises SaleError when _call returns False."""
+        mocker.patch.object(OdooSaleService, "_call", return_value=False)
+
+        with pytest.raises(SaleError, match="Failed to mark sale 42 as notified"):
+            service.mark_sale_notified(42)
+
+    def test_mark_sale_notified_raises_sale_error_on_none_result(self, service, mocker):
+        """Test that mark_sale_notified raises SaleError when _call returns None."""
+        mocker.patch.object(OdooSaleService, "_call", return_value=None)
+
+        with pytest.raises(SaleError, match="Failed to mark sale 100 as notified"):
+            service.mark_sale_notified(100)
+
+    def test_mark_sale_notified_raises_sale_error_on_zero_result(self, service, mocker):
+        """Test that mark_sale_notified raises SaleError when _call returns 0."""
+        mocker.patch.object(OdooSaleService, "_call", return_value=0)
+
+        with pytest.raises(SaleError, match="Failed to mark sale 55 as notified"):
+            service.mark_sale_notified(55)
+
+
 class TestConvertOrderLines:
     """Tests for _convert_order_lines method."""
 
