@@ -92,25 +92,46 @@ deonet-external-order/
 
 ### High-Level Data Flow
 
+**New Sales Workflow:**
 ```
-External Order Provider (Harman)
+External Order Provider (Harman/others)
         ↓
-    Read Orders [IOrderReader]
+    Read Orders [IOrderService.read_orders()]
         ↓
-  Create Sale in Odoo [ISaleService]
+  Create or Update Sale in Odoo [ISaleService]
         ↓
-  Get Artwork (if service available) [IArtworkService]
+  Get Artwork (if service exists) [IOrderService.get_artwork_service()]
         ↓
-  Confirm Sale in Odoo
+  Fetch Artwork [IArtworkService.get_artwork()]
         ↓
-  Organize Placement Files
+  Confirm Sale in Odoo [ISaleService.confirm_sale()]
         ↓
-  Notify Provider [IOrderNotifier] ← EDIFACT D96A/D99A
-        ↓
-  Handle Stock Transfers [IStockService]
+  Persist Order as CONFIRMED
 ```
 
-**Key Detail:** Artwork retrieval is conditional - if no artwork service is configured, the order proceeds directly to confirmation.
+**Completed Sales Workflow:**
+```
+Odoo Completed Sales
+        ↓
+  Get Notify Data [IOrderService.get_notify_data()]
+        ↓
+  Send EDIFACT Notification [IOrderService.notify_completed_sale()]
+        ↓
+  Mark Sale Notified [ISaleService.mark_sale_notified()]
+        ↓
+  Persist Order as COMPLETED
+```
+
+**Stock Transfer Workflow:**
+```
+Harman Stock Transfer Requests (XML)
+        ↓
+  Read Transfers [IStockService.read_stock_transfers()]
+        ↓
+  Process & Validate Transfer
+        ↓
+  Reply to Provider [IStockService.reply_stock_transfer()]
+```
 
 ### Core Design Patterns
 
@@ -178,83 +199,156 @@ Workflow: Read Orders → Create/Update Sales → Get Artwork (conditional) → 
 
 ```python
 NewSaleUseCase.execute():
-  for each order_service:
-    for each order:
-      1. Persist order as NEW
-      2. Create or update sale in Odoo
-      3. If artwork_service available:
-         - Get artwork from artwork service
-         - Persist order as ARTWORK
-      4. Confirm sale in Odoo
-      5. Persist order as CONFIRMED
-      
-organize_placement_files(placement_files: list[Path]) -> None:
-  Extract sale ID from first file's stem, split by underscore
-  Create order-specific subdirectories based on sale ID prefix
-  Copy placement files to appropriate directories
+  """Process new orders from all registered order services."""
+  for each order_service in order_services.items():
+    for each order in order_service.read_orders():
+      try:
+        # 1. Persist order as NEW
+        order_service.persist_order(order, OrderStatus.NEW)
+        
+        # 2. Create or update sale in Odoo
+        sale_id = sale_service.create_sale(order)
+        order.set_sale_id(sale_id)
+        
+        # 3. Get artwork if service available
+        artwork_service = order_service.get_artwork_service(order, artwork_services)
+        if artwork_service:
+          artwork_list = artwork_service.get_artwork(order)
+          for artwork in artwork_list:
+            line_item.set_artwork(artwork)  # Attach artwork to line items
+          order_service.persist_order(order, OrderStatus.ARTWORK)
+        
+        # 4. Confirm sale in Odoo
+        sale_service.confirm_sale(order)
+        order.set_status(OrderStatus.CONFIRMED)
+        order_service.persist_order(order, OrderStatus.CONFIRMED)
+        
+      except Exception as exc:
+        error_store.add(exc)  # Collect error, continue with next order
 ```
 
 **Key Behavior:**
-- ARTWORK status persisted only when artwork_service exists
-- Confirm sale ALWAYS called, even when no artwork service
-- Placement files organized using sale ID extracted from filename stem
+- Each order service is a registered plugin (Harman, etc.)
+- Artwork workflow is conditional - if `get_artwork_service()` returns None, artwork step is skipped
+- OrderStatus transitions: NEW → ARTWORK (if artwork available) → CONFIRMED
+- Errors are collected per-order; one order failure doesn't stop others
 
-#### **SpectrumArtworkService**
+#### **SpectrumArtworkService** (Reference Implementation)
 
-Retrieves and manages digital artwork from Spectrum API. Handles design downloads, placement file organization, and client header management.
+Retrieves and manages digital artwork from Spectrum REST API. Handles design downloads, placement file organization, and client authentication.
 
 ```python
-SpectrumArtworkService.get_artwork(order: Order) -> list[Artwork]:
-  1. Fetch order data from Spectrum API
-  2. For each design:
-     - Retrieve placement files
-     - Extract and organize to digitals_dir
-     - Create Artwork objects with file_path validation
-  3. Return list of validated Artwork objects
-  4. On error: Collect in ErrorStore, raise ArtworkError
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SpectrumArtworkService:
+  """Get artwork from Spectrum API."""
+  session: requests.Session         # HTTP client (initialized in __post_init__)
+  base_url: str                     # Spectrum API base URL
+  digitals_dir: Path                # Local directory to store downloads
+  client_handle: str = field(init=False)  # Set during __post_init__
+  order_data: dict = field(init=False)    # Cached from API
   
-__post_init__():
-  Configure authorization headers from order data
-  Set client_handle (init=False attribute)
-  Build Spectrum API request session
+  def __post_init__(self) -> None:
+    """Initialize API session and fetch order metadata."""
+    # Configure session headers with authorization
+    response = self.session.get(f"{self.base_url}/order_data")
+    order_data = response.json()
+    object.__setattr__(self, "order_data", order_data)
+    object.__setattr__(self, "client_handle", order_data["client_handle"])
+  
+  def get_artwork(self, order: Order) -> list[Artwork]:
+    """Fetch artwork for all line items in order.
+    
+    Returns:
+      List of Artwork objects with validated file paths
+    Raises:
+      ArtworkError: If order data missing or download fails
+    """
+    artwork_list = []
+    for line_item in order.line_items:
+      designs = self._download_designs(line_item.product_code)
+      for design in designs:
+        placement_path = self._download_placement(design["id"])
+        artwork = Artwork(
+            product_code=line_item.product_code,
+            material=design["material"],
+            file_path=placement_path,
+        )
+        artwork_list.append(artwork)
+    return artwork_list
 ```
 
-**Key Attributes:**
-- `session: requests.Session` - HTTP client for API calls
-- `base_url: str` - Spectrum API base URL
-- `digitals_dir: Path` - Local directory for downloaded artwork
-- `client_handle: str` (init=False) - Extracted from order response
-- `order_data: dict` (init=False) - Cached order details from API
-
-**Key Methods:**
-- `get_artwork()` - Main orchestrator (fetches designs, organizes files, validates)
-- `_get_order_data()` - Retrieves order metadata from Spectrum API
-- `_download_designs()` - Lists available designs for order
-- `_download_placement()` - Downloads and extracts placement files
+**Key Design Patterns:**
+- **Frozen Dataclass** - Immutable after initialization
+- **init=False Fields** - Changed via `object.__setattr__()` in `__post_init__()`
+- **Single-responsibility Methods** - Each private method handles one task
+- **Validation** - Artwork objects validate file existence on creation
+- **Error Handling** - Raises ArtworkError with context; caller uses ErrorStore
 
 #### **CompletedSaleUseCase**
-Workflow: Find Completed Sales → Update Order Status → Send Notifications
+Workflow: Find Completed Sales → Get Notification Data → Send Notifications → Mark Notified
 
 ```python
 CompletedSaleUseCase.execute():
-  for each order_service:
-    for each completed_sale in sale_service:
-      1. Load order from provider cache
-      2. Update order status to COMPLETED
-      3. Send delivery notification (EDIFACT)
+  """Process completed sales from Odoo."""
+  for each order_service in order_services.items():
+    for sale_id, remote_order_id in sale_service.search_completed_sales(provider):
+      try:
+        # 1. Load order from provider cache
+        order = order_service.load_order(remote_order_id)
+        if not order:
+          raise SaleError(f"Order not found: {remote_order_id}")
+        
+        # 2. Get data needed for notification
+        notify_data = order_service.get_notify_data(order, sale_service)
+        
+        # 3. Send EDIFACT notification (D96A + D99A formats)
+        order_service.notify_completed_sale(order, notify_data)
+        
+        # 4. Mark sale as notified
+        sale_service.mark_sale_notified(sale_id)
+        
+        # 5. Persist order as COMPLETED
+        order.set_status(OrderStatus.COMPLETED)
+        order_service.persist_order(order, OrderStatus.COMPLETED)
+        
+      except Exception as exc:
+        error_store.add(exc)  # Collect error, continue with next sale
 ```
 
+**Key Behavior:**
+- `get_notify_data()` gathers order details, shipping info, and serials from sale service
+- `notify_completed_sale()` generates EDIFACT D96A and D99A messages and writes to output directory
+- `mark_sale_notified()` updates Odoo flag; called only if notification succeeds
+- If notification fails, mark_sale_notified is NOT called (state consistency)
+- If persist fails, mark_sale_notified was already called (no rollback)
+
 #### **StockTransferUseCase**
-Workflow: Read Stock Requests → Process Transfers → Reply to Provider
+Workflow: Read Stock Requests → Process Transfers → Reply to Provider with Status
 
 ```python
 StockTransferUseCase.execute():
-  for each stock_service:
-    for each stock_transfer:
-      1. Read transfer request
-      2. Process transfer (validate, update inventory)
-      3. Reply to provider with status
+  """Process stock transfer requests from providers."""
+  for each stock_service in stock_services.items():
+    for each transfer in stock_service.read_stock_transfers():
+      try:
+        # 1. Read and validate transfer request
+        transfer_id = transfer["id"]  # e.g., from XML/file
+        
+        # 2. Process transfer (logic varies by provider)
+        stock_service.process_transfer(transfer)
+        
+        # 3. Reply to provider with status
+        stock_service.reply_stock_transfer(transfer_id, status="completed")
+        
+      except Exception as exc:
+        error_store.add(exc)  # Collect error, continue with next transfer
+        # Can attempt to reply with error status
 ```
+
+**Key Behavior:**
+- Stock services implement `IStockService` for both reading requests and sending replies
+- Currently HarmanStockService handles XML-based IDOC requests
+- Errors are collected per-transfer; one failure doesn't block others
 
 ## Setup and Installation
 
@@ -292,9 +386,14 @@ WHERE NOT EXISTS (
 
 3. **Set up environment variables**
    ```bash
+   # Copy the example environment file
    cp .env.example .env
-   # Edit .env with your actual credentials
+   
+   # Edit .env with your actual credentials and settings
+   nano .env  # or use your favorite editor
    ```
+   
+   See [Configuration](#configuration) section below for detailed variable descriptions.
 
 4. **Verify installation**
    ```bash
@@ -319,7 +418,26 @@ uv run pyright src/
 
 ## Configuration
 
-Configuration is centralized in `src/config.py` and loaded from environment variables.
+Configuration is centralized in `src/config.py` and loaded from environment variables via `.env` file.
+
+### Using `.env.example`
+
+The repository includes a `.env.example` template file with all required and optional environment variables documented:
+
+```bash
+# Copy the template to create your local configuration
+cp .env.example .env
+
+# Edit with your actual values (credentials, URLs, API keys)
+# .env is in .gitignore and should never be committed
+```
+
+**Key Points:**
+- `.env.example` documents every variable with explanatory comments
+- Variables marked **(Required)** must be set for the application to run
+- Variables marked **(Optional)** have sensible defaults if omitted
+- Never commit the actual `.env` file (it contains secrets)
+- `.env` is automatically loaded on application startup via `src/config.py`
 
 ### Configuration File: `config.py`
 
@@ -422,91 +540,128 @@ The `Order` class represents a single order from an external provider:
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Order:
+    # Required input fields
     administration_id: int           # Provider administration ID
-    customer_id: int                 # Customer/distributor ID
-    order_provider: str              # "Harman", "MyProvider", etc.
-    pricelist_id: int
+    customer_id: int                 # Customer/distributor ID  
+    order_provider: str              # "Harman", etc. (provider name)
+    pricelist_id: int                # Price list ID
     remote_order_id: str             # ID in external system
-    shipment_type: str               # Shipping method
+    shipment_type: str               # Shipping method/type
     description: str                 # Order description/summary
-    delivery_instructions: str = ""  # Optional delivery instructions
-    status: OrderStatus              # NEW, CREATED, ARTWORK, CONFIRMED, COMPLETED
-    ship_to: ShipTo                  # Shipping address
+    ship_to: ShipTo                  # Shipping address object
     line_items: list[LineItem]       # Order lines with products
     
-    # Read-only fields
-    id: UUID                         # Local unique ID
-    sale_id: int                     # Odoo sale ID (once created)
-    created_at: datetime
-    ship_at: date
+    # Optional fields
+    delivery_instructions: str = ""  # Optional delivery instructions
+    
+    # Auto-generated read-only fields (cannot be set via __init__)
+    id: int = field(init=False, default_factory=...)          # UUID-like identifier
+    sale_id: int = field(init=False, default=0)               # Odoo sale ID (once created)
+    status: OrderStatus = field(init=False, default=OrderStatus.NEW)  # Current status
+    created_at: str = field(init=False, default_factory=...)  # ISO format datetime
+    ship_at: str = field(init=False, default_factory=...)     # ISO format date (7 days ahead)
+
+# Instance methods for setting read-only fields:
+# - set_sale_id(value: int) -> None
+# - set_status(value: OrderStatus) -> None
+# - set_created_at(value: datetime) -> None
+# - set_ship_at(value: date) -> None
 ```
 
 **OrderStatus enum:**
 ```
 NEW → CREATED → ARTWORK → CONFIRMED → COMPLETED → SHIPPED
                                             ↓
-                                         FAILED
+                                    FAILED (error state)
 ```
 
 ### ShipTo (Value Object)
 
-Represents a shipping address:
+Represents shipping/billing address with validation:
 
 ```python
 @dataclass(frozen=True, slots=True)
 class ShipTo:
+    # Required fields
     remote_customer_id: str          # ID in external system
-    company_name: str
-    contact_name: str                # Validated: title case
-    email: str                       # Validated: contains @ and .
-    phone: str                       # Validated: basic format
-    street1: str
-    street2: str = ""
-    city: str
-    state_code: str = ""
-    postal_code: str
-    country_code: str                # Validated: 2-letter ISO code
+    company_name: str                # Company name (can be empty for B2C)
+    contact_name: str                # Contact person (validated: non-empty)
+    email: str                       # Email (validated: contains @ and .)
+    phone: str                       # Phone number (basic format validation)
+    street1: str                     # Primary street address
+    city: str                        # City name
+    postal_code: str                 # ZIP/postal code
+    country_code: str                # Validated: 2-letter ISO code (e.g., "US")
+    
+    # Optional fields  
+    street2: str = ""                # Secondary street (apt, suite, etc.)
+    state_code: str = ""             # State/province code
 ```
 
 ### LineItem (Value Object)
 
+Represents a single product line in an order:
+
 ```python
 @dataclass(frozen=True, slots=True)
 class LineItem:
-    line_number: int
-    product_code: str
-    quantity: int                    # Positive integer
-    unit_price: float
-    total_price: float = 0.0
+    # Required fields
+    line_id: str                     # Line item ID (from provider, validated: non-empty)
+    product_code: str                # Product/SKU code (validated: non-empty)
+    quantity: int                    # Quantity (validated: positive integer > 0)
+    
+    # Optional fields
+    artwork: Artwork | None = None   # Product artwork (can be set via set_artwork())
+
+# Instance method:
+# - set_artwork(value: Artwork) -> None  (validates and sets artwork)
 ```
 
 ### Artwork (Value Object)
 
+Represents product artwork file and metadata:
+
 ```python
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Artwork:
-    product_code: str                # Non-empty string
-    material: str                    # Non-empty string ("CLEAR", "STANDARD", etc.)
-    file_path: Path                  # Must exist (validated in __post_init__)
-    created_at: datetime             # Defaults to current time
+    # Required fields
+    artwork_id: str                  # Artwork identifier (non-empty, validated)
+    artwork_line_id: str             # Associated line item ID (non-empty, validated)
+    design_paths: list[Path]         # List of paths to design files (must exist)
+    
+    # Auto-generated fields
+    created_at: str = field(init=False, default_factory=...)  # ISO format datetime
 ```
 
 **Validation Rules:**
-- `product_code` and `material` must be non-empty strings
-- `file_path` must exist as a file on the filesystem
-- Validation happens in `__post_init__()` and raises ValueError if invalid
+- `artwork_id` and `artwork_line_id` must be non-empty strings
+- `design_paths` must be a non-empty list of existing Path objects
+- File existence is validated in `__post_init__()` and raises ValueError if missing
+- All fields are immutable after creation (frozen dataclass)
 
-### Validators
+### Built-in Validators
 
-Every domain object is validated on creation. Validators are in `src/domain/validators.py`:
+Every domain object is validated on creation. Core validators in `src/domain/validators.py`:
 
 ```python
-validate_email(value, field_name)              # Checks @ and .
-validate_phone(value, field_name)              # Basic format validation
+# String validation
+validate_email(value, field_name)              # Email format (@ and .)
+validate_phone(value, field_name)              # Basic phone format
 validate_country_code(value, field_name)       # 2-letter ISO code
+validate_non_empty_string(value, field_name)   # Non-empty string
+validate_non_empty_string_lowercase(value, field_name)  # Non-empty, lowercase
+validate_non_empty_string_uppercase(value, field_name)  # Non-empty, uppercase
+
+# Integer validation
 validate_positive_int(value, field_name)       # > 0
 validate_non_negative_int(value, field_name)   # >= 0
-validate_non_empty_string_uppercase(value)     # Converts and validates
+
+# Collection validation
+validate_list_of_instances(value, expected_type, field_name)  # Type validation for lists
+
+# Field setters (for frozen dataclasses)
+set_stripped_string(obj, field_name, value)    # Set string after stripping whitespace
+set_normalized_string(obj, field_name, value, transform="none")  # Set with optional case transform
 ```
 
 ## Adding New Services
@@ -574,10 +729,9 @@ class MyProviderOrderService:
             ),
             line_items=[
                 LineItem(
-                    line_number=line["line_no"],
+                    line_id=line["line_no"],
                     product_code=line["sku"],
                     quantity=line["qty"],
-                    unit_price=line["price"],
                 )
                 for line in raw_order["lines"]
             ],
@@ -604,12 +758,19 @@ class MyProviderOrderService:
         # (Implementation depends on what you cached)
     
     # IOrderNotifier
-    def notify_completed_sale(self, order: Order) -> None:
-        """Notify MyProvider that sale is completed."""
-        # Send EDIFACT notification or API call
-        # Example:
-        #   httpx.post(f"{self.api_url}/orders/{order.remote_order_id}/notify",
-        #              json={"status": "completed", "sale_id": order.sale_id})
+    def get_notify_data(self, order: Order, sale_service: ISaleService) -> dict:
+        """Get data needed for notification (customer info, shipping, serials, etc.)."""
+        # Gather information from sale_service and order
+        return {
+            "customer_name": sale_service.get_customer_name(order.sale_id),
+            "shipping_address": sale_service.get_shipping_address(order.sale_id),
+        }
+    
+    def notify_completed_sale(self, order: Order, notify_data: dict) -> None:
+        """Notify MyProvider that sale is completed with EDIFACT message."""
+        # Generate EDIFACT notification (D96A + D99A) and send/save
+        # Example: httpx.post(f"{self.api_url}/orders/{order.remote_order_id}/notify",
+        #                      json={"status": "completed", "sale_id": order.sale_id})
     
     # IArtworkServiceProvider
     def get_artwork_service(
@@ -795,30 +956,45 @@ class SpectrumArtworkService:
 
 ### Test Coverage
 
-Comprehensive test suites with high coverage across all modules:
+Comprehensive test suite with **862 unit tests** and high code coverage:
 
-- **Unit tests** - Individual component testing with mocks
-  - `spectrum_artwork_service.py` - 35 tests (100% coverage) - Design retrieval, file organization, error handling
-  - `new_sale_use_case.py` - 40 tests (100% coverage) - Sale creation, artwork handling, placement file organization
-  - Other service and domain modules - 100+ additional tests
-- **Integration tests** - Cross-module testing with real service interactions
-  - `test_new_sale_integration.py` - 4 tests validating Odoo and Spectrum service integration
-  - Additional integration tests covering use case workflows
+**Module Coverage Levels:**
+- **Domain Layer** (100% coverage) - Order, ShipTo, LineItem, Artwork, Validators - comprehensive validation and state transition testing
+- **Application Layer** (100% coverage) - All use cases (NewSalesUseCase, CompletedSaleUseCase, StockTransferUseCase) with mocked services
+- **Services Layer** (78-100% coverage):
+  - HarmanOrderService: 52 tests (78% coverage) - Order parsing, EDIFACT processing
+  - OdooSaleService: 66 tests (95% coverage) - Sale management, JSON-RPC integration
+  - SpectrumArtworkService: 35+ tests (100% coverage) - Design retrieval, file handling
+  - RenderService: 100% coverage - Template rendering
+  - HarmanStockService: 100% coverage - Stock transfers
+  
+**Overall:** 87% code coverage across all modules
 
-Total: **80+ core tests** with comprehensive coverage of critical workflows
+**Test Files (24 total):**
+- Unit tests: `tests/unit/` (19 test files)
+  - Domain tests: Order, ShipTo, LineItem, Artwork, Validators
+  - Service tests: Harman, Odoo, Spectrum, Render (with mocked HTTP)
+  - Use case tests: NewSale, CompletedSale, StockTransfer (with mocked services)
+  - Config tests: Configuration loading and validation
+- Integration tests: `tests/integration/` (5 test files)
+  - Cross-module testing validating service interactions
+  - Main setup and workflow integration tests
 
 ```bash
-# Run all tests
-uv run pytest tests/ -v
+# Run all unit tests
+uv run pytest tests/unit/ -v
 
 # Run with coverage report
-uv run pytest tests/ --cov=src --cov-report=html
+uv run pytest tests/unit/ --cov=src --cov-report=html --cov-report=term-missing
 
 # Run specific test file
 uv run pytest tests/unit/domain/test_order.py -v
 
 # Run specific test class
-uv run pytest tests/unit/services/test_odoo_sale_service.py::TestOdooSaleService -v
+uv run pytest tests/unit/services/test_odoo_sale_service.py::TestMarkSaleNotified -v
+
+# Run integration tests
+uv run pytest tests/integration/ -v
 ```
 
 ### Writing Tests for New Services
