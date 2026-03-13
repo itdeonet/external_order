@@ -1,23 +1,23 @@
 UNA:+.? '
-UNB+UNOA:2+{{ order.interchange_receiver }}:ZZ+{{ order.interchange_sender }}:ZZ+{{ ship_date.strftime("%y%m%d") }}:{{ ship_date.strftime("%H%M") }}+{{ interchange_control_ref }}++++++1'
+UNB+UNOA:2+DEONET-PROD:ZZ+HARMAN-PROD:ZZ+{{ ship_date.strftime("%y%m%d") }}:{{ ship_date.strftime("%H%M") }}+{{ interchange_control_ref }}++++++1'
 UNH+{{ ship_date.strftime("%H%M%S") }}+DESADV:D:99A:UN'
-BGM+351:9+{{ order.order_number }}+9'
+BGM+351:9+{{ sale_name }}+9'
 DTM+137:{{ ship_date.strftime("%Y%m%d") }}:102'
-RFF+DQ:{{ order.delivery_note_number }}'
+RFF+DQ:{{ order.delivery_note_id }}'
 DTM+404:{{ ship_date.strftime('%Y%m%d%H%M%S') }}:203'
-RFF+ASM:{{ order.recipient.customer_number }}'
+RFF+ASM:{{ order.ship_to.remote_customer_id }}'
 CPS+1'
-FTX+ZZZ+++https?://www.dpdgroup.com/nl/mydpd/my-parcels/track??:lang=nl&parcelNumber={{ order.tracking_numbers|first|default('') }}'
+FTX+ZZZ+++https?://www.dpdgroup.com/nl/mydpd/my-parcels/track??:lang=nl&parcelNumber={{ shipping_info.carrier_tracking_ref|first | default('') }}'
 
-{% for item in order.items %}
-LIN+{{ item.line_number }}+1+{{ item.product_code }}:MF'
-PIA+1+{{ item_description }}'
+{% for item in order.line_items %}
+LIN+{{ item.remote_line_id }}+1+{{ item.product_code }}:MF'
+PIA+1+CLEAR'
 QTY+12:{{ item.quantity }}:EA'
-{% for serial in item.serials %}
+{% for serial in serials_by_line[item.remote_line_id] %}
 GIN+BN+{{ serial }}'
 {% endfor %}
 FTX+PRD+++ECOM:UNR'
 {% endfor %}
 
-UNT+{{ segments_d99a|sum }}+{{ ship_date.strftime("%H%M%S") }}'
+UNT+{{ num_segments.D99A }}+{{ ship_date.strftime("%H%M%S") }}'
 UNZ+1+{{ interchange_control_ref }}'

@@ -1,36 +1,36 @@
 UNA:+.? '
-UNB+UNOC:2+{{ order.interchange_receiver }}:ZZ+{{ order.interchange_sender }}:ZZ+{{ ship_date.strftime("%y%m%d") }}:{{ ship_date.strftime("%H%M") }}+{{ interchange_control_ref }}'
+UNB+UNOC:2+DEONET-PROD:ZZ+HARMAN-PROD:ZZ+{{ ship_date.strftime("%y%m%d") }}:{{ ship_date.strftime("%H%M") }}+{{ interchange_control_ref }}'
 UNH+{{ ship_date.strftime("%H%M%S") }}+DESADV:D:96A:UN:EAN005'
-BGM+351+{{ order.order_number }}+9'
+BGM+351+{{ sale_name }}+9'
 DTM+137:{{ ship_date.strftime("%Y%m%d") }}:102'
 DTM+11:{{ ship_date.strftime("%Y%m%d") }}:102'
 DTM+132:{{ expected_date.strftime("%Y%m%d") }}:102'
-RFF+BM:{{ order.order_number }}'
-RFF+CN:{{ (order.shipment_type.split(' '))[1] }}'
-NAD+CA+{{ (order.shipment_type.split(' '))[1] }}'
+RFF+BM:{{ sale_name }}'
+RFF+CN:DPD'
+NAD+CA+DPD'
 NAD+DP+{{ order.ship_to.remote_customer_id }}'
 TDT+20++01'
 CPS+1'
-FTX+ZZZ+++https?://www.dpdgroup.com/nl/mydpd/my-parcels/track??:lang=nl&parcelNumber={{ order.tracking_numbers|first|default('') }}'
+FTX+ZZZ+++https?://www.dpdgroup.com/nl/mydpd/my-parcels/track??:lang=nl&parcelNumber={{ shipping_info.carrier_tracking_ref|first | default('') }}'
 PAC+0++201'
 PAC+1++PK'
 CPS+2+1'
 PAC+1++PK'
-MEA+PD+AAB+KGM:{{ order.shipping_weight|round(2) }}'
+MEA+PD+AAB+KGM:{{ shipping_info.weight|round(2) }}'
 MEA+PD+AAW+CMQ:{{ box_length * box_width * box_height }}'
 MEA+PD+LN+CMT:{{ box_length }}'
 MEA+PD+WD+CMT:{{ box_width }}'
 MEA+PD+HT+CMT:{{ box_height }}'
 PCI+33E'
-RFF+AAS:{{ order.tracking_numbers|first|default('') }}'
+RFF+AAS:{{ shipping_info.carrier_tracking_ref|first | default('') }}'
 GIN+BJ+{{ sscc }}'
 
-{% for item in order.items %}
-LIN+{{ item.line_number }}++{{ item.product_code }}:MF'
-PIA+1+{{ item_description }}'
+{% for item in order.line_items %}
+LIN+{{ item.remote_line_id }}++{{ item.product_code }}:MF'
+PIA+1+CLEAR'
 QTY+12:{{ item.quantity }}'
-RFF+DQ:{{ order.delivery_note_number }}'
-{% for serial in item.serials %}
+RFF+DQ:{{ order.delivery_note_id }}'
+{% for serial in serials_by_line[item.remote_line_id] %}
 {% if loop.index % 10 == 1 %}
 PCI+XX'
 {% endif %}
@@ -38,5 +38,5 @@ GIN+BN+{{ serial }}'
 {% endfor %}
 {% endfor %}
 
-UNT+{{ segments_d96a|sum }}+{{ ship_date.strftime("%H%M%S") }}'
+UNT+{{ num_segments.D96A }}+{{ ship_date.strftime("%H%M%S") }}'
 UNZ+1+{{ interchange_control_ref }}'
