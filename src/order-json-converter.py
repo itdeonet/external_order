@@ -1,7 +1,6 @@
 import datetime as dt
 import json
 import re
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -44,15 +43,22 @@ def convert_json(data: dict[str, Any]) -> dict[str, Any]:
                 "artwork": {
                     "artwork_id": item.get("artwork_id", ""),
                     "artwork_line_id": item.get("line_number", ""),
-                    "design_url": f"https://api.spectrumcustomizer.com/{item.get('artwork_endpoint', '').lstrip('/')}/",
+                    "design_url": f"https://api.spectrumcustomizer.com/{item.get('artwork_endpoint', '').lstrip('/')}/"
+                    if item.get("artwork_endpoint")
+                    else "",
                     "design_paths": [
                         re.sub(r"file:///", "", path)
                         for path in item.get("downloaded_artwork_urls", [])
+                        if path.startswith("file:///")
                     ],
-                    "placement_url": f"https://api.spectrumcustomizer.com/{item.get('placement_endpoint', '').lstrip('/')}/",
+                    "placement_url": f"https://api.spectrumcustomizer.com/{item.get('placement_endpoint', '').lstrip('/')}/"
+                    if item.get("placement_endpoint")
+                    else "",
                     "placement_path": re.sub(
                         r"file:///", "", item.get("downloaded_placement_url", "")
-                    ),
+                    )
+                    if item.get("downloaded_placement_url")
+                    else "",
                 },
             }
             for item in data.get("items", [])
@@ -64,16 +70,13 @@ def convert_json(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def update_paths(data: dict[str, Any]) -> None:
-    digitals_dir = Path(data["line_items"][0]["artwork"]["design_paths"][0]).parent
-    if not digitals_dir.is_dir():
-        digitals_dir = Path.home() / "projects_data/external_order/digitals"
+    digitals_dir = Path("C:\\users\\Administrator\\projects_data\\external_order\\digitals")
     for item in data["line_items"]:
         item["artwork"]["design_paths"] = [
-            str(digitals_dir / Path(path).name) for path in item["artwork"]["design_paths"]
+            str(digitals_dir / Path(path).name) for path in item["artwork"]["design_paths"] if path
         ]
-        item["artwork"]["placement_path"] = str(
-            digitals_dir / Path(item["artwork"]["placement_path"]).name
-        )
+        path = Path(item["artwork"]["placement_path"])
+        item["artwork"]["placement_path"] = str(digitals_dir / path.name)
         for path in item["artwork"]["design_paths"] + [item["artwork"]["placement_path"]]:
             if not Path(path).is_file():
                 Path(path).touch()
@@ -92,12 +95,13 @@ def main():
         print(f"Error: {folder_path} is not a valid directory.")
         sys.exit(1)
 
-    for file in folder_path.glob("*.json"):
+    for file in folder_path.glob("S*.json"):
         try:
-            data: dict[str, Any] = json.loads(file.read_text(encoding="utf-8"))  # type: ignore
-            backup_file = file.with_suffix(".json.bak")
+            try:
+                data: dict[str, Any] = json.loads(file.read_text())  # type: ignore
+            except UnicodeDecodeError:
+                data = json.loads(file.read_text(encoding="utf-8-sig"))  # type: ignore
             new_file = file.parent / f"{data.get('remote_number', file.stem)}.json"
-            shutil.copy(file, backup_file)
             converted = convert_json(data)
             update_paths(converted)
             new_file.write_text(json.dumps(converted, indent=2, default=str), encoding="utf-8")
