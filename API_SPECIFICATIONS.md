@@ -52,14 +52,15 @@ Params:
     "client_order_ref": order_description,
     "pricelist_id": pricelist_id,
     "order_line": [(0, 0, line_dict), ...],  # 0,0 = create new
-    "state": "draft",
+    "state": "sale",                          # Created directly in final state
     "commitment_date": ISO date string,
     "carrier_id": carrier_id,
     "x_remote_delivery_instructions": instructions or None,
     "x_remote_order_id": remote_order_id,
     "x_remote_order_provider": order_provider,
 }
-Returns: int (sale ID)
+Returns: (sale_id: int, sale_name: str) - tuple of (ID, Name)
+Note: Sales are created in "sale" state (no separate confirm step needed)
 ```
 
 #### 2. Search Sale Order
@@ -77,15 +78,7 @@ Params (query_options):
 Returns: list of dicts with id, state, etc.
 ```
 
-#### 3. Confirm Sale
-```
-Model: sale.order
-Method: action_confirm
-Params (query_data): [[sale_id]]
-Returns: bool
-```
-
-#### 4. Update Sale
+#### 3. Update Sale
 ```
 Model: sale.order
 Method: write
@@ -93,7 +86,7 @@ Params (query_data): [[sale_id], {fields_dict}]
 Returns: bool
 ```
 
-#### 5. Search Completed Sales
+#### 4. Search Completed Sales
 ```
 Model: sale.order
 Method: search_read
@@ -108,7 +101,7 @@ Params (query_options):
 Returns: list of dicts with id, x_remote_order_id
 ```
 
-#### 6. Mark Sale Notified
+#### 5. Mark Sale Notified
 ```
 Model: sale.order
 Method: write
@@ -117,7 +110,7 @@ Params (query_data):
 Returns: bool
 ```
 
-#### 7. Search Shipping Info
+#### 6. Search Shipping Info
 ```
 Model: stock.move
 Method: search_read
@@ -131,7 +124,7 @@ Params (query_options):
 Returns: list of dicts
 ```
 
-#### 8. Search Serials
+#### 7. Search Serials
 ```
 Model: stock.serial.move
 Method: search_read
@@ -142,7 +135,7 @@ Params (query_options):
 Returns: list of dicts with product_id (tuple), serial
 ```
 
-#### 9. Search/Create Contact (res.partner)
+#### 8. Search/Create Contact (res.partner)
 ```
 Model: res.partner
 Method: create
@@ -170,7 +163,7 @@ Params:
 Returns: int (contact ID)
 ```
 
-#### 10. Search Country
+#### 9. Search Country
 ```
 Model: res.country
 Method: search_read
@@ -181,7 +174,7 @@ Params (query_options):
 Returns: list of dicts with id
 ```
 
-#### 11. Search State
+#### 10. Search State
 ```
 Model: res.country.state
 Method: search_read
@@ -195,7 +188,7 @@ Params (query_options):
 Returns: list of dicts with id
 ```
 
-#### 12. Search Carrier
+#### 11. Search Carrier
 ```
 Model: delivery.carrier
 Method: search_read
@@ -209,7 +202,7 @@ Params (query_options):
 Returns: list of dicts with id
 ```
 
-#### 13. Search Products
+#### 12. Search Products
 ```
 Model: product.product
 Method: search_read

@@ -104,8 +104,6 @@ External Order Provider (Harman/others)
         ↓
   Fetch Artwork [IArtworkService.get_artwork()]
         ↓
-  Confirm Sale in Odoo [ISaleService.confirm_sale()]
-        ↓
   Persist Order as CONFIRMED
 ```
 
@@ -212,8 +210,9 @@ NewSaleUseCase.execute():
         order_service.persist_order(order, OrderStatus.NEW)
         
         # 2. Create or update sale in Odoo
-        sale_id = sale_service.create_sale(order)
+        sale_id, sale_name = sale_service.create_sale(order)  # Returns tuple
         order.set_sale_id(sale_id)
+        order.set_sale_name(sale_name)  # Store sale name from Odoo
         
         # 3. Get artwork if service available
         artwork_service = order_service.get_artwork_service(order, artwork_services)
@@ -223,8 +222,7 @@ NewSaleUseCase.execute():
             line_item.set_artwork(artwork)  # Attach artwork to line items
           order_service.persist_order(order, OrderStatus.ARTWORK)
         
-        # 4. Confirm sale in Odoo
-        sale_service.confirm_sale(order)
+        # 4. Persist as CONFIRMED (no separate confirm step)
         order.set_status(OrderStatus.CONFIRMED)
         order_service.persist_order(order, OrderStatus.CONFIRMED)
         
@@ -234,7 +232,9 @@ NewSaleUseCase.execute():
 
 **Key Behavior:**
 - Each order service is a registered plugin (Harman, etc.)
+- `create_sale()` returns a tuple `(sale_id, sale_name)` - both must be set on order
 - Artwork workflow is conditional - if `get_artwork_service()` returns None, artwork step is skipped
+- Sale is created in final "sale" state in Odoo (no separate confirm step needed)
 - OrderStatus transitions: NEW → ARTWORK (if artwork available) → CONFIRMED
 - Errors are collected per-order; one order failure doesn't stop others
 
@@ -263,6 +263,9 @@ class SpectrumArtworkService:
   def get_artwork(self, order: Order) -> list[Artwork]:
     """Fetch artwork for all line items in order.
     
+    Args:
+      order: Order with order_id and sale_name set
+    
     Returns:
       List of Artwork objects with validated file paths
     Raises:
@@ -270,14 +273,17 @@ class SpectrumArtworkService:
     """
     artwork_list = []
     for line_item in order.line_items:
-      designs = self._download_designs(line_item.product_code)
+      recipe_set_id = line_item.product_code  # Maps to recipe set in Spectrum API
+      designs = self._download_designs(recipe_set_id, order.sale_name)
       for design in designs:
-        placement_path = self._download_placement(design["id"])
+        placement_path = self._download_placement(recipe_set_id, order.sale_name)
         artwork = Artwork(
             product_code=line_item.product_code,
             material=design["material"],
             file_path=placement_path,
         )
+        artwork_list.append(artwork)
+    return artwork_list
         artwork_list.append(artwork)
     return artwork_list
 ```

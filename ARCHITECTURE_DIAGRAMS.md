@@ -12,7 +12,7 @@ graph TD
     
     OrderSvc["HarmanOrderService<br/>- read_orders()<br/>- persist_order()<br/>- load_order()<br/>- notify_completed_sale()"]
     
-    SaleSvc["OdooSaleService<br/>- create_sale()<br/>- update_contact()<br/>- confirm_sale()<br/>- mark_sale_notified()"]
+    SaleSvc["OdooSaleService<br/>- create_sale()<br/>- update_contact()<br/>- update_sale()<br/>- mark_sale_notified()"]
     
     ArtSvc["SpectrumArtworkService<br/>- get_artwork()<br/>- _load_order_data()<br/>- _download_designs()"]
     
@@ -55,9 +55,10 @@ graph TD
     Create["create_sale()"]
     Contact["search/create contact"]
     Convert["convert order lines"]
-    RPC1["RPC: sale.order.create()"]
+    RPC1["RPC: sale.order.create()<br/>returns (sale_id, sale_name)"]
     
     Persist2["persist_order(CREATED)"]
+    Persist2:set_sale_id_and_name["Order.set_sale_id() & set_sale_name()"]
     GetArt["HarmanOrderService.get_artwork_service()"]
     RetArt["Return SpectrumArtworkService<br/>if matches"]
     
@@ -66,15 +67,13 @@ graph TD
     API2["API: GET /api/webtoprint/"]
     Extract["Extract ZIP to digitals_dir"]
     API3["API: GET /spec.../pdf/"]
-    SavePDF["Save PDF to digitals_dir"]
+    SavePDF["Save PDF to digitals_dir<br/>with {sale_name} prefix"]
     SetArt["LineItem.set_artwork(Artwork)"]
     
     Org["organize_placement_files()"]
-    Copy["Copy to open_orders_dir/{sale_id}/"]
+    Copy["Copy to open_orders_dir/{sale_name}/"]
     
     Persist3["persist_order(ARTWORK)"]
-    Confirm["OdooSaleService.confirm_sale()"]
-    RPC2["RPC: sale.order.action_confirm()"]
     Persist4["persist_order(CONFIRMED)"]
     
     Output["✓ Sale created in Odoo<br/>with artwork"]
@@ -91,7 +90,8 @@ graph TD
     Contact --> Convert
     Convert --> RPC1
     RPC1 --> Persist2
-    Persist2 --> GetArt
+    Persist2 --> Persist2:set_sale_id_and_name
+    Persist2:set_sale_id_and_name --> GetArt
     GetArt --> RetArt
     RetArt --> GetArtwork
     GetArtwork --> API1
@@ -103,9 +103,7 @@ graph TD
     SetArt --> Org
     Org --> Copy
     Copy --> Persist3
-    Persist3 --> Confirm
-    Confirm --> RPC2
-    RPC2 --> Persist4
+    Persist3 --> Persist4
     Persist4 --> Output
 ```
 

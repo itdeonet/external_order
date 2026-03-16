@@ -123,8 +123,7 @@ class IOrderService(IOrderReader, IOrderStore, IOrderNotifier, IArtworkServicePr
 Creates, manages, and queries sales.
 ```python
 class ISaleService(Protocol):
-    def create_sale(self, order: "Order") -> int
-    def confirm_sale(self, order: "Order") -> None
+    def create_sale(self, order: "Order") -> tuple[int, str]  # Returns (sale_id, sale_name)
     def sale_has_expected_order_lines(self, order: "Order") -> bool
     def update_contact(self, order: "Order") -> None
     def update_sale(self, order: "Order") -> None
@@ -164,6 +163,7 @@ Located in [src/domain/order.py](src/domain/order.py)
 - `ship_to: ShipTo` - Shipping address
 - `line_items: list[LineItem]` - Product lines
 - `sale_id: int` - Odoo sale ID (default=0, set via method)
+- `sale_name: str` - Odoo sale order name (default="", set via method)
 - `status: OrderStatus` - Current state (NEW, CREATED, ARTWORK, CONFIRMED, COMPLETED, SHIPPED, FAILED)
 - `created_at: str` - ISO datetime string
 - `ship_at: str` - ISO date string
@@ -171,6 +171,7 @@ Located in [src/domain/order.py](src/domain/order.py)
 **Methods:**
 - `__post_init__()` - Validates all fields on construction
 - `set_sale_id(value: int) -> None` - Set the sale ID (requires positive integer)
+- `set_sale_name(value: str) -> None` - Set the sale name (requires non-empty string)
 - `set_status(value: OrderStatus) -> None` - Set order status
 - `set_created_at(created_at: dt.datetime) -> None` - Set creation timestamp
 - `set_ship_at(ship_at: dt.date) -> None` - Set shipping date
@@ -336,8 +337,7 @@ Implements: `ISaleService`
 - `base_url: str` - Odoo JSON-RPC endpoint URL
 
 **Public methods:**
-- `create_sale(order) -> int` - Create new Odoo sale or return existing
-- `confirm_sale(order) -> None` - Confirm sale (state=draft→sale)
+- `create_sale(order) -> tuple[int, str]` - Create new Odoo sale and return (sale_id, sale_name)
 - `sale_has_expected_order_lines(order) -> bool` - Check line count matches
 - `update_contact(order) -> None` - Update shipping contact details
 - `update_sale(order) -> None` - Update sale from order data
@@ -375,10 +375,10 @@ Implements: `IArtworkService`
 
 **Private methods:**
 - `_load_order_data(order) -> None` - Fetch order from Spectrum API
-- `_download_designs(recipe_set_id, sale_id) -> list[Path]` - Extract ZIP to digitals_dir
-- `_download_placement(recipe_set_id, sale_id) -> Path` - Save placement PDF
+- `_download_designs(recipe_set_id, sale_name) -> list[Path]` - Extract ZIP to digitals_dir with sale_name prefix
+- `_download_placement(recipe_set_id, sale_name) -> Path` - Save placement PDF with sale_name prefix
 
-**File naming:** `{sale_name}_{filename}`
+**File naming:** `{sale_name}_{filename}` (e.g., "SO-12345_design.pdf", "SO-12345_RECIPE001_placement.pdf") (e.g., "SO-12345_design.pdf")
 
 ### `RenderService`
 Located in [src/services/render_service.py](src/services/render_service.py)
