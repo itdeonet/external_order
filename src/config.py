@@ -29,20 +29,32 @@ class Config:
     sale_company_name: str = "Deonet Production B.V."
     ssl_verify: bool = os.getenv("SSL_VERIFY", "true").lower() == "true"
     templates_dir: Path = Path(__file__).parent / "templates"
-    work_dir: Path = Path(os.getenv("WORK_DIR", Path.home() / "projects_data" / "external_order"))
+    work_dir: Path = Path(
+        os.getenv("WORK_DIR", Path.home() / "projects-data" / "external_order")
+    )
 
     # Email settings
     smtp_host: str = os.getenv("SMTP_HOST", "smtp-relay.gmail.com")
     smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
-    email_sender: str = f"External Order on {socket.gethostname()}<{os.getenv('EMAIL_SENDER', '')}>"
+    email_sender: str = (
+        f"External Order on {socket.gethostname()}<{os.getenv('EMAIL_SENDER', '')}>"
+    )
     email_alert_to: list[str] = field(
-        default_factory=lambda: [s.strip() for s in os.getenv("EMAIL_ALERT_TO", "").split(",")]
+        default_factory=lambda: [
+            s.strip() for s in os.getenv("EMAIL_ALERT_TO", "").split(",")
+        ]
     )
     email_stock_to: list[str] = field(
-        default_factory=lambda: [s.strip() for s in os.getenv("EMAIL_STOCK_TO", "").split(",")]
+        default_factory=lambda: [
+            s.strip() for s in os.getenv("EMAIL_STOCK_TO", "").split(",")
+        ]
     )
-    email_alert_template: Path = Path(__file__).parent / "templates" / "error_alert.html"
-    email_stock_template: Path = Path(__file__).parent / "templates" / "stock_email.html"
+    email_alert_template: Path = (
+        Path(__file__).parent / "templates" / "error_alert.html"
+    )
+    email_stock_template: Path = (
+        Path(__file__).parent / "templates" / "stock_email.html"
+    )
 
     # Harman settings
     harman_input_dir: Path = field(init=False)
@@ -79,7 +91,9 @@ class Config:
         object.__setattr__(self, "harman_output_dir", self.work_dir / "harman" / "out")
         object.__setattr__(self, "digitals_dir", self.work_dir / "digitals")
         object.__setattr__(self, "open_orders_dir", self.work_dir / "open_orders")
-        object.__setattr__(self, "log_file", self.work_dir / "logs" / self.log_file.name)
+        object.__setattr__(
+            self, "log_file", self.work_dir / "logs" / self.log_file.name
+        )
 
         self.harman_input_dir.mkdir(parents=True, exist_ok=True)
         self.harman_output_dir.mkdir(parents=True, exist_ok=True)
