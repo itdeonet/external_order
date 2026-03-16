@@ -43,24 +43,16 @@ class HarmanOrderService:
     Configuration-driven; integrates with `RenderService` and `ErrorStore`.
     """
 
-    administration_id: int = field(
-        default_factory=lambda: get_config().harman_administration_id
-    )
+    administration_id: int = field(default_factory=lambda: get_config().harman_administration_id)
     customer_id: int = field(default_factory=lambda: get_config().harman_customer_id)
     pricelist_id: int = field(default_factory=lambda: get_config().harman_pricelist_id)
-    order_provider: str = field(
-        default_factory=lambda: get_config().harman_order_provider
-    )
-    shipment_type: str = field(
-        default_factory=lambda: get_config().harman_shipment_type
-    )
+    order_provider: str = field(default_factory=lambda: get_config().harman_order_provider)
+    shipment_type: str = field(default_factory=lambda: get_config().harman_shipment_type)
     workdays_for_delivery: int = field(
         default_factory=lambda: get_config().harman_workdays_for_delivery
     )
     input_dir: Path = field(default_factory=lambda: Path(get_config().harman_input_dir))
-    output_dir: Path = field(
-        default_factory=lambda: Path(get_config().harman_output_dir)
-    )
+    output_dir: Path = field(default_factory=lambda: Path(get_config().harman_output_dir))
     renderer: RenderService = field(default_factory=lambda: RenderService())
 
     def read_orders(self) -> Generator[Order, None, None]:
@@ -113,9 +105,7 @@ class HarmanOrderService:
         logger.info("Extracted order data: %s", order_data)
         return order_data
 
-    def _get_segment_data(
-        self, segment: Segment, order_data: dict[str, Any]
-    ) -> dict[str, Any]:
+    def _get_segment_data(self, segment: Segment, order_data: dict[str, Any]) -> dict[str, Any]:
         """Parse a single EDIFACT `segment` and update `order_data` in-place."""
         logger.debug("Process segment: %s", segment)
         match [segment.tag, *segment.elements]:
@@ -151,17 +141,13 @@ class HarmanOrderService:
                     {"remote_line_id": line_id, "product_code": product_code}
                 )
             case ["QTY", ["113", quantity, unit_of_measure]]:
-                assert order_data["line_items"], (
-                    "QTY segment must be preceded by a LIN segment."
-                )
+                assert order_data["line_items"], "QTY segment must be preceded by a LIN segment."
                 order_data["line_items"][-1]["quantity"] = int(quantity)
                 order_data["line_items"][-1]["unit_of_measure"] = unit_of_measure
             case ["FTX", "DEL", "3", "", delivery_instructions]:
                 order_data["delivery_instructions"] = delivery_instructions
             case ["FTX", "PRD", "", "", [location, stock_status]]:
-                assert order_data["line_items"], (
-                    "FTX segment must be preceded by a LIN segment."
-                )
+                assert order_data["line_items"], "FTX segment must be preceded by a LIN segment."
                 order_data["line_items"][-1]["location"] = location
                 order_data["line_items"][-1]["stock_status"] = stock_status
 
@@ -218,14 +204,10 @@ class HarmanOrderService:
         order.set_ship_at(Order.calculate_delivery_date(self.workdays_for_delivery))
         return order
 
-    def read_order_data_by_remote_order_id(
-        self, remote_order_id: str
-    ) -> dict[str, Any] | None:
+    def read_order_data_by_remote_order_id(self, remote_order_id: str) -> dict[str, Any] | None:
         """Find and parse the file for `remote_order_id`, returning parsed data."""
         logger.info("Get order data for remote order ID: %s", remote_order_id)
-        for file in self.input_dir.glob(
-            f"{remote_order_id}.confirmed", case_sensitive=False
-        ):
+        for file in self.input_dir.glob(f"{remote_order_id}.confirmed", case_sensitive=False):
             return self._read_order_data(file)
         return None
 
@@ -240,9 +222,7 @@ class HarmanOrderService:
 
     def should_update_sale(self, order: Order) -> bool:
         """Determine if an existing sale should be updated based on remote_order_id."""
-        logger.info(
-            "Check if sale should be updated for order: %s", order.remote_order_id
-        )
+        logger.info("Check if sale should be updated for order: %s", order.remote_order_id)
         # For Harman orders, we want to update a B2B sale
         # A B2B sale is created in the sale system, but contact data and delivery instructions may
         # be missing or incomplete
@@ -268,18 +248,13 @@ class HarmanOrderService:
         order.set_status(status)
         order_data = asdict(order)
         file_path = self.input_dir / f"{order.remote_order_id}.json"
-        text = json.dumps(
-            order_data, indent=4, ensure_ascii=False, default=custom_serializer
-        )
+        text = json.dumps(order_data, indent=4, ensure_ascii=False, default=custom_serializer)
         file_path.write_text(text, encoding="utf-8")
 
         # rename the INSDES file to reflect the new status
         for file in self.input_dir.glob(f"{order.remote_order_id}.*"):
             if file.suffix.lower() != ".json":
-                file.rename(
-                    file.parent
-                    / f"{order.remote_order_id}.{order.status.value}".upper()
-                )
+                file.rename(file.parent / f"{order.remote_order_id}.{order.status.value}".upper())
 
     def load_order(self, remote_order_id: str) -> Order:
         """Load and return an `Order` previously persisted as JSON."""
@@ -293,9 +268,7 @@ class HarmanOrderService:
         sale_name = data.pop("sale_name", "")
         status = data.pop("status", OrderStatus.NEW.value)
         created_at = dt.datetime.fromisoformat(
-            data.pop(
-                "created_at", (dt.datetime.now() - dt.timedelta(days=2)).isoformat()
-            )
+            data.pop("created_at", (dt.datetime.now() - dt.timedelta(days=2)).isoformat())
         )
         data.pop("ship_at", None)  # ship_at will be current date
         ship_at = dt.date.today()
@@ -310,9 +283,7 @@ class HarmanOrderService:
                     artwork_id=artwork_data.get("artwork_id", ""),
                     artwork_line_id=artwork_data.get("artwork_line_id", ""),
                     design_url=artwork_data.get("design_url", ""),
-                    design_paths=[
-                        Path(p) for p in artwork_data.get("design_paths", [])
-                    ],
+                    design_paths=[Path(p) for p in artwork_data.get("design_paths", [])],
                     placement_url=artwork_data.get("placement_url", ""),
                     placement_path=Path(artwork_data.get("placement_path", "")),
                 )
@@ -324,8 +295,10 @@ class HarmanOrderService:
         data["line_items"] = items
 
         order = Order(**data)
-        order.set_sale_id(sale_id)
-        order.set_sale_name(sale_name)
+        if sale_id > 0:
+            order.set_sale_id(sale_id)
+        if sale_name:
+            order.set_sale_name(sale_name)
         order.set_status(OrderStatus(status))
         order.set_created_at(created_at)
         order.set_ship_at(ship_at)
@@ -358,14 +331,10 @@ class HarmanOrderService:
             content = Serializer().serialize(list(segments), break_lines=True)
 
             # write the message
-            notify_path = (
-                self.output_dir / f"{order.remote_order_id}.{file.stem}".upper()
-            )
+            notify_path = self.output_dir / f"{order.remote_order_id}.{file.stem}".upper()
             notify_path.write_text(content, encoding="utf-8")
 
-    def get_notify_data(
-        self, order: Order, sale_service: ISaleService
-    ) -> dict[str, Any]:
+    def get_notify_data(self, order: Order, sale_service: ISaleService) -> dict[str, Any]:
         """Get the data needed for DESADV notification generation.
 
         Prepares all data required to render DESADV notification templates,
@@ -391,12 +360,8 @@ class HarmanOrderService:
 
         # get info from INSDES file to include in the notification
         order_data = self.read_order_data_by_remote_order_id(order.remote_order_id)
-        if not (
-            order_data and order_data.get("ship_to") and order_data.get("line_items")
-        ):
-            raise NotifyError(
-                "No valid order data found", order_id=order.remote_order_id
-            )
+        if not (order_data and order_data.get("ship_to") and order_data.get("line_items")):
+            raise NotifyError("No valid order data found", order_id=order.remote_order_id)
 
         num_segments = {
             "D96A": sum(
@@ -409,8 +374,7 @@ class HarmanOrderService:
                     sum(item.get("quantity", 0) for item in order_data["line_items"]),
                     # PCI segments: 1 per 10 products, at least 1
                     1,
-                    sum(item.get("quantity", 0) for item in order_data["line_items"])
-                    // 10,
+                    sum(item.get("quantity", 0) for item in order_data["line_items"]) // 10,
                 ]
             ),
             "D99A": sum(

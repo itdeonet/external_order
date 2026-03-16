@@ -990,6 +990,7 @@ class TestLoadOrder:
             "delivery_instructions": "Test instructions",
             "status": "created",
             "sale_id": 42,
+            "sale_name": "Acme Corp Sale",
             "created_at": "2025-02-14T10:30:45",
             "ship_at": "2025-02-21",
             "ship_to": {
@@ -1030,8 +1031,80 @@ class TestLoadOrder:
         # Verify key fields are restored
         assert result.remote_order_id == "ORD-123"
         assert result.sale_id == 42
+        assert result.sale_name == "Acme Corp Sale"
         assert result.status == OrderStatus.CREATED
         assert len(result.line_items) == 1
+
+    def test_load_order_sets_sale_name(self, service):
+        """Test that load_order correctly sets the sale_name from JSON data."""
+        order_file = service.input_dir / "ORD-SALE.json"
+        order_data = {
+            "administration_id": 1,
+            "customer_id": 100,
+            "pricelist_id": 50,
+            "order_provider": "Harman",
+            "remote_order_id": "ORD-SALE",
+            "shipment_type": "standard",
+            "description": "Test order",
+            "sale_name": "Premium Sales Inc",
+            "ship_to": {
+                "remote_customer_id": "CUST123",
+                "contact_name": "John Doe",
+                "email": "john@test.com",
+                "phone": "+1-555-0001",
+                "street1": "123 Main St",
+                "city": "Chicago",
+                "postal_code": "60601",
+                "country_code": "US",
+            },
+            "line_items": [
+                {
+                    "line_id": "1",
+                    "product_code": "PROD001",
+                    "quantity": 100,
+                }
+            ],
+        }
+        order_file.write_text(json.dumps(order_data), encoding="utf-8")
+
+        result = service.load_order("ORD-SALE")
+
+        assert result.sale_name == "Premium Sales Inc"
+
+    def test_load_order_defaults_sale_name_when_missing(self, service):
+        """Test that load_order defaults sale_name to empty string when not provided."""
+        order_file = service.input_dir / "ORD-NO-SALE.json"
+        order_data = {
+            "administration_id": 1,
+            "customer_id": 100,
+            "pricelist_id": 50,
+            "order_provider": "Harman",
+            "remote_order_id": "ORD-NO-SALE",
+            "shipment_type": "standard",
+            "description": "Test order",
+            "ship_to": {
+                "remote_customer_id": "CUST123",
+                "contact_name": "John Doe",
+                "email": "john@test.com",
+                "phone": "+1-555-0001",
+                "street1": "123 Main St",
+                "city": "Chicago",
+                "postal_code": "60601",
+                "country_code": "US",
+            },
+            "line_items": [
+                {
+                    "line_id": "1",
+                    "product_code": "PROD001",
+                    "quantity": 100,
+                }
+            ],
+        }
+        order_file.write_text(json.dumps(order_data), encoding="utf-8")
+
+        result = service.load_order("ORD-NO-SALE")
+
+        assert result.sale_name == ""
 
     def test_load_order_raises_error_when_file_not_found(self, service):
         """Test that load_order raises an error when JSON file doesn't exist."""
@@ -1115,3 +1188,95 @@ class TestNotifyCompletedSale:
 
         with contextlib.suppress(Exception):
             service.notify_completed_sale(order)
+
+
+class TestShouldUpdateSale:
+    """Tests for should_update_sale method."""
+
+    def test_should_update_sale_returns_true_for_s_format(self):
+        """Test that S-format IDs should be updated."""
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import Mock
+
+        from src.services.render_service import RenderService
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            service = HarmanOrderService(
+                administration_id=1,
+                customer_id=100,
+                pricelist_id=50,
+                order_provider="Harman",
+                shipment_type="standard",
+                workdays_for_delivery=5,
+                input_dir=tmp_path / "input",
+                output_dir=tmp_path / "output",
+                renderer=Mock(spec=RenderService),
+            )
+
+            mock_order = Mock()
+            mock_order.remote_order_id = "S12345"
+
+            result = service.should_update_sale(mock_order)
+            assert result is True
+
+    def test_should_update_sale_returns_false_for_non_s_format(self):
+        """Test that non-S-format IDs should not be updated."""
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import Mock
+
+        from src.services.render_service import RenderService
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            service = HarmanOrderService(
+                administration_id=1,
+                customer_id=100,
+                pricelist_id=50,
+                order_provider="Harman",
+                shipment_type="standard",
+                workdays_for_delivery=5,
+                input_dir=tmp_path / "input",
+                output_dir=tmp_path / "output",
+                renderer=Mock(spec=RenderService),
+            )
+
+            mock_order = Mock()
+            mock_order.remote_order_id = "HA-EM-001"
+
+            result = service.should_update_sale(mock_order)
+            assert result is False
+
+
+class TestReadOrderDataByRemoteOrderId:
+    """Tests for read_order_data_by_remote_order_id method."""
+
+    def test_read_order_data_by_remote_order_id_returns_none_when_not_found(self):
+        """Test that None is returned when order file not found."""
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import Mock
+
+        from src.services.render_service import RenderService
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_dir = tmp_path / "input"
+            input_dir.mkdir()
+
+            service = HarmanOrderService(
+                administration_id=1,
+                customer_id=100,
+                pricelist_id=50,
+                order_provider="Harman",
+                shipment_type="standard",
+                workdays_for_delivery=5,
+                input_dir=input_dir,
+                output_dir=tmp_path / "output",
+                renderer=Mock(spec=RenderService),
+            )
+
+            result = service.read_order_data_by_remote_order_id("NONEXISTENT")
+            assert result is None
