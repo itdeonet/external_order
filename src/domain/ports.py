@@ -130,8 +130,8 @@ class IOrderService(IOrderReader, IOrderStore, IOrderNotifier, IArtworkServicePr
 class ISaleService(Protocol):
     """Protocol for creating and managing sales for orders."""
 
-    def create_sale(self, order: "Order") -> int:
-        """Create a sale for `order` and return its ID; may raise on errors."""
+    def create_sale(self, order: "Order") -> tuple[int, str]:
+        """Create a sale for `order` and return its ID and name; may raise on errors."""
         ...
 
     def confirm_sale(self, order: "Order") -> None:

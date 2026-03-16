@@ -253,7 +253,8 @@ class OdooSaleService:
                 and product_name.strip()
             ):
                 raise SaleError(
-                    f"Product search for {line_item.product_code} failed", order.remote_order_id
+                    f"Product search for {line_item.product_code} failed",
+                    order.remote_order_id,
                 )
 
             order_lines.append(
@@ -311,7 +312,7 @@ class OdooSaleService:
         logger.info("Found carrier ID %d for search: %s", carrier_id, order.shipment_type)
         return carrier_id
 
-    def create_sale(self, order: Order) -> int:
+    def create_sale(self, order: Order) -> tuple[int, str]:
         """Create sale for order, or return existing sale ID.
 
         Args:
@@ -327,12 +328,13 @@ class OdooSaleService:
         logger.info("Search sale for order %s", order.remote_order_id)
         if sale_data := self.search_sale(order):
             logger.info(
-                "Sale exists for order %s from provider %s with ID %s",
+                "Sale exists for order %s from provider %s with (ID, name) (%s, %s)",
                 order.remote_order_id,
                 order.order_provider,
                 sale_data["id"],
+                sale_data["name"],
             )
-            return sale_data["id"]
+            return sale_data["id"], sale_data["name"]
 
         logger.info("Sale not found for order %s, create new sale", order.remote_order_id)
         contact_id = self._create_contact(order)
@@ -349,7 +351,7 @@ class OdooSaleService:
                     "client_order_ref": order.description,
                     "pricelist_id": order.pricelist_id,
                     "order_line": order_lines,
-                    "state": "sent",
+                    "state": "sale",
                     "commitment_date": order.ship_at,
                     "carrier_id": self._search_carrier_id(order),
                     "x_remote_delivery_instructions": order.delivery_instructions or None,
@@ -362,8 +364,17 @@ class OdooSaleService:
         if not isinstance(sale_id, int):
             raise SaleError("Failed to create sale", order.remote_order_id)
 
-        logger.info("Created sale with ID %d for order %s", sale_id, order.remote_order_id)
-        return sale_id
+        if sale_data := self.search_sale(order):
+            logger.info(
+                "Sale created for order %s from provider %s with (ID, name) (%s, %s)",
+                order.remote_order_id,
+                order.order_provider,
+                sale_data["id"],
+                sale_data["name"],
+            )
+            return sale_data["id"], sale_data["name"]
+        else:
+            raise SaleError("Sale created but not found on search", order.remote_order_id)
 
     def confirm_sale(self, order: Order) -> None:
         """Confirm the sale for `order`; raise `SaleError` on failure."""
@@ -468,7 +479,8 @@ class OdooSaleService:
         )
         if not bool(result):
             raise SaleError(
-                f"Failed to set delivery instructions for sale {sale_id}", order.remote_order_id
+                f"Failed to set delivery instructions for sale {sale_id}",
+                order.remote_order_id,
             )
 
         logger.info(
@@ -580,7 +592,9 @@ class OdooSaleService:
             for item in result
         ]
         logger.info(
-            "Found shipping information for order %s: %s", order.remote_order_id, shipping_info
+            "Found shipping information for order %s: %s",
+            order.remote_order_id,
+            shipping_info,
         )
         return shipping_info
 
@@ -633,7 +647,9 @@ class OdooSaleService:
             ]
 
         logger.info(
-            "Found serial numbers for order %s: %s", order.remote_order_id, serials_by_line_item
+            "Found serial numbers for order %s: %s",
+            order.remote_order_id,
+            serials_by_line_item,
         )
         return serials_by_line_item
 

@@ -378,7 +378,7 @@ Implements: `IArtworkService`
 - `_download_designs(recipe_set_id, sale_id) -> list[Path]` - Extract ZIP to digitals_dir
 - `_download_placement(recipe_set_id, sale_id) -> Path` - Save placement PDF
 
-**File naming:** `S{sale_id:05}_{filename}`
+**File naming:** `{sale_name}_{filename}`
 
 ### `RenderService`
 Located in [src/services/render_service.py](src/services/render_service.py)

@@ -44,7 +44,9 @@ class NewSaleUseCase:
 
                     if not self.sale_service.search_sale(order):
                         # no sale for this order, create it
-                        order.set_sale_id(self.sale_service.create_sale(order))
+                        sale_id, sale_name = self.sale_service.create_sale(order)
+                        order.set_sale_id(sale_id)
+                        order.set_sale_name(sale_name)
                     elif order_service.should_update_sale(order):
                         # sale exists but order data has changed, update it
                         if not self.sale_service.sale_has_expected_order_lines(order):
@@ -67,8 +69,7 @@ class NewSaleUseCase:
                         self.organize_placement_files(order, artwork_files)
                         order_service.persist_order(order, OrderStatus.ARTWORK)
 
-                    # confirm the sale in the sales system
-                    self.sale_service.confirm_sale(order)
+                    # persist the order as confirmed after all processing is done
                     order_service.persist_order(order, OrderStatus.CONFIRMED)
 
                 except Exception as exc:

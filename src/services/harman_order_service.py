@@ -290,6 +290,7 @@ class HarmanOrderService:
 
         # pop all non init fields and prepare the data for Order initialization
         sale_id = data.pop("sale_id", 0)
+        sale_name = data.pop("sale_name", "")
         status = data.pop("status", OrderStatus.NEW.value)
         created_at = dt.datetime.fromisoformat(
             data.pop(
@@ -324,6 +325,7 @@ class HarmanOrderService:
 
         order = Order(**data)
         order.set_sale_id(sale_id)
+        order.set_sale_name(sale_name)
         order.set_status(OrderStatus(status))
         order.set_created_at(created_at)
         order.set_ship_at(ship_at)
@@ -434,7 +436,7 @@ class HarmanOrderService:
             "box_length": box_length,
             "box_width": box_width,
             "box_height": box_height,
-            "sale_name": f"S{order.sale_id:05}",
+            "sale_name": order.sale_name,
             "sscc": "".join(random.choices(string.digits, k=20)),
             "num_segments": num_segments,
             "order": order_data,

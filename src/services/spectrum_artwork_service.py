@@ -63,7 +63,12 @@ class SpectrumArtworkService:
         for li in self.order_data.get("lineItems", []):
             for sku_qty in li.get("skuQuantities", []):
                 artwork_data.add(
-                    (li["id"], sku_qty["sku"], sku_qty["quantity"], li.get("recipeSetId"))
+                    (
+                        li["id"],
+                        sku_qty["sku"],
+                        sku_qty["quantity"],
+                        li.get("recipeSetId"),
+                    )
                 )
         logger.debug("Artwork data extracted from Spectrum response: %s", artwork_data)
 
@@ -79,11 +84,11 @@ class SpectrumArtworkService:
                         artwork_line_id=str(li_id),
                         design_url=f"{self.base_url.rstrip('/')}{design_endpoint}",
                         design_paths=self._download_designs(
-                            recipe_set_id=recipe_set_id, sale_id=order.sale_id
+                            recipe_set_id=recipe_set_id, sale_name=order.sale_name
                         ),
                         placement_url=f"{self.base_url.rstrip('/')}{placement_endpoint}",
                         placement_path=self._download_placement(
-                            recipe_set_id=recipe_set_id, sale_id=order.sale_id
+                            recipe_set_id=recipe_set_id, sale_name=order.sale_name
                         ),
                     )
                     li.set_artwork(artwork)
@@ -121,15 +126,15 @@ class SpectrumArtworkService:
         object.__setattr__(self, "order_data", order_data)
         object.__setattr__(self, "client_handle", order_data.get("clientHandle", ""))
 
-    def _download_designs(self, recipe_set_id: str, sale_id: int) -> list[Path]:
+    def _download_designs(self, recipe_set_id: str, sale_name: str) -> list[Path]:
         """Download and extract design files from Spectrum.
 
         Queries webtoprint endpoint for recipe set, extracts ZIP contents to digitals_dir
-        with sale ID prefix (S{sale_id:05}_{filename}).
+        with sale name prefix ({sale_name}_{filename}).
 
         Args:
             recipe_set_id: Spectrum recipe set identifier.
-            sale_id: Sale ID for filename prefix.
+            sale_name: Sale name for filename prefix.
 
         Returns:
             List of Path objects for extracted design files.
@@ -137,7 +142,7 @@ class SpectrumArtworkService:
         Raises:
             requests.exceptions.RequestException: If API request fails.
         """
-        logger.info("Get designs for artwork %s with order id %d", recipe_set_id, sale_id)
+        logger.info("Get designs for artwork %s with order name %s", recipe_set_id, sale_name)
         endpoint = f"/api/webtoprint/{recipe_set_id}/"
         response = self.session.get(url=f"{self.base_url.rstrip('/')}{endpoint}", timeout=(5, 30))
         response.raise_for_status()
@@ -146,21 +151,21 @@ class SpectrumArtworkService:
         with ZipFile(io.BytesIO(response.content)) as zip_file:
             for member in zip_file.infolist():
                 # Set filename to include order ID and extract to self.digitals_dir
-                member.filename = f"S{sale_id:05}_{member.filename}"
+                member.filename = f"{sale_name}_{member.filename}"
                 zip_file.extract(member, path=self.digitals_dir)
                 saved_as.append(self.digitals_dir / member.filename)
                 logger.debug(f"Extracted {member.filename} to {saved_as[-1]}")
 
         return saved_as
 
-    def _download_placement(self, recipe_set_id: str, sale_id: int) -> Path:
+    def _download_placement(self, recipe_set_id: str, sale_name: str) -> Path:
         """Download placement specification PDF from Spectrum.
 
-        Saves PDF to digitals_dir with filename format: S{sale_id:05}_{recipe_set_id}_placement.pdf
+        Saves PDF to digitals_dir with filename format: {sale_name}_{recipe_set_id}_placement.pdf
 
         Args:
             recipe_set_id: Spectrum recipe set identifier.
-            sale_id: Sale ID for filename prefix.
+            sale_name: Sale name for filename prefix.
 
         Returns:
             Path to saved placement PDF file.
@@ -168,11 +173,11 @@ class SpectrumArtworkService:
         Raises:
             requests.exceptions.RequestException: If API request fails.
         """
-        logger.info("Get placement for artwork %s with order id %d", recipe_set_id, sale_id)
+        logger.info("Get placement for artwork %s with order name %s", recipe_set_id, sale_name)
         endpoint = f"/{self.client_handle}/specification/{recipe_set_id}/pdf/"
         response = self.session.get(url=f"{self.base_url.rstrip('/')}{endpoint}", timeout=(5, 30))
         response.raise_for_status()
-        save_as = self.digitals_dir / f"S{sale_id:05}_{recipe_set_id}_placement.pdf"
+        save_as = self.digitals_dir / f"{sale_name}_{recipe_set_id}_placement.pdf"
         save_as.write_bytes(response.content)
         logger.debug(f"Saved placement PDF to {save_as}")
         return save_as

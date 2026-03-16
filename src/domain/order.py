@@ -32,6 +32,7 @@ class Order:
     """
 
     sale_id: int = field(default=0, init=False)
+    sale_name: str = field(default="", init=False)
     administration_id: int
     customer_id: int
     order_provider: str
@@ -84,6 +85,12 @@ class Order:
         if not (isinstance(value, int) and value > 0):
             raise ValueError("value must be a positive integer.")
         object.__setattr__(self, "sale_id", value)
+
+    def set_sale_name(self, value: str) -> None:
+        """Set internal `sale_name`; requires a non-empty string."""
+        if not (isinstance(value, str) and value.strip()):
+            raise ValueError("value must be a non-empty string.")
+        object.__setattr__(self, "sale_name", value)
 
     def set_status(self, value: OrderStatus) -> None:
         """Set `status` to an `OrderStatus` value."""

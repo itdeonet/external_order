@@ -278,7 +278,7 @@ Method: GET
 Path: /api/webtoprint/{recipe_set_id}/
 Response: ZIP file bytes
 Content-Type: application/zip
-Extraction: Files prefixed with S{sale_id:05}_{filename}
+Extraction: Files prefixed with {sale_name}_{filename}
 ```
 
 #### 3. Get Placement PDF
@@ -287,7 +287,7 @@ Method: GET
 Path: /{clientHandle}/specification/{recipe_set_id}/pdf/
 Response: PDF file bytes
 Content-Type: application/pdf
-Save as: S{sale_id:05}_{recipe_set_id}_placement.pdf
+Save as: {sale_name}_{recipe_set_id}_placement.pdf
 ```
 
 ---
@@ -374,7 +374,7 @@ Provided to templates:
 - ship_date: ISO datetime
 - expected_date: ISO datetime
 - box_length, box_width, box_height: dimensions
-- sale_name: S{sale_id:05}
+- sale_name: {sale_name}
 - sscc: 20-digit random SSCC code
 - num_segments: dict with D96A and D99A counts
 - order: original parsed order data
