@@ -134,10 +134,6 @@ class ISaleService(Protocol):
         """Create a sale for `order` and return its ID and name; may raise on errors."""
         ...
 
-    def confirm_sale(self, order: "Order") -> None:
-        """Confirm the sale for `order` in the sales system."""
-        ...
-
     def sale_has_expected_order_lines(self, order: "Order") -> bool:
         """Return True if sale lines match `order` lines, else False."""
         ...

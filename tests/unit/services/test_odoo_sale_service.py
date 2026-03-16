@@ -168,7 +168,9 @@ class TestCreateSale:
 
     def test_create_sale_successful(self, service, mocker, order):
         """Test successful sale creation."""
-        mocker.patch.object(OdooSaleService, "search_sale", return_value={})
+        mocker.patch.object(
+            OdooSaleService, "search_sale", side_effect=[{}, {"id": 100, "name": "SO-12345"}]
+        )
         mocker.patch.object(OdooSaleService, "_create_contact", return_value=10)
         mocker.patch.object(
             OdooSaleService,
@@ -180,19 +182,19 @@ class TestCreateSale:
 
         result = service.create_sale(order)
 
-        assert result == 100
+        assert result == (100, "SO-12345")
 
     def test_create_sale_returns_existing_sale_id(self, service, mocker, order):
-        """Test that create_sale returns existing sale ID if already created."""
-        existing_sale = {"id": 100}
+        """Test that create_sale returns existing sale ID and name if already created."""
+        existing_sale = {"id": 100, "name": "SO-98765"}
         mocker.patch.object(OdooSaleService, "search_sale", return_value=existing_sale)
 
         result = service.create_sale(order)
 
-        assert result == 100
+        assert result == (100, "SO-98765")
 
     def test_create_sale_raises_when_creation_fails(self, service, mocker, order):
-        """Test that SaleError is raised when sale creation returns an int."""
+        """Test that SaleError is raised when sale creation returns non-integer."""
         mocker.patch.object(OdooSaleService, "search_sale", return_value={})
         mocker.patch.object(OdooSaleService, "_create_contact", return_value=10)
         mocker.patch.object(OdooSaleService, "_convert_order_lines", return_value=[])
@@ -202,64 +204,21 @@ class TestCreateSale:
         with pytest.raises(SaleError, match="Failed to create sale"):
             service.create_sale(order)
 
-
-class TestConfirmSale:
-    """Tests for confirm_sale method."""
-
-    @pytest.fixture
-    def service(self):
-        """Provide an OdooSaleService instance."""
-        mock_auth = Mock(spec=OdooAuth)
-        mock_client = Mock(spec=requests.Session)
-        return OdooSaleService(auth=mock_auth, session=mock_client)
-
-    @pytest.fixture
-    def order(self):
-        """Provide an Order instance."""
-        ship_to = ShipTo(
-            remote_customer_id="CUST123",
-            contact_name="John Doe",
-            email="john@example.com",
-            phone="555-0123",
-            street1="123 Main St",
-            city="Chicago",
-            postal_code="60601",
-            country_code="US",
+    def test_create_sale_raises_when_sale_not_found_after_creation(self, service, mocker, order):
+        """Test that SaleError is raised when sale is not found after creation."""
+        # First search returns empty (sale doesn't exist), second search also returns empty (failed to find after creation)
+        mocker.patch.object(OdooSaleService, "search_sale", side_effect=[{}, {}])
+        mocker.patch.object(OdooSaleService, "_create_contact", return_value=10)
+        mocker.patch.object(
+            OdooSaleService,
+            "_convert_order_lines",
+            return_value=[{"product_id": 1, "quantity": 10}],
         )
-        line_item = LineItem(line_id="LINE001", product_code="PROD001", quantity=10)
-        return Order(
-            administration_id=1,
-            customer_id=100,
-            order_provider="Harman",
-            pricelist_id=50,
-            remote_order_id="HA-EM-12345",
-            shipment_type="standard",
-            description="Test order",
-            ship_to=ship_to,
-            line_items=[line_item],
-        )
+        mocker.patch.object(OdooSaleService, "_search_carrier_id", return_value=5)
+        mocker.patch.object(OdooSaleService, "_call", return_value=100)
 
-    def test_confirm_sale_successful(self, service, mocker, order):
-        """Test successful sale confirmation."""
-        mocker.patch.object(OdooSaleService, "search_sale", return_value={"id": 100})
-        mocker.patch.object(OdooSaleService, "_call", return_value=True)
-
-        service.confirm_sale(order)
-
-    def test_confirm_sale_raises_when_sale_not_found(self, service, mocker, order):
-        """Test that SaleError is raised when sale not found."""
-        mocker.patch.object(OdooSaleService, "search_sale", return_value={})
-
-        with pytest.raises(SaleError, match="Sale not found"):
-            service.confirm_sale(order)
-
-    def test_confirm_sale_raises_on_confirmation_failure(self, service, mocker, order):
-        """Test that SaleError is raised when confirmation fails."""
-        mocker.patch.object(OdooSaleService, "search_sale", return_value={"id": 100})
-        mocker.patch.object(OdooSaleService, "_call", return_value=False)
-
-        with pytest.raises(SaleError, match="Failed to confirm sale"):
-            service.confirm_sale(order)
+        with pytest.raises(SaleError, match="Sale created but not found on search"):
+            service.create_sale(order)
 
 
 class TestSearchCompletedSales:

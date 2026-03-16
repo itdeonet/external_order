@@ -376,29 +376,6 @@ class OdooSaleService:
         else:
             raise SaleError("Sale created but not found on search", order.remote_order_id)
 
-    def confirm_sale(self, order: Order) -> None:
-        """Confirm the sale for `order`; raise `SaleError` on failure."""
-        logger.info("Confirm sale for order: %s", order.remote_order_id)
-        sale_data = self.search_sale(order)
-        if not (sale_data and "id" in sale_data and sale_data["id"] != 0):
-            raise SaleError("Sale not found", order.remote_order_id)
-        if sale_data.get("state") == "sale":
-            logger.info("Sale for order %s is already confirmed", order.remote_order_id)
-            return
-
-        sale_id = sale_data["id"]
-        logger.info("Confirm sale with id: %s for order: %s", sale_id, order.remote_order_id)
-        result = self._call(
-            model="sale.order",
-            method="action_confirm",
-            query_data=[[sale_id]],
-        )
-
-        if not bool(result):
-            raise SaleError("Failed to confirm sale", order.remote_order_id)
-
-        logger.info("Sale with id %d confirmed successfully", sale_id)
-
     def sale_has_expected_order_lines(self, order: Order) -> bool:
         """Does the sale for the given order contain the expected order lines."""
         logger.info(
