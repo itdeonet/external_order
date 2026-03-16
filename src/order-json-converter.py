@@ -18,7 +18,9 @@ def convert_json(data: dict[str, Any]) -> dict[str, Any]:
         "order_provider": "HARMAN JBL",
         "pricelist_id": 2,
         "remote_order_id": data.get("remote_number", ""),
-        "shipment_type": "harman%b2c" if "B2C" in data.get("shipment_type", "") else "harman%b2b",
+        "shipment_type": "harman%b2c"
+        if "B2C" in data.get("shipment_type", "")
+        else "harman%b2b",
         "description": f"HARMAN JBL order {data.get('remote_number', '')} / {data.get('delivery_note_number', '')}",
         "delivery_instructions": "",
         "status": "confirmed",
@@ -70,14 +72,20 @@ def convert_json(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def update_paths(data: dict[str, Any]) -> None:
-    digitals_dir = Path("C:\\users\\Administrator\\projects_data\\external_order\\digitals")
+    digitals_dir = Path(
+        "C:\\users\\Administrator\\projects-data\\external_order\\digitals"
+    )
     for item in data["line_items"]:
         item["artwork"]["design_paths"] = [
-            str(digitals_dir / Path(path).name) for path in item["artwork"]["design_paths"] if path
+            str(digitals_dir / Path(path).name)
+            for path in item["artwork"]["design_paths"]
+            if path
         ]
         path = Path(item["artwork"]["placement_path"])
         item["artwork"]["placement_path"] = str(digitals_dir / path.name)
-        for path in item["artwork"]["design_paths"] + [item["artwork"]["placement_path"]]:
+        for path in item["artwork"]["design_paths"] + [
+            item["artwork"]["placement_path"]
+        ]:
             if not Path(path).is_file():
                 Path(path).touch()
 
@@ -104,7 +112,9 @@ def main():
             new_file = file.parent / f"{data.get('remote_number', file.stem)}.json"
             converted = convert_json(data)
             update_paths(converted)
-            new_file.write_text(json.dumps(converted, indent=2, default=str), encoding="utf-8")
+            new_file.write_text(
+                json.dumps(converted, indent=2, default=str), encoding="utf-8"
+            )
         except Exception as e:
             print(f"Error processing {file}: {e}")
 
