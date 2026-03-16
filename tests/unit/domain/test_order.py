@@ -596,6 +596,61 @@ class TestOrderSetSaleID:
             order.set_sale_id("123")
 
 
+class TestOrderSetSaleName:
+    """Tests for set_sale_name method."""
+
+    @pytest.fixture
+    def order(self):
+        """Provide an Order instance."""
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(line_id="RL-001", product_code="PROD-001", quantity=5)
+        return Order(
+            administration_id=1,
+            customer_id=100,
+            order_provider="Provider",
+            pricelist_id=50,
+            remote_order_id="ORD-123",
+            shipment_type="standard",
+            description="Test order",
+            ship_to=ship_to,
+            line_items=[line_item],
+        )
+
+    def test_set_sale_name_valid(self, order):
+        """Test setting a valid sale name."""
+        order.set_sale_name("Acme Corp Sale")
+        assert order.sale_name == "Acme Corp Sale"
+
+    def test_set_sale_name_empty_raises_error(self, order):
+        """Test that setting sale name to empty string raises ValueError."""
+        with pytest.raises(ValueError, match="value must be a non-empty string"):
+            order.set_sale_name("")
+
+    def test_set_sale_name_whitespace_only_raises_error(self, order):
+        """Test that setting sale name to whitespace-only raises ValueError."""
+        with pytest.raises(ValueError, match="value must be a non-empty string"):
+            order.set_sale_name("   ")
+
+    def test_set_sale_name_non_string_raises_error(self, order):
+        """Test that setting non-string sale name raises ValueError."""
+        with pytest.raises(ValueError, match="value must be a non-empty string"):
+            order.set_sale_name(123)  # type: ignore
+
+    def test_set_sale_name_strips_whitespace(self, order):
+        """Test that whitespace is not stripped from sale name value."""
+        order.set_sale_name("  Acme Corp Sale  ")
+        assert order.sale_name == "  Acme Corp Sale  "
+
+
 class TestOrderSetStatus:
     """Tests for set_status method."""
 
