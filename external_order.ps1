@@ -28,7 +28,8 @@ function Invoke-PythonScript {
     
     if ($exitCode -eq 0) {
         Write-LogMessage "Python processing $script completed."
-    } else {
+    }
+    else {
         Write-LogMessage "ERROR: Python processing $script failed with exit code: $exitCode"
     }
     
@@ -39,46 +40,46 @@ function Get-IncomingFiles {
     Write-LogMessage "Get incoming files from Harman SFTP"
     
     # Incoming files from sftp server, exit on error
-    rclone copy "harmansftp:out_in04" "harmansftp:out_in04/archive" --exclude "archive/**" --no-traverse --log-level NOTICE --log-file="$logfile"
+    rclone copy "harmansftp:out_in04" "harmansftp:out_in04/archive" --exclude "archive/**" --no-traverse --log-level $loglevel --log-file="$logfile"
     if ($LASTEXITCODE -ne 0) { exit 1 }
-    rclone copy "harmansftp:out_insdes" "harmansftp:out_insdes/archive" --exclude "archive/**" --no-traverse --log-level NOTICE --log-file="$logfile"
+    rclone copy "harmansftp:out_insdes" "harmansftp:out_insdes/archive" --exclude "archive/**" --no-traverse --log-level $loglevel --log-file="$logfile"
     if ($LASTEXITCODE -ne 0) { exit 1 }
-    rclone move "harmansftp:out_in04" "$workdir/harman/in" --exclude "archive/**" --no-traverse --log-level NOTICE --log-file="$logfile"
-    rclone move "harmansftp:out_insdes" "$workdir/harman/in" --exclude "archive/**" --no-traverse --log-level NOTICE --log-file="$logfile"
+    rclone move "harmansftp:out_in04" "$workdir/harman/in" --exclude "archive/**" --no-traverse --log-level $loglevel --log-file="$logfile"
+    rclone move "harmansftp:out_insdes" "$workdir/harman/in" --exclude "archive/**" --no-traverse --log-level $loglevel --log-file="$logfile"
 }
 
 function Publish-OutgoingFiles {
     Write-LogMessage "Publish outgoing files to Harman SFTP and Google Drive."
     
     # outgoing IN05 files to Google Drive
-    rclone move "$workdir/harman/out" "$gd_workdir/archive/out/in05" --include "*.XML" --fast-list --checksum --log-level NOTICE --log-file="$logfile"
-    rclone copy "$gd_workdir/out/in05/send" "$gd_workdir/archive/out/in05" --include "*.XML" --fast-list --checksum --log-level NOTICE --log-file="$logfile"
+    rclone move "$workdir/harman/out" "$gd_workdir/archive/out/in05" --include "*.XML" --fast-list --checksum --log-level $loglevel --log-file="$logfile"
+    rclone copy "$gd_workdir/out/in05/send" "$gd_workdir/archive/out/in05" --include "*.XML" --fast-list --checksum --log-level $loglevel --log-file="$logfile"
 
     # outgoing IN05 files to Harman SFTP, exit on error
     if ([datetime]::Now.Hour -ge 19) {
         Write-LogMessage "Publishing IN05 files to Harman SFTP."
-        rclone copy "$gd_workdir/out/in05/send" "harmansftp:in_in05" --include "*.XML" --log-level NOTICE --log-file="$logfile"
+        rclone copy "$gd_workdir/out/in05/send" "harmansftp:in_in05" --include "*.XML" --log-level $loglevel --log-file="$logfile"
         if ($LASTEXITCODE -ne 0) { exit 1 }
-        rclone move "$gd_workdir/out/in05/send" "harmansftp:in_in05/archive" --include "*.XML" --log-level NOTICE --log-file="$logfile"
+        rclone move "$gd_workdir/out/in05/send" "harmansftp:in_in05/archive" --drive-use-trash=false --include "*.XML" --log-level $loglevel --log-file="$logfile"
         if ($LASTEXITCODE -ne 0) { exit 1 }
     }
 
     # outgoing DESADV files to Google Drive archive and Harman SFTP, exit on error
-    rclone move "$workdir/harman/out" "$gd_workdir/out/desadvd96a" --include "*.DESADVD96A" --fast-list --checksum --log-level NOTICE --log-file="$logfile"
-    rclone move "$workdir/harman/out" "$gd_workdir/out/desadvd99a" --include "*.DESADVD99A" --fast-list --checksum --log-level NOTICE --log-file="$logfile"
-    rclone copy "$gd_workdir/out/desadvd96a" "$gd_workdir/archive/out/desadvd96a" --include "*.DESADVD96A" --fast-list --checksum --log-level NOTICE --log-file="$logfile"
-    rclone copy "$gd_workdir/out/desadvd99a" "$gd_workdir/archive/out/desadvd99a" --include "*.DESADVD99A" --fast-list --checksum --log-level NOTICE --log-file="$logfile"
+    rclone move "$workdir/harman/out" "$gd_workdir/out/desadvd96a" --include "*.DESADVD96A" --fast-list --checksum --log-level $loglevel --log-file="$logfile"
+    rclone move "$workdir/harman/out" "$gd_workdir/out/desadvd99a" --include "*.DESADVD99A" --fast-list --checksum --log-level $loglevel --log-file="$logfile"
+    rclone copy "$gd_workdir/out/desadvd96a" "$gd_workdir/archive/out/desadvd96a" --include "*.DESADVD96A" --fast-list --checksum --log-level $loglevel --log-file="$logfile"
+    rclone copy "$gd_workdir/out/desadvd99a" "$gd_workdir/archive/out/desadvd99a" --include "*.DESADVD99A" --fast-list --checksum --log-level $loglevel --log-file="$logfile"
     
     # outgoing DESADV files to Harman SFTP, exit on error
     if ([datetime]::Now.Hour -ge 19) {
         Write-LogMessage "Publishing DESADV files to Harman SFTP."
-        rclone copy "$gd_workdir/out/desadvd96a" "harmansftp:in_desadvd96a" --include "*.DESADVD96A" --log-level NOTICE --log-file="$logfile"
+        rclone copy "$gd_workdir/out/desadvd96a" "harmansftp:in_desadvd96a" --include "*.DESADVD96A" --log-level $loglevel --log-file="$logfile"
         if ($LASTEXITCODE -ne 0) { exit 1 }
-        rclone copy "$gd_workdir/out/desadvd99a" "harmansftp:in_desadvd99a" --include "*.DESADVD99A" --log-level NOTICE --log-file="$logfile"
+        rclone copy "$gd_workdir/out/desadvd99a" "harmansftp:in_desadvd99a" --include "*.DESADVD99A" --log-level $loglevel --log-file="$logfile"
         if ($LASTEXITCODE -ne 0) { exit 1 }
-        rclone move "$gd_workdir/out/desadvd96a" "harmansftp:in_desadvd96a/archive" --include "*.DESADVD96A" --log-level NOTICE --log-file="$logfile"
+        rclone move "$gd_workdir/out/desadvd96a" "harmansftp:in_desadvd96a/archive" --drive-use-trash=false --include "*.DESADVD96A" --log-level $loglevel --log-file="$logfile"
         if ($LASTEXITCODE -ne 0) { exit 1 }
-        rclone move "$gd_workdir/out/desadvd99a" "harmansftp:in_desadvd99a/archive" --include "*.DESADVD99A" --log-level NOTICE --log-file="$logfile"
+        rclone move "$gd_workdir/out/desadvd99a" "harmansftp:in_desadvd99a/archive" --drive-use-trash=false --include "*.DESADVD99A" --log-level $loglevel --log-file="$logfile"
         if ($LASTEXITCODE -ne 0) { exit 1 }
     }
 }
@@ -86,13 +87,13 @@ function Publish-OutgoingFiles {
 function Publish-OtherFiles {
     Write-LogMessage "Publish other files to Google Drive."
     # Copy digital files to Google Drive
-    rclone copy "$workdir/digitals" "$gd_digitals" --fast-list --checksum --transfers 16 --checkers 16 --log-level NOTICE --log-file="$logfile" --max-age 7d
-    rclone move "$workdir/open_orders" "$gd_open_orders" --delete-empty-src-dirs --log-level NOTICE --log-file="$logfile"
+    rclone copy "$workdir/digitals" "$gd_digitals" --fast-list --checksum --transfers 16 --checkers 16 --log-level $loglevel --log-file="$logfile" --max-age 7d
+    rclone move "$workdir/open_orders" "$gd_open_orders" --delete-empty-src-dirs --log-level $loglevel --log-file="$logfile"
 
     # Copy work files to Google Drive, processed, order and log files
-    rclone copy "$workdir/harman/in" "$gd_workdir/archive/in/in04" --fast-list --checksum --transfers 16 --checkers 16 --include "*.XML" --log-level NOTICE --log-file="$logfile"
-    rclone copy "$workdir/harman/in" "$gd_workdir/archive/in/insdes" --fast-list --checksum --transfers 16 --checkers 16 --log-level NOTICE --log-file="$logfile" --max-age 7d
-    rclone copy "$workdir/logs" "$gd_workdir/logs" --fast-list --checksum --transfers 16 --checkers 16 --log-level NOTICE --log-file="$logfile" --max-age 7d
+    rclone copy "$workdir/harman/in" "$gd_workdir/archive/in/in04" --fast-list --checksum --transfers 16 --checkers 16 --include "*.XML" --log-level $loglevel --log-file="$logfile"
+    rclone copy "$workdir/harman/in" "$gd_workdir/archive/in/insdes" --fast-list --checksum --transfers 16 --checkers 16 --log-level $loglevel --log-file="$logfile" --max-age 7d
+    rclone copy "$workdir/logs" "$gd_workdir/logs" --fast-list --checksum --transfers 16 --checkers 16 --log-level $loglevel --log-file="$logfile" --max-age 7d
 }
 
 function Invoke-Cleanup {
@@ -104,17 +105,23 @@ function Invoke-Cleanup {
 
 $workdir = "C:\Users\Administrator\projects-data\external_order"
 $logfile = Join-Path $workdir "logs\external_order.log"
+$loglevel = "INFO"
 $gd_prepress = "gprepress:Drukproeven/Drukproeven_$(Get-Date -Format yyyy)"
 $gd_digitals = "$gd_prepress/Harman-JBL"
 $gd_open_orders = "$gd_prepress/000 - Visuals/open_orders"
 $gd_workdir = "gautomation:Harman"
-
 
 Write-Host "logfile: $logfile"
 Write-Host "workdir: $workdir"
 Write-Host "gd_digitals: $gd_digitals"
 Write-Host "gd_open_orders: $gd_open_orders"
 Write-Host "gd_workdir: $gd_workdir"
+
+$now = [datetime]::Now
+if ($now.Hour -eq 0 -and $now.Minute -lt 10) {
+    $newname = $logfile + "." + $now.ToString("yyyy-MM-dd")
+    rename-item -Path $logfile -NewName $newname -ErrorAction SilentlyContinue
+}
 
 "" | Add-Content -Path $logfile
 Write-LogMessage "--- Start of script ---"
