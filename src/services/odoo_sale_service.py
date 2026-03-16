@@ -349,7 +349,7 @@ class OdooSaleService:
                     "client_order_ref": order.description,
                     "pricelist_id": order.pricelist_id,
                     "order_line": order_lines,
-                    "state": "draft",
+                    "state": "sent",
                     "commitment_date": order.ship_at,
                     "carrier_id": self._search_carrier_id(order),
                     "x_remote_delivery_instructions": order.delivery_instructions or None,
