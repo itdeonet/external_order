@@ -526,7 +526,7 @@ Located in [src/config.py](src/config.py)
 - `sale_company_name: str` - "Deonet Production B.V."
 - `ssl_verify: bool` - SSL verification flag (env: SSL_VERIFY, default: true)
 - `templates_dir: Path` - Template location (src/templates)
-- `work_dir: Path` - Base data directory (env: WORK_DIR, default: ~/projects_data/external_order)
+- `work_dir: Path` - Base data directory (env: WORK_DIR, default: ~/projects-data/external_order)
 
 **Email Settings:**
 - `smtp_host: str` - SMTP relay (env: SMTP_HOST, default: "smtp-relay.gmail.com")

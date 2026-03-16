@@ -453,7 +453,7 @@ cp .env.example .env
 @dataclass(frozen=True, slots=True)
 class Config:
     # Directories
-    work_dir: Path = Path.home() / "projects_data" / "external_order"
+    work_dir: Path = Path.home() / "projects-data" / "external_order"
     templates_dir: Path                          # Auto-set to src/templates
     harman_input_dir: Path                       # Auto-set from work_dir
     harman_output_dir: Path
@@ -484,7 +484,7 @@ class Config:
 Create a `.env` file with the following variables:
 
 ```bash
-# Working Directory (optional, defaults to ~/projects_data/external_order)
+# Working Directory (optional, defaults to ~/projects-data/external_order)
 WORK_DIR=/path/to/work/directory
 
 # SSL Verification (optional, defaults to true for production)
@@ -512,7 +512,7 @@ SPECTRUM_API_KEY=your_spectrum_token_here
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `WORK_DIR` | No | `~/projects_data/external_order` | Base directory for working files, logs, and order tracking |
+| `WORK_DIR` | No | `~/projects-data/external_order` | Base directory for working files, logs, and order tracking |
 | `SSL_VERIFY` | No | `true` | Enable/disable SSL certificate verification for HTTPS requests |
 | `SMTP_HOST` | No | `smtp-relay.gmail.com` | SMTP server host for email notifications |
 | `SMTP_PORT` | No | `587` | SMTP server port (TLS) |

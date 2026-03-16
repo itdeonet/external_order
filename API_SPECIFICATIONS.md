@@ -471,7 +471,7 @@ Structure:
 
 ```bash
 # Application
-WORK_DIR="/path/to/data"              # Default: ~/projects_data/external_order
+WORK_DIR="/path/to/data"              # Default: ~/projects-data/external_order
 SSL_VERIFY="true"                     # SSL certificate verification
 
 # SMTP Email
