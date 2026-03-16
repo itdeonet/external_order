@@ -70,8 +70,9 @@ class TestNewSaleUseCaseIntegration:
         sample_order,
     ):
         """Test getting artwork from Spectrum service."""
-        # Set the sale_id on the sample order
+        # Set the sale_id and sale_name on the sample order
         sample_order.set_sale_id(100)
+        sample_order.set_sale_name("SO-12345")
 
         # Create a mock requests.Session
         mock_session = Mock(spec=requests.Session)
@@ -125,8 +126,8 @@ class TestNewSaleUseCaseIntegration:
 
         # Verify artwork was downloaded
         assert len(file_paths) == 2  # design + placement
-        assert (temp_dir / "S00100_design.pdf").exists()
-        assert (temp_dir / "S00100_RECIPE123_placement.pdf").exists()
+        assert (temp_dir / "SO-12345_design.pdf").exists()
+        assert (temp_dir / "SO-12345_RECIPE123_placement.pdf").exists()
 
     def test_new_sale_handles_missing_sale(
         self,

@@ -210,7 +210,7 @@ class TestCreateSalesNewSaleCreation:
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.search_sale.return_value = {}
-        use_case.sale_service.create_sale.return_value = 999
+        use_case.sale_service.create_sale.return_value = (999, "SO-999")
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -234,7 +234,7 @@ class TestCreateSalesNewSaleCreation:
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.search_sale.return_value = {}
-        use_case.sale_service.create_sale.return_value = 999
+        use_case.sale_service.create_sale.return_value = (999, "SO-ART")
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -256,7 +256,7 @@ class TestCreateSalesNewSaleCreation:
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.search_sale.return_value = {}
-        use_case.sale_service.create_sale.return_value = 999
+        use_case.sale_service.create_sale.return_value = (999, "SO-CONF")
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -267,7 +267,7 @@ class TestCreateSalesNewSaleCreation:
         assert calls[2] == call(order, OrderStatus.CONFIRMED)
 
     def test_create_sales_confirms_sale_after_artwork(self, use_case, mocker):
-        """Test that sale is confirmed after getting artwork."""
+        """Test that sale is created with proper ID and name unpacking."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
         artwork_service = MagicMock(spec=IArtworkService)
@@ -278,13 +278,15 @@ class TestCreateSalesNewSaleCreation:
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.search_sale.return_value = {}
-        use_case.sale_service.create_sale.return_value = 999
+        use_case.sale_service.create_sale.return_value = (999, "SO-999")
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.execute()
 
-        use_case.sale_service.confirm_sale.assert_called_once_with(order)
+        use_case.sale_service.create_sale.assert_called_once_with(order)
+        assert order.sale_id == 999
+        assert order.sale_name == "SO-999"
 
 
 class TestCreateSalesExistingSaleUpdate:
@@ -394,21 +396,6 @@ class TestCreateSalesExceptionHandling:
         use_case.order_services.items.return_value = [("test_service", order_service)]
         use_case.sale_service.search_sale.return_value = {}
         use_case.sale_service.create_sale.side_effect = Exception("Sale creation failed")
-
-        mocker.patch("src.app.new_sale_use_case.logger")
-
-        use_case.execute()
-
-    def test_create_sales_exception_during_confirm_sale(self, use_case, mocker):
-        """Test exception handling when confirm_sale fails."""
-        order = create_sample_order()
-        order_service = MagicMock(spec=IOrderService)
-        order_service.read_orders.return_value = iter([order])
-        order_service.get_artwork_service.return_value = None
-
-        use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.search_sale.return_value = {}
-        use_case.sale_service.confirm_sale.side_effect = Exception("Confirm failed")
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -752,7 +739,7 @@ class TestSaleUseCaseIntegration:
 
             use_case.order_services.items.return_value = [("integration_service", order_service)]
             use_case.sale_service.search_sale.return_value = {}
-            use_case.sale_service.create_sale.return_value = 12345
+            use_case.sale_service.create_sale.return_value = (12345, "SO-FULL")
 
             mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -760,7 +747,8 @@ class TestSaleUseCaseIntegration:
 
             # Verify complete flow
             use_case.sale_service.create_sale.assert_called_once_with(order)
-            use_case.sale_service.confirm_sale.assert_called_once_with(order)
+            assert order.sale_id == 12345
+            assert order.sale_name == "SO-FULL"
             assert order_service.persist_order.call_count == 4
 
             # Verify placement file was copied
@@ -784,7 +772,6 @@ class TestSaleUseCaseIntegration:
 
         # Verify flow
         use_case.sale_service.update_contact.assert_called_once_with(order)
-        use_case.sale_service.confirm_sale.assert_called_once_with(order)
         use_case.sale_service.create_sale.assert_not_called()
 
     def test_full_workflow_multiple_orders_different_statuses(self, use_case, mocker):
