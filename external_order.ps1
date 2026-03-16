@@ -119,7 +119,7 @@ Write-Host "gd_workdir: $gd_workdir"
 
 $now = [datetime]::Now
 if ($now.Hour -eq 0 -and $now.Minute -lt 10) {
-    $newname = $logfile + "." + $now.ToString("yyyy-MM-dd")
+    $newname = $logfile + "." + $now.AddDays(-1).ToString("yyyy-MM-dd")
     rename-item -Path $logfile -NewName $newname -ErrorAction SilentlyContinue
 }
 
