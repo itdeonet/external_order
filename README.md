@@ -248,13 +248,18 @@ class SpectrumArtworkService:
   """Get artwork from Spectrum API."""
   session: requests.Session         # HTTP client
   api_key: InitVar[str]             # API authentication key
+  session: requests.Session         # HTTP client
+  api_key: InitVar[str]             # API authentication key
   base_url: str                     # Spectrum API base URL
   digitals_dir: Path                # Local directory to store downloads
   client_handle: str = field(init=False)  # Set during __post_init__
   order_data: dict = field(init=False)    # Cached from API
   
   def __post_init__(self, api_key: str) -> None:
+  def __post_init__(self, api_key: str) -> None:
     """Initialize API session and fetch order metadata."""
+    # Configure session headers with authorization token
+    self.session.headers.update({"SPECTRUM_API_TOKEN": api_key})
     # Configure session headers with authorization token
     self.session.headers.update({"SPECTRUM_API_TOKEN": api_key})
     response = self.session.get(f"{self.base_url}/order_data")
@@ -484,7 +489,7 @@ class Config:
     
     # Spectrum settings
     spectrum_base_url: str                       # from env SPECTRUM_BASE_URL
-    spectrum_jbl_api_key: str                        # from env SPECTRUM_JBL_API_KEY
+    spectrum_harman_api_key: str                        # from env SPECTRUM_HARMAN_API_KEY
 ```
 
 ### Environment Variables
@@ -513,7 +518,7 @@ ODOO_RPC_PASSWORD=your_odoo_token_here
 
 # Spectrum Artwork Service (required for artwork retrieval)
 SPECTRUM_BASE_URL=https://staging.spectrumcustomizer.com/
-SPECTRUM_JBL_API_KEY=your_spectrum_token_here
+SPECTRUM_HARMAN_API_KEY=your_spectrum_token_here
 ```
 
 **Environment Variable Reference:**
@@ -532,7 +537,7 @@ SPECTRUM_JBL_API_KEY=your_spectrum_token_here
 | `ODOO_RPC_USER_ID` | Yes | `0` | Numeric user ID for Odoo JSON-RPC API authentication |
 | `ODOO_RPC_PASSWORD` | Yes | Empty | Odoo user password for JSON-RPC API authentication |
 | `SPECTRUM_BASE_URL` | Yes | Empty | Base URL for Spectrum artwork API |
-| `SPECTRUM_JBL_API_KEY` | Yes | Empty | API key for Spectrum authentication |
+| `SPECTRUM_HARMAN_API_KEY` | Yes | Empty | API key for Spectrum authentication |
 
 ### Using Configuration
 
@@ -973,16 +978,21 @@ class SpectrumArtworkService:
     
     session: requests.Session                  # HTTP client
     api_key: InitVar[str]                      # API authentication key
+    api_key: InitVar[str]                      # API authentication key
     base_url: str                              # API base URL
     digitals_dir: Path                         # Local storage
     client_handle: str = field(init=False)     # Set in __post_init__
     order_data: dict = field(init=False)       # Cached from API
     
     def __post_init__(self, api_key: str) -> None:
+    def __post_init__(self, api_key: str) -> None:
         """Initialize authorization headers and API session."""
         # Configure session headers with authentication token
         self.session.headers.update({"SPECTRUM_API_TOKEN": api_key})
+        # Configure session headers with authentication token
+        self.session.headers.update({"SPECTRUM_API_TOKEN": api_key})
         # Extract client_handle from order response
+        # Store order data for subsequent requests
         # Store order data for subsequent requests
         object.__setattr__(self, "client_handle", extracted_value)
         object.__setattr__(self, "order_data", response_data)
@@ -1372,7 +1382,7 @@ uv run python -m src.main                  # Run application
 
 # Configuration
 export ODOO_BASE_URL="https://..."
-export SPECTRUM_JBL_API_KEY="..."
+export SPECTRUM_HARMAN_API_KEY="..."
 uv run python -m src.main
 
 # Code quality

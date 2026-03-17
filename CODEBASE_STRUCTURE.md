@@ -562,7 +562,7 @@ Located in [src/config.py](src/config.py)
 
 **Spectrum Settings:**
 - `spectrum_base_url: str` - API base URL (env: SPECTRUM_BASE_URL)
-- `spectrum_jbl_api_key: str` - API key (env: SPECTRUM_JBL_API_KEY)
+- `spectrum_harman_api_key: str` - API key (env: SPECTRUM_HARMAN_API_KEY)
 
 **Key behavior:**
 - All directories created in `__post_init__()` via `mkdir(parents=True, exist_ok=True)`

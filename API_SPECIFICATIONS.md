@@ -237,7 +237,7 @@ Returns: list of dicts with id, name
 ### Base Configuration
 ```
 Base URL: {SPECTRUM_BASE_URL}
-Auth Header: SPECTRUM_API_TOKEN: {SPECTRUM_JBL_API_KEY}
+Auth Header: SPECTRUM_API_TOKEN: {SPECTRUM_HARMAN_API_KEY}
 Timeout: (5, 30) seconds
 ```
 
@@ -482,7 +482,7 @@ ODOO_RPC_PASSWORD="secret_password"         # RPC password
 
 # Spectrum
 SPECTRUM_BASE_URL="https://api.spectrum.example.com/"  # API base URL
-SPECTRUM_JBL_API_KEY="api_key_token"                       # API token
+SPECTRUM_HARMAN_API_KEY="api_key_token"                       # API token
 ```
 
 ---

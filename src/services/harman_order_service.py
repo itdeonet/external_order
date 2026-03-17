@@ -43,6 +43,9 @@ class HarmanOrderService:
     Configuration-driven; integrates with `RenderService` and `ErrorStore`.
     """
 
+    artwork_provider_name: str = field(
+        default_factory=lambda: get_config().harman_artwork_provider_name
+    )
     administration_id: int = field(default_factory=lambda: get_config().harman_administration_id)
     customer_id: int = field(default_factory=lambda: get_config().harman_customer_id)
     pricelist_id: int = field(default_factory=lambda: get_config().harman_pricelist_id)
@@ -217,7 +220,7 @@ class HarmanOrderService:
         """Return the matching artwork service for `order`, or `None` if none."""
         logger.info("Get artwork service for order: %s", order.remote_order_id)
         if re.match(r"(HA|JB)-EM-(ST-)?\d+", order.remote_order_id):
-            return artwork_services.get("Spectrum")
+            return artwork_services.get(self.artwork_provider_name)
         return None
 
     def should_update_sale(self, order: Order) -> bool:

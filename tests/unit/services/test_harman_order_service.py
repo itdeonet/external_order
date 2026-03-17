@@ -9,6 +9,7 @@ import pytest
 from pydifact import Segment  # type: ignore
 
 from src.app.errors import ErrorStore
+from src.config import get_config
 from src.domain import IArtworkService, Order, OrderStatus
 from src.services.harman_order_service import HarmanOrderService
 from src.services.render_service import RenderService
@@ -437,7 +438,7 @@ class TestGetArtworkService:
         result = service.get_artwork_service(mock_order, mock_registry)
 
         assert result is mock_spectrum
-        mock_registry.get.assert_called_once_with("Spectrum")
+        mock_registry.get.assert_called_once_with(get_config().harman_artwork_provider_name)
 
     def test_get_artwork_service_jb_format(self, service, mock_order, mock_registry, mocker):
         """Test getting artwork service for JB format order ID."""
@@ -448,7 +449,7 @@ class TestGetArtworkService:
         result = service.get_artwork_service(mock_order, mock_registry)
 
         assert result is mock_spectrum
-        mock_registry.get.assert_called_once_with("Spectrum")
+        mock_registry.get.assert_called_once_with(get_config().harman_artwork_provider_name)
 
     def test_get_artwork_service_ha_format_no_st(self, service, mock_order, mock_registry, mocker):
         """Test getting artwork service for HA format without ST."""
