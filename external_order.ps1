@@ -52,31 +52,41 @@ function Publish-OutgoingFiles {
     Write-LogMessage "Publish outgoing files to Harman SFTP and Google Drive."
     
     # outgoing IN05 files to Google Drive
+    Write-LogMessage "Move local IN05 files to Google Drive archive."
     rclone move "$workdir/harman/out" "$gd_workdir/archive/out/in05" --include "*.XML" --fast-list --checksum --log-level $loglevel --log-file="$logfile"
+    Write-LogMessage "Copy IN05 files for Harman to Google Drive archive."
     rclone copy "$gd_workdir/out/in05/send" "$gd_workdir/archive/out/in05" --include "*.XML" --fast-list --checksum --log-level $loglevel --log-file="$logfile"
 
     # outgoing IN05 files to Harman SFTP, exit on error
     if ([datetime]::Now.Hour -ge 19) {
         Write-LogMessage "Publishing IN05 files to Harman SFTP."
+        Write-LogMessage "Copy IN05 files for Harman to Harman SFTP."
         rclone copy "$gd_workdir/out/in05/send" "harmansftp:in_in05" --include "*.XML" --log-level $loglevel --log-file="$logfile"
         if ($LASTEXITCODE -ne 0) { exit 1 }
+        Write-LogMessage "Move IN05 files for Harman to Harman SFTP archive."
         rclone move "$gd_workdir/out/in05/send" "harmansftp:in_in05/archive" --drive-use-trash=false --include "*.XML" --log-level $loglevel --log-file="$logfile"
         if ($LASTEXITCODE -ne 0) { exit 1 }
     }
 
     # outgoing DESADV files to Google Drive archive and Harman SFTP, exit on error
+    Write-LogMessage "Move local DESADV files for Harman to Google Drive."
     rclone move "$workdir/harman/out" "$gd_workdir/out/desadvd96a" --include "*.DESADVD96A" --fast-list --checksum --log-level $loglevel --log-file="$logfile"
     rclone move "$workdir/harman/out" "$gd_workdir/out/desadvd99a" --include "*.DESADVD99A" --fast-list --checksum --log-level $loglevel --log-file="$logfile"
+    
+    Write-LogMessage "Copy DESADV files for Harman to Google Drive archive."
     rclone copy "$gd_workdir/out/desadvd96a" "$gd_workdir/archive/out/desadvd96a" --include "*.DESADVD96A" --fast-list --checksum --log-level $loglevel --log-file="$logfile"
     rclone copy "$gd_workdir/out/desadvd99a" "$gd_workdir/archive/out/desadvd99a" --include "*.DESADVD99A" --fast-list --checksum --log-level $loglevel --log-file="$logfile"
     
     # outgoing DESADV files to Harman SFTP, exit on error
     if ([datetime]::Now.Hour -ge 19) {
         Write-LogMessage "Publishing DESADV files to Harman SFTP."
+        Write-LogMessage "Copy DESADV files for Harman to Harman SFTP."
         rclone copy "$gd_workdir/out/desadvd96a" "harmansftp:in_desadvd96a" --include "*.DESADVD96A" --log-level $loglevel --log-file="$logfile"
         if ($LASTEXITCODE -ne 0) { exit 1 }
         rclone copy "$gd_workdir/out/desadvd99a" "harmansftp:in_desadvd99a" --include "*.DESADVD99A" --log-level $loglevel --log-file="$logfile"
         if ($LASTEXITCODE -ne 0) { exit 1 }
+
+        Write-LogMessage "Move DESADV files for Harman to Harman SFTP archive."
         rclone move "$gd_workdir/out/desadvd96a" "harmansftp:in_desadvd96a/archive" --drive-use-trash=false --include "*.DESADVD96A" --log-level $loglevel --log-file="$logfile"
         if ($LASTEXITCODE -ne 0) { exit 1 }
         rclone move "$gd_workdir/out/desadvd99a" "harmansftp:in_desadvd99a/archive" --drive-use-trash=false --include "*.DESADVD99A" --log-level $loglevel --log-file="$logfile"
@@ -87,18 +97,24 @@ function Publish-OutgoingFiles {
 function Publish-OtherFiles {
     Write-LogMessage "Publish other files to Google Drive."
     # Copy digital files to Google Drive
+    Write-LogMessage "Copy local digital files to Google Drive prepress."
     rclone copy "$workdir/digitals" "$gd_digitals" --fast-list --checksum --transfers 16 --checkers 16 --log-level $loglevel --log-file="$logfile" --max-age 7d
+    Write-LogMessage "Move local open order files to Google Drive open orders."
     rclone move "$workdir/open_orders" "$gd_open_orders" --delete-empty-src-dirs --log-level $loglevel --log-file="$logfile"
 
     # Copy work files to Google Drive, processed, order and log files
+    Write-LogMessage "Copy local IN04 files to Google Drive archive."
     rclone copy "$workdir/harman/in" "$gd_workdir/archive/in/in04" --fast-list --checksum --transfers 16 --checkers 16 --include "*.XML" --log-level $loglevel --log-file="$logfile"
+    Write-LogMessage "Copy local INSDES and JSON files to Google Drive archive."
     rclone copy "$workdir/harman/in" "$gd_workdir/archive/in/insdes" --fast-list --checksum --transfers 16 --checkers 16 --log-level $loglevel --log-file="$logfile" --max-age 7d
+    Write-LogMessage "Copy local log files to Google Drive."
     rclone copy "$workdir/logs" "$gd_workdir/logs" --fast-list --checksum --transfers 16 --checkers 16 --log-level $loglevel --log-file="$logfile" --max-age 7d
 }
 
 function Invoke-Cleanup {
     $now = [datetime]::Now
     if ($now.Hour -eq 23 -and $now.Minute -lt 20) {
+        Write-LogMessage "Performing cleanup Automation shared drive."
         rclone cleanup gautomation: --log-file="$logfile"
     }
 }
@@ -121,6 +137,7 @@ $now = [datetime]::Now
 if ($now.Hour -eq 0 -and $now.Minute -lt 10) {
     $newname = $logfile + "." + $now.AddDays(-1).ToString("yyyy-MM-dd")
     rename-item -Path $logfile -NewName $newname -ErrorAction SilentlyContinue
+    new-item -Path $logfile -ItemType File -Force | Out-Null
 }
 
 "" | Add-Content -Path $logfile
