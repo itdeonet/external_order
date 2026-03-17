@@ -40,6 +40,9 @@ class CamelbakOrderService:
 
     session: requests.Session
     base_url: str = field(default_factory=lambda: get_config().spectrum_base_url)
+    artwork_provider_name: str = field(
+        default_factory=lambda: get_config().camelbak_artwork_provider_name
+    )
     administration_id: int = field(default_factory=lambda: get_config().camelbak_administration_id)
     customer_id: int = field(default_factory=lambda: get_config().camelbak_customer_id)
     pricelist_id: int = field(default_factory=lambda: get_config().camelbak_pricelist_id)
@@ -49,8 +52,6 @@ class CamelbakOrderService:
         default_factory=lambda: get_config().camelbak_workdays_for_delivery
     )
     input_dir: Path = field(default_factory=lambda: Path(get_config().camelbak_input_dir))
-    # output_dir: Path = field(default_factory=lambda: Path(get_config().camelbak_output_dir))
-    # renderer: RenderService = field(default_factory=lambda: RenderService())
 
     def read_orders(self) -> Generator[Order, None, None]:
         """Search the API for new orders and yield Order instances.
@@ -95,7 +96,7 @@ class CamelbakOrderService:
             order_provider=self.order_provider,
             pricelist_id=self.pricelist_id,
             remote_order_id=data.get("purchaseOrderNumber", ""),
-            shipment_type="Camelbak%",
+            shipment_type=self.shipment_type,
             description=(f"{self.order_provider} order {data.get('purchaseOrderNumber', '')}"),
             delivery_instructions="",
             ship_to=ShipTo(
@@ -130,7 +131,7 @@ class CamelbakOrderService:
     ) -> IArtworkService | None:
         """Return the matching artwork service for `order`, or `None` if none."""
         logger.info("Get artwork service for order: %s", order.remote_order_id)
-        return artwork_services.get("Spectrum")
+        return artwork_services.get(self.artwork_provider_name)
 
     def should_update_sale(self, order: Order) -> bool:
         """Determine if an existing sale should be updated based on remote_order_id."""

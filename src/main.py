@@ -25,6 +25,7 @@ from src.domain import (
     IStockService,
     IUseCase,
 )
+from src.services.camelbak_order_service import CamelbakOrderService
 from src.services.harman_order_service import HarmanOrderService
 from src.services.harman_stock_service import HarmanStockService
 from src.services.odoo_sale_service import OdooSaleService
@@ -61,14 +62,28 @@ def main() -> None:
     use_cases: IRegistry[IUseCase] = Registry[IUseCase]()  # type: ignore[type-arg]
 
     with (
-        requests.Session() as sale_session,
-        requests.Session() as spectrum_session,
+        requests.Session() as odoo_session,
+        requests.Session() as spectrum_harman_session,
+        requests.Session() as spectrum_camelbak_session,
     ):
         artwork_services.register(
-            "Spectrum",
-            SpectrumArtworkService(session=spectrum_session, api_key=config.spectrum_jbl_api_key),
+            config.harman_artwork_provider_name,
+            SpectrumArtworkService(
+                session=spectrum_harman_session, api_key=config.spectrum_harman_api_key
+            ),
         )
-        sale_service: ISaleService = OdooSaleService(session=sale_session)
+        artwork_services.register(
+            config.camelbak_artwork_provider_name,
+            SpectrumArtworkService(
+                session=spectrum_camelbak_session, api_key=config.spectrum_camelbak_api_key
+            ),
+        )
+
+        order_services.register(
+            config.camelbak_order_provider, CamelbakOrderService(session=spectrum_camelbak_session)
+        )
+
+        sale_service: ISaleService = OdooSaleService(session=odoo_session)
         # use cases
         use_cases.register(
             "NewSale",

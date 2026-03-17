@@ -45,15 +45,17 @@ class Config:
     email_stock_template: Path = Path(__file__).parent / "templates" / "stock_email.html"
 
     # Camelbak settings
+    camelbak_artwork_provider_name: str = "Spectrum CAMELBAK"
     camelbak_input_dir: Path = field(init=False)
     camelbak_administration_id: int = 1
-    camelbak_customer_id: int = -1
+    camelbak_customer_id: int = 9999999
     camelbak_pricelist_id: int = 2
     camelbak_order_provider: str = "CAMELBAK"
     camelbak_shipment_type: str = "camelbak%"
     camelbak_workdays_for_delivery: int = 3
 
     # Harman settings
+    harman_artwork_provider_name: str = "Spectrum JBL"
     harman_input_dir: Path = field(init=False)
     harman_output_dir: Path = field(init=False)
     harman_administration_id: int = 2
@@ -80,7 +82,8 @@ class Config:
 
     # Spectrum settings
     spectrum_base_url: str = os.getenv("SPECTRUM_BASE_URL", "")
-    spectrum_jbl_api_key: str = os.getenv("SPECTRUM_JBL_API_KEY", "")
+    spectrum_harman_api_key: str = os.getenv("SPECTRUM_HARMAN_API_KEY", "")
+    spectrum_camelbak_api_key: str = os.getenv("SPECTRUM_CAMELBAK_API_KEY", "")
 
     def __post_init__(self) -> None:
         """Set derived paths from `work_dir` and create required directories."""
