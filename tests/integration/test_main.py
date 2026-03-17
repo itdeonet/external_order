@@ -48,7 +48,7 @@ class TestMainApplicationSetup:
             mock_config.odoo_password = "test"
             mock_config.odoo_database = "test_db"
             mock_config.spectrum_base_url = "https://spectrum.example.com"
-            mock_config.spectrum_api_key = "test_key"
+            mock_config.spectrum_jbl_api_key = "test_key"
 
             mock_get_config.return_value = mock_config
 
@@ -85,7 +85,7 @@ class TestMainApplicationSetup:
             mock_config.odoo_password = "test"
             mock_config.odoo_database = "test_db"
             mock_config.spectrum_base_url = "https://spectrum.example.com"
-            mock_config.spectrum_api_key = "test_key"
+            mock_config.spectrum_jbl_api_key = "test_key"
             mock_config.log_file = tmp_path / "external_order.log"
             mock_config.log_file_level = "DEBUG"
 

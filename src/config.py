@@ -80,7 +80,7 @@ class Config:
 
     # Spectrum settings
     spectrum_base_url: str = os.getenv("SPECTRUM_BASE_URL", "")
-    spectrum_api_key: str = os.getenv("SPECTRUM_API_KEY", "")
+    spectrum_jbl_api_key: str = os.getenv("SPECTRUM_JBL_API_KEY", "")
 
     def __post_init__(self) -> None:
         """Set derived paths from `work_dir` and create required directories."""

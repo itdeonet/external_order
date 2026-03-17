@@ -64,7 +64,10 @@ def main() -> None:
         requests.Session() as sale_session,
         requests.Session() as spectrum_session,
     ):
-        artwork_services.register("Spectrum", SpectrumArtworkService(session=spectrum_session))
+        artwork_services.register(
+            "Spectrum",
+            SpectrumArtworkService(session=spectrum_session, api_key=config.spectrum_jbl_api_key),
+        )
         sale_service: ISaleService = OdooSaleService(session=sale_session)
         # use cases
         use_cases.register(

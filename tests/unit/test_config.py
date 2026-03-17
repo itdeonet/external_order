@@ -67,7 +67,7 @@ class TestConfigInitialization:
         config = Config()
 
         assert hasattr(config, "spectrum_base_url")
-        assert hasattr(config, "spectrum_api_key")
+        assert hasattr(config, "spectrum_jbl_api_key")
 
     def test_config_is_frozen_dataclass(self):
         """Test that Config is a frozen dataclass."""

@@ -562,7 +562,7 @@ Located in [src/config.py](src/config.py)
 
 **Spectrum Settings:**
 - `spectrum_base_url: str` - API base URL (env: SPECTRUM_BASE_URL)
-- `spectrum_api_key: str` - API key (env: SPECTRUM_API_KEY)
+- `spectrum_jbl_api_key: str` - API key (env: SPECTRUM_JBL_API_KEY)
 
 **Key behavior:**
 - All directories created in `__post_init__()` via `mkdir(parents=True, exist_ok=True)`
@@ -593,7 +593,7 @@ def main() -> None:
 
     # 3. Create service instances and register use cases
     with requests.Session() as sale_session, requests.Session() as spectrum_session:
-        artwork_services.register("Spectrum", SpectrumArtworkService(session=spectrum_session))
+        artwork_services.register("Spectrum", SpectrumArtworkService(session=spectrum_session, api_key=config.spectrum_api_key))
         sale_service: ISaleService = OdooSaleService(session=sale_session)
         
         use_cases.register("NewSale", NewSaleUseCase(...))

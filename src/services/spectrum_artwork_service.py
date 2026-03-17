@@ -1,7 +1,7 @@
 """Spectrum artwork service for retrieving and managing digital assets from Spectrum API."""
 
 import io
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 from logging import getLogger
 from pathlib import Path
 from typing import Any
@@ -29,14 +29,15 @@ class SpectrumArtworkService:
     """
 
     session: requests.Session
+    api_key: InitVar[str]
     base_url: str = field(default_factory=lambda: get_config().spectrum_base_url)
     digitals_dir: Path = field(default_factory=lambda: Path(get_config().digitals_dir))
     client_handle: str = field(default="", init=False)
     order_data: dict[str, Any] = field(default_factory=dict, init=False)
 
-    def __post_init__(self) -> None:
+    def __post_init__(self, api_key: str) -> None:
         """post init to ensure the object is valid."""
-        self.session.headers.update({"SPECTRUM_API_TOKEN": get_config().spectrum_api_key})
+        self.session.headers.update({"SPECTRUM_API_TOKEN": api_key})
 
     def get_artwork(self, order: Order) -> list[Path]:
         """Retrieve and download artwork assets for an order.

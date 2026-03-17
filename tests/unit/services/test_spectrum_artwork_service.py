@@ -29,7 +29,10 @@ class TestSpectrumArtworkServiceInstantiation:
         digitals_dir = Path("/tmp/digitals")
 
         service = SpectrumArtworkService(
-            session=mock_client, base_url="https://spectrum.example.com", digitals_dir=digitals_dir
+            session=mock_client,
+            api_key="test-key",
+            base_url="https://spectrum.example.com",
+            digitals_dir=digitals_dir,
         )
 
         assert service.session is mock_client
@@ -39,7 +42,10 @@ class TestSpectrumArtworkServiceInstantiation:
         """Test that client is initialized as empty string."""
         mock_client = _create_mock_session()
         service = SpectrumArtworkService(
-            session=mock_client, base_url="https://spectrum.example.com", digitals_dir=Path("/tmp")
+            session=mock_client,
+            api_key="test-key",
+            base_url="https://spectrum.example.com",
+            digitals_dir=Path("/tmp"),
         )
 
         assert isinstance(service.client_handle, str)
@@ -48,7 +54,7 @@ class TestSpectrumArtworkServiceInstantiation:
     def test_instantiation_raises_without_session(self):
         """Test that session is required."""
         with pytest.raises(TypeError):
-            SpectrumArtworkService(base_url="https://spectrum.example.com")  # type: ignore
+            SpectrumArtworkService(api_key="test-key", base_url="https://spectrum.example.com")  # type: ignore
 
 
 class TestSpectrumArtworkServiceClientAttribute:
@@ -58,7 +64,10 @@ class TestSpectrumArtworkServiceClientAttribute:
         """Test that client starts as empty string."""
         mock_client = _create_mock_session()
         service = SpectrumArtworkService(
-            session=mock_client, base_url="https://spectrum.example.com", digitals_dir=Path("/tmp")
+            session=mock_client,
+            api_key="test-key",
+            base_url="https://spectrum.example.com",
+            digitals_dir=Path("/tmp"),
         )
 
         assert service.client_handle == ""
@@ -67,7 +76,10 @@ class TestSpectrumArtworkServiceClientAttribute:
         """Test that service is frozen and client cannot be modified directly."""
         mock_client = _create_mock_session()
         service = SpectrumArtworkService(
-            session=mock_client, base_url="https://spectrum.example.com", digitals_dir=Path("/tmp")
+            session=mock_client,
+            api_key="test-key",
+            base_url="https://spectrum.example.com",
+            digitals_dir=Path("/tmp"),
         )
 
         with pytest.raises(Exception):  # FrozenInstanceError  # noqa: B017
@@ -79,6 +91,7 @@ class TestSpectrumArtworkServiceClientAttribute:
         with pytest.raises(TypeError):
             SpectrumArtworkService(
                 session=mock_client,
+                api_key="test-key",
                 base_url="https://spectrum.example.com",
                 digitals_dir=Path("/tmp"),
                 client_handle="CLIENT123",  # type: ignore
@@ -97,7 +110,10 @@ class TestSpectrumArtworkServiceGetArtwork:
     def service(self, mock_client, tmp_path):
         """Provide a SpectrumArtworkService instance."""
         return SpectrumArtworkService(
-            session=mock_client, base_url="https://spectrum.example.com", digitals_dir=tmp_path
+            session=mock_client,
+            api_key="test-key",
+            base_url="https://spectrum.example.com",
+            digitals_dir=tmp_path,
         )
 
     @pytest.fixture
@@ -647,7 +663,10 @@ class TestSpectrumArtworkServiceGetPlacement:
     def service(self, mock_client, tmp_path):
         """Provide a SpectrumArtworkService instance."""
         return SpectrumArtworkService(
-            session=mock_client, base_url="https://spectrum.example.com", digitals_dir=tmp_path
+            session=mock_client,
+            api_key="test-key",
+            base_url="https://spectrum.example.com",
+            digitals_dir=tmp_path,
         )
 
     def test_download_placement_downloads_pdf(self, service, mock_client):
@@ -749,7 +768,10 @@ class TestSpectrumArtworkServiceGetDesigns:
     def service(self, mock_client, tmp_path):
         """Provide a SpectrumArtworkService instance."""
         return SpectrumArtworkService(
-            session=mock_client, base_url="https://spectrum.example.com", digitals_dir=tmp_path
+            session=mock_client,
+            api_key="test-key",
+            base_url="https://spectrum.example.com",
+            digitals_dir=tmp_path,
         )
 
     def test_download_designs_downloads_zip(self, service, mock_client):

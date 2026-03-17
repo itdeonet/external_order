@@ -117,6 +117,7 @@ class TestNewSaleUseCaseIntegration:
 
         artwork_service = SpectrumArtworkService(
             session=mock_session,
+            api_key="test-key",
             base_url="https://spectrum.example.com",
             digitals_dir=temp_dir,
         )
