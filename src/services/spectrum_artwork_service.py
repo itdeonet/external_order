@@ -154,6 +154,7 @@ class SpectrumArtworkService:
                 member.filename = f"{sale_name}_{member.filename}"
                 zip_file.extract(member, path=self.digitals_dir)
                 saved_as.append(self.digitals_dir / member.filename)
+                saved_as[-1].touch()  # update modified time to now
                 logger.debug(f"Extracted {member.filename} to {saved_as[-1]}")
 
         return saved_as
@@ -179,5 +180,6 @@ class SpectrumArtworkService:
         response.raise_for_status()
         save_as = self.digitals_dir / f"{sale_name}_{recipe_set_id}_placement.pdf"
         save_as.write_bytes(response.content)
+        save_as.touch()  # update modified time to now
         logger.debug(f"Saved placement PDF to {save_as}")
         return save_as
