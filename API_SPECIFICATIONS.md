@@ -285,7 +285,107 @@ Save as: {sale_name}_{recipe_set_id}_placement.pdf
 
 ---
 
-## 3. Harman EDIFACT Format
+## 3. Camelbak Order API (REST)
+
+### Base Configuration
+```
+Base URL: {SPECTRUM_BASE_URL}
+Auth Header: SPECTRUM_API_TOKEN: {SPECTRUM_API_KEY}
+Method: POST for order search
+Timeout: (5, 30) seconds
+```
+
+### API Endpoints
+
+#### 1. Search Orders
+```
+Method: POST
+Path: /api/orders/search/
+Authentication: Authorization header with api_key
+Request Body:
+{
+    "lastModificationStartDate": "YYYY-MM-DD",  # Today's date
+    "workflowStatuses": ["not-started"]         # Filter for new orders
+}
+Response: Array of order objects
+```
+
+#### 2. Order Data Structure
+```
+{
+    "purchaseOrderNumber": "ORDER-12345",
+    "userId": "USER123",
+    "emailAddress": "user@example.com",
+    "phoneNumber": "+1-555-0123",
+    "shippingAddress": {
+        "firstName": "John",
+        "lastName": "Doe",
+        "address1": "123 Main St",
+        "address2": "Suite 100",
+        "city": "Chicago",
+        "state": "IL",           # or "province" for Canada
+        "postalCode": "60601",
+        "country": "US"
+    },
+    "lineItems": [
+        {
+            "recipeSetId": "RECIPE-001",
+            "skuQuantities": [
+                {
+                    "sku": "SKU001",
+                    "quantity": "100"
+                }
+            ]
+        }
+    ]
+}
+```
+
+#### 3. Update Order Status
+```
+Method: PUT
+Path: /api/order/status/
+Request Body:
+{
+    "purchaseOrderNumber": "ORDER-12345",
+    "lineItems": [
+        {
+            "recipeSetReadableId": "RECIPE-001",
+            "workflowStatus": "in-progress"
+        }
+    ]
+}
+Response: Success confirmation
+```
+
+#### 4. Ship Notification
+```
+Method: POST
+Path: /api/order/ship-notification/
+Request Body:
+{
+    "purchaseOrderNumber": "ORDER-12345",
+    "lineItems": [
+        {
+            "recipeSetReadableId": "RECIPE-001",
+            "shipmentTracking": "TRACK-123456"
+        }
+    ]
+}
+Response: Success confirmation
+```
+
+### Key Characteristics
+- **Authentication**: API token in header (SPECTRUM_API_TOKEN)
+- **Order States**: new (not-started) → in-progress → shipped
+- **Shipment Tracking**: Can contain multiple comma-separated tracking references
+- **Multiple SKUs**: Each recipe set can have multiple SKU quantities
+- **Optional Fields**: Province (Canada), address2, state (US)
+- **JSON Serialization**: DateTime fields serialized using custom JSON encoder
+
+---
+
+## 4. Harman EDIFACT Format
 
 ### Input File Types
 Located in: `{work_dir}/harman/in/`

@@ -15,7 +15,9 @@ from src.services.camelbak_order_service import CamelbakOrderService
 @pytest.fixture
 def mock_session(mocker):
     """Provide a mocked requests.Session."""
-    return mocker.Mock(spec=requests.Session)
+    mock = mocker.Mock(spec=requests.Session)
+    mock.headers = {}
+    return mock
 
 
 class TestCamelbakOrderServiceInstantiation:
@@ -23,7 +25,7 @@ class TestCamelbakOrderServiceInstantiation:
 
     def test_instantiation_with_defaults(self, mock_session):
         """Test creating CamelbakOrderService with default values from config."""
-        service = CamelbakOrderService(session=mock_session)
+        service = CamelbakOrderService(session=mock_session, api_key="test-api-key")
 
         assert service.session is mock_session
         assert service.base_url == get_config().spectrum_base_url
@@ -40,6 +42,7 @@ class TestCamelbakOrderServiceInstantiation:
         input_dir = tmp_path / "input"
         service = CamelbakOrderService(
             session=mock_session,
+            api_key="test-api-key",
             base_url="http://custom.example.com",
             artwork_provider_name="Custom Spectrum",
             administration_id=10,
@@ -69,7 +72,7 @@ class TestReadOrders:
         """Test that read_orders returns a generator."""
         from collections.abc import Generator
 
-        service = CamelbakOrderService(session=mock_session)
+        service = CamelbakOrderService(session=mock_session, api_key="test-api-key")
         result = service.read_orders()
 
         assert isinstance(result, Generator)
@@ -104,7 +107,9 @@ class TestReadOrders:
         mock_response.json.return_value = api_response
         mock_session.post.return_value = mock_response
 
-        service = CamelbakOrderService(session=mock_session, customer_id=100)
+        service = CamelbakOrderService(
+            session=mock_session, api_key="test-api-key", customer_id=100
+        )
         orders = list(service.read_orders())
 
         assert len(orders) == 1
@@ -118,7 +123,9 @@ class TestReadOrders:
         mock_response.json.return_value = []
         mock_session.post.return_value = mock_response
 
-        service = CamelbakOrderService(session=mock_session, base_url="http://api.example.com")
+        service = CamelbakOrderService(
+            session=mock_session, api_key="test-api-key", base_url="http://api.example.com"
+        )
         list(service.read_orders())
 
         # Verify post was called with correct endpoint and data
@@ -139,7 +146,7 @@ class TestReadOrders:
         mock_response.json.return_value = []
         mock_session.post.return_value = mock_response
 
-        service = CamelbakOrderService(session=mock_session)
+        service = CamelbakOrderService(session=mock_session, api_key="test-api-key")
         orders = list(service.read_orders())
 
         assert len(orders) == 0
@@ -174,7 +181,9 @@ class TestReadOrders:
         mock_response.json.return_value = api_response
         mock_session.post.return_value = mock_response
 
-        service = CamelbakOrderService(session=mock_session, customer_id=100)
+        service = CamelbakOrderService(
+            session=mock_session, api_key="test-api-key", customer_id=100
+        )
         orders = list(service.read_orders())
 
         assert len(orders) == 3
@@ -238,7 +247,9 @@ class TestReadOrders:
             "src.services.camelbak_order_service.get_error_store", return_value=mock_error_store
         )
 
-        service = CamelbakOrderService(session=mock_session, customer_id=100)
+        service = CamelbakOrderService(
+            session=mock_session, api_key="test-api-key", customer_id=100
+        )
         orders = list(service.read_orders())
 
         # Should have yielded 2 valid orders
@@ -255,6 +266,7 @@ class TestMakeOrder:
         """Provide a CamelbakOrderService instance."""
         return CamelbakOrderService(
             session=mock_session,
+            api_key="test-api-key",
             administration_id=1,
             customer_id=100,
             pricelist_id=2,
@@ -445,6 +457,7 @@ class TestGetArtworkService:
         """Test that get_artwork_service returns the artwork service."""
         service = CamelbakOrderService(
             session=mock_session,
+            api_key="test-api-key",
             artwork_provider_name=get_config().camelbak_artwork_provider_name,
         )
         mock_order = mocker.Mock(spec=Order)
@@ -463,6 +476,7 @@ class TestGetArtworkService:
         custom_provider = "Custom Provider"
         service = CamelbakOrderService(
             session=mock_session,
+            api_key="test-api-key",
             artwork_provider_name=custom_provider,
         )
         mock_order = mocker.Mock(spec=Order)
@@ -480,7 +494,7 @@ class TestShouldUpdateSale:
 
     def test_should_update_sale_always_returns_false(self, mock_session):
         """Test that should_update_sale always returns False for Camelbak."""
-        service = CamelbakOrderService(session=mock_session)
+        service = CamelbakOrderService(session=mock_session, api_key="test-api-key")
         mock_order = Mock(spec=Order)
         mock_order.remote_order_id = "ANY-ORDER"
 
@@ -499,6 +513,7 @@ class TestPersistOrder:
         input_dir.mkdir(parents=True, exist_ok=True)
         return CamelbakOrderService(
             session=mock_session,
+            api_key="test-api-key",
             base_url="http://api.example.com",
             input_dir=input_dir,
         )
@@ -650,6 +665,7 @@ class TestLoadOrder:
         input_dir.mkdir(parents=True, exist_ok=True)
         return CamelbakOrderService(
             session=mock_session,
+            api_key="test-api-key",
             input_dir=input_dir,
         )
 
@@ -822,6 +838,7 @@ class TestNotifyCompletedSale:
         """Test that notify_completed_sale calls the API with correct data."""
         service = CamelbakOrderService(
             session=mock_session,
+            api_key="test-api-key",
             base_url="http://api.example.com",
         )
 
@@ -854,7 +871,9 @@ class TestNotifyCompletedSale:
 
     def test_notify_completed_sale_empty_tracking(self, mock_session, mocker):
         """Test notify_completed_sale with empty tracking reference."""
-        service = CamelbakOrderService(session=mock_session, base_url="http://api.example.com")
+        service = CamelbakOrderService(
+            session=mock_session, api_key="test-api-key", base_url="http://api.example.com"
+        )
 
         mock_order = mocker.Mock(spec=Order)
         mock_order.remote_order_id = "ORDER-002"
@@ -878,7 +897,7 @@ class TestGetNotifyData:
 
     def test_get_notify_data_retrieves_shipping_info(self, mock_session, mocker):
         """Test that get_notify_data retrieves shipping info from sale service."""
-        service = CamelbakOrderService(session=mock_session)
+        service = CamelbakOrderService(session=mock_session, api_key="test-api-key")
 
         mock_order = mocker.Mock(spec=Order)
         mock_order.remote_order_id = "ORDER-001"
@@ -895,7 +914,7 @@ class TestGetNotifyData:
 
     def test_get_notify_data_splits_tracking_refs(self, mock_session, mocker):
         """Test that get_notify_data properly splits tracking references."""
-        service = CamelbakOrderService(session=mock_session)
+        service = CamelbakOrderService(session=mock_session, api_key="test-api-key")
 
         mock_order = mocker.Mock(spec=Order)
         mock_sale_service = mocker.Mock()

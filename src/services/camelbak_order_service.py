@@ -7,7 +7,7 @@ Provides `SpectrumOrderService` for parsing Spectrum API orders, creating
 import datetime as dt
 import json
 from collections.abc import Generator
-from dataclasses import asdict, dataclass, field
+from dataclasses import InitVar, asdict, dataclass, field
 from enum import Enum
 from logging import getLogger
 from pathlib import Path
@@ -39,6 +39,7 @@ class CamelbakOrderService:
     """
 
     session: requests.Session
+    api_key: InitVar[str] = field(repr=False)
     base_url: str = field(default_factory=lambda: get_config().spectrum_base_url)
     artwork_provider_name: str = field(
         default_factory=lambda: get_config().camelbak_artwork_provider_name
@@ -52,6 +53,10 @@ class CamelbakOrderService:
         default_factory=lambda: get_config().camelbak_workdays_for_delivery
     )
     input_dir: Path = field(default_factory=lambda: Path(get_config().camelbak_input_dir))
+
+    def __post_init__(self, api_key: str) -> None:
+        """post init to ensure the object is valid."""
+        self.session.headers.update({"SPECTRUM_API_TOKEN": api_key})
 
     def read_orders(self) -> Generator[Order, None, None]:
         """Search the API for new orders and yield Order instances.

@@ -80,7 +80,10 @@ def main() -> None:
         )
 
         order_services.register(
-            config.camelbak_order_provider, CamelbakOrderService(session=spectrum_camelbak_session)
+            config.camelbak_order_provider,
+            CamelbakOrderService(
+                session=spectrum_camelbak_session, api_key=config.spectrum_camelbak_api_key
+            ),
         )
 
         sale_service: ISaleService = OdooSaleService(session=odoo_session)

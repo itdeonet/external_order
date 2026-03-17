@@ -29,7 +29,7 @@ class SpectrumArtworkService:
     """
 
     session: requests.Session
-    api_key: InitVar[str]
+    api_key: InitVar[str] = field(repr=False)
     base_url: str = field(default_factory=lambda: get_config().spectrum_base_url)
     digitals_dir: Path = field(default_factory=lambda: Path(get_config().digitals_dir))
     client_handle: str = field(default="", init=False)

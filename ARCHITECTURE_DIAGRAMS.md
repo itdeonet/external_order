@@ -10,7 +10,9 @@ graph TD
     
     Reg["REGISTRIES<br/>(Service Discovery)<br/>- IRegistry[T]<br/>- Thread-safe"]
     
-    OrderSvc["HarmanOrderService<br/>- read_orders()<br/>- persist_order()<br/>- load_order()<br/>- notify_completed_sale()"]
+    OrderSvc1["HarmanOrderService<br/>(EDIFACT)<br/>- read_orders()<br/>- persist_order()<br/>- load_order()<br/>- notify_completed_sale()"]
+    
+    OrderSvc2["CamelbakOrderService<br/>(REST API)<br/>- read_orders()<br/>- persist_order()<br/>- load_order()<br/>- notify_completed_sale()"]
     
     SaleSvc["OdooSaleService<br/>- create_sale()<br/>- update_contact()<br/>- update_sale()<br/>- mark_sale_notified()"]
     
@@ -26,13 +28,16 @@ graph TD
     
     Main --> UC
     Main --> Reg
-    UC --> OrderSvc
+    UC --> OrderSvc1
+    UC --> OrderSvc2
     UC --> SaleSvc
     UC --> ArtSvc
     UC --> StockSvc
     Reg -.->|orders, artwork,<br/>sale services| UC
-    OrderSvc --> Odoo
-    OrderSvc --> Harman
+    OrderSvc1 --> Odoo
+    OrderSvc1 --> Harman
+    OrderSvc2 --> Odoo
+    OrderSvc2 --> Spectrum
     SaleSvc --> Odoo
     ArtSvc --> Spectrum
     StockSvc --> Harman

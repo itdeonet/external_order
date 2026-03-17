@@ -33,6 +33,7 @@ src/
 │
 ├── services/                        # Service implementations (external integrations)
 │   ├── harman_order_service.py     # EDIFACT order parsing & Harman integration
+│   ├── camelbak_order_service.py   # Camelbak/Spectrum REST API order integration
 │   ├── harman_stock_service.py     # Stock transfer XML processing
 │   ├── odoo_sale_service.py        # Odoo sales RPC operations
 │   ├── spectrum_artwork_service.py # Spectrum API artwork retrieval
@@ -289,6 +290,54 @@ Implements: `IOrderService` (read, store, notify, artwork selection)
 - `_get_segment_data(segment, order_data) -> dict[str, Any]` - Extract segment data
 - `_make_order(data) -> Order` - Create Order from parsed data
 - `read_order_data_by_remote_order_id(remote_order_id) -> dict[str, Any] | None` - Find archived file
+
+### `CamelbakOrderService`
+Located in [src/services/camelbak_order_service.py](src/services/camelbak_order_service.py)
+
+Implements: `IOrderService` (read, store, notify, artwork selection)
+
+**Constructor:**
+- `session: requests.Session` - HTTP client for API requests
+- `api_key: str` (InitVar) - Authentication token (stored in session headers, not as field)
+- Configuration fields (from Config):
+  - `base_url: str` - Spectrum API base URL (default from config)
+  - `artwork_provider_name: str` - Artwork service name (default "Spectrum CAMELBAK" from config)
+  - `administration_id: int` - Odoo company ID (default from config)
+  - `customer_id: int` - Odoo customer ID (default from config)
+  - `pricelist_id: int` - Pricelist ID (default from config)
+  - `order_provider: str` - "CAMELBAK" (default from config)
+  - `shipment_type: str` - "camelbak%" (default from config)
+  - `workdays_for_delivery: int` - Default delivery days (default from config)
+  - `input_dir: Path` - Directory for persisted orders (default from config)
+
+**Constructor behavior (`__post_init__`):**
+- Updates session headers with `SPECTRUM_API_TOKEN: {api_key}`
+
+**Public methods:**
+- `read_orders() -> Generator[Order, None, None]` - Query Spectrum API for new orders (not-started status)
+- `get_artwork_service(order, artwork_services) -> IArtworkService | None` - Return Spectrum service based on artwork_provider_name
+- `should_update_sale(order) -> bool` - Always returns False (Camelbak orders are immutable)
+- `persist_order(order, status) -> None` - Save order as JSON file and update order status via API
+- `load_order(remote_order_id) -> Order` - Load previously persisted JSON order from file
+- `notify_completed_sale(order, notify_data) -> None` - Send ship notification to Spectrum API
+- `get_notify_data(order, sale_service) -> dict[str, Any]` - Get tracking reference from sale service
+
+**Private methods:**
+- `_make_order(data) -> Order` - Create Order from API response data
+  - Transforms API field names to domain model fields
+  - Handles multiple SKU quantities per recipe set
+  - Calculates ship_at date using workdays_for_delivery
+
+**API Integration:**
+- **Search Orders**: POST `/api/orders/search/` with lastModificationStartDate and workflow status filter
+- **Update Status**: PUT `/api/order/status/` with purchase order number and line item workflow status
+- **Ship Notification**: POST `/api/order/ship-notification/` with tracking references
+
+**File Persistence:**
+- Orders stored as JSON in `input_dir/{remote_order_id}.json`
+- Uses custom datetime serializer for ISO format serialization
+- Reconstructs ShipTo and LineItem objects on load
+- Always recalculates ship_at to today's date (ignores persisted value)
 
 ### `HarmanStockService`
 Located in [src/services/harman_stock_service.py](src/services/harman_stock_service.py)

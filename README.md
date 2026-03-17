@@ -20,11 +20,11 @@ A modular order synchronization system that imports orders from external provide
 
 This application orchestrates a multi-step workflow for processing external orders:
 
-1. **Read Orders** - Import order data from external providers (currently Harman, extensible to others)
+1. **Read Orders** - Import order data from external providers (Harman via EDIFACT, Camelbak via REST API)
 2. **Create Sales** - Create corresponding sales in Odoo ERP system
 3. **Manage Artwork** - Fetch and manage product artwork from external services (Spectrum)
 4. **Confirm Sales** - Complete the sales workflow in Odoo
-5. **Stock Transfers** - Handle inventory movements between warehouse systems
+5. **Stock Transfers** - Handle inventory movements between warehouse systems (Harman)
 6. **Notifications** - Send delivery notifications (EDIFACT format)
 
 The system is designed as a **pluggable service architecture** where new order providers, artwork services, and stock systems can be added without modifying core logic.
@@ -50,7 +50,8 @@ deonet-external-order/
 │   │   └── validators.py          # Domain validation rules
 │   │
 │   ├── services/                  # Infrastructure layer (external integrations)
-│   │   ├── harman_order_service.py         # Harman order provider
+│   │   ├── harman_order_service.py         # Harman EDIFACT order provider
+│   │   ├── camelbak_order_service.py       # Camelbak REST API order provider
 │   │   ├── harman_stock_service.py         # Harman stock transfers
 │   │   ├── odoo_sale_service.py            # Odoo ERP integration
 │   │   ├── spectrum_artwork_service.py     # Spectrum artwork provider
@@ -68,7 +69,7 @@ deonet-external-order/
 │   └── main.py                    # Application entry point
 │
 ├── tests/                         # Test suite
-│   ├── unit/                      # Unit tests (100+ tests)
+│   ├── unit/                      # Unit tests (900+ tests)
 │   │   ├── app/                   # Use case tests
 │   │   ├── domain/                # Entity and validator tests
 │   │   └── services/              # Service integration tests
@@ -143,7 +144,11 @@ Services are registered at runtime, allowing new providers to be plugged in with
 # In main.py
 order_services: IRegistry[IOrderService] = Registry[IOrderService]()
 order_services.register("Harman", HarmanOrderService.from_config(config))
-order_services.register("MyNewProvider", MyNewOrderService.from_config(config))
+order_services.register("Camelbak", CamelbakOrderService(
+    session=requests.Session(),
+    api_key=config.spectrum_api_key,
+    base_url=config.spectrum_base_url,
+))
 
 # In use cases, iterate over all registered services
 for order_service_name, order_service in order_services.items():
@@ -419,7 +424,7 @@ WHERE NOT EXISTS (
 4. **Verify installation**
    ```bash
    uv run pytest tests/ -q
-   # Should show tests passing (80+ core tests)
+   # Should show tests passing (900+ tests)
    ```
 
 ### Development Setup
@@ -468,12 +473,23 @@ class Config:
     # Directories
     work_dir: Path = Path.home() / "projects-data" / "external_order"
     templates_dir: Path                          # Auto-set to src/templates
+    camelbak_input_dir: Path                     # Auto-set from work_dir
     harman_input_dir: Path                       # Auto-set from work_dir
     harman_output_dir: Path
     digitals_dir: Path
     open_orders_dir: Path
     
+    # Camelbak settings
+    camelbak_artwork_provider_name: str = "Spectrum CAMELBAK"
+    camelbak_administration_id: int = 1
+    camelbak_customer_id: int = 9999999
+    camelbak_pricelist_id: int = 2
+    camelbak_order_provider: str = "CAMELBAK"
+    camelbak_shipment_type: str = "camelbak%"
+    camelbak_workdays_for_delivery: int = 3
+    
     # Harman settings
+    harman_artwork_provider_name: str = "Spectrum JBL"
     harman_administration_id: int = 2
     harman_customer_id: int = 5380
     harman_pricelist_id: int = 2
@@ -489,7 +505,8 @@ class Config:
     
     # Spectrum settings
     spectrum_base_url: str                       # from env SPECTRUM_BASE_URL
-    spectrum_harman_api_key: str                        # from env SPECTRUM_HARMAN_API_KEY
+    spectrum_harman_api_key: str                 # from env SPECTRUM_HARMAN_API_KEY
+    spectrum_camelbak_api_key: str               # from env SPECTRUM_CAMELBAK_API_KEY
 ```
 
 ### Environment Variables
@@ -516,9 +533,10 @@ ODOO_DATABASE=production_db
 ODOO_RPC_USER_ID=2
 ODOO_RPC_PASSWORD=your_odoo_token_here
 
-# Spectrum Artwork Service (required for artwork retrieval)
+# Spectrum API (required for artwork retrieval - supports both Harman and Camelbak)
 SPECTRUM_BASE_URL=https://staging.spectrumcustomizer.com/
-SPECTRUM_HARMAN_API_KEY=your_spectrum_token_here
+SPECTRUM_HARMAN_API_KEY=your_spectrum_harman_token_here
+SPECTRUM_CAMELBAK_API_KEY=your_spectrum_camelbak_token_here
 ```
 
 **Environment Variable Reference:**
@@ -536,8 +554,9 @@ SPECTRUM_HARMAN_API_KEY=your_spectrum_token_here
 | `ODOO_DATABASE` | Yes | Empty | Odoo database/instance name |
 | `ODOO_RPC_USER_ID` | Yes | `0` | Numeric user ID for Odoo JSON-RPC API authentication |
 | `ODOO_RPC_PASSWORD` | Yes | Empty | Odoo user password for JSON-RPC API authentication |
-| `SPECTRUM_BASE_URL` | Yes | Empty | Base URL for Spectrum artwork API |
-| `SPECTRUM_HARMAN_API_KEY` | Yes | Empty | API key for Spectrum authentication |
+| `SPECTRUM_BASE_URL` | Yes | Empty | Base URL for Spectrum artwork and order APIs |
+| `SPECTRUM_HARMAN_API_KEY` | Yes | Empty | API key for Spectrum Harman authentication |
+| `SPECTRUM_CAMELBAK_API_KEY` | Yes | Empty | API key for Spectrum Camelbak authentication |
 
 ### Using Configuration
 
