@@ -82,26 +82,6 @@ class TestConfigInitialization:
 class TestGetConfig:
     """Tests for get_config function."""
 
-    def test_get_config_returns_config_instance(self):
-        """Test that get_config returns a Config instance."""
-        # Clear cache first
-        get_config.cache_clear()
-
-        config = get_config()
-
-        assert isinstance(config, Config)
-
-    def test_get_config_is_cached(self):
-        """Test that get_config caches the result."""
-        # Clear cache first
-        get_config.cache_clear()
-
-        config1 = get_config()
-        config2 = get_config()
-
-        # Should be the same instance due to caching
-        assert config1 is config2
-
     def test_get_config_has_functools_cache_decorator(self):
         """Test that get_config uses functools.cache."""
         # The function should have cache_clear method

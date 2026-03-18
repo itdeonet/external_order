@@ -194,6 +194,7 @@ class TestReadOrders:
         """Test that read_orders posts the correct search parameters."""
         mock_response = Mock()
         mock_response.json.return_value = []
+        mock_response.raise_for_status.return_value = None
         mock_session.post.return_value = mock_response
 
         service = SpectrumOrderService(
@@ -207,11 +208,11 @@ class TestReadOrders:
         mock_session.post.assert_called_once()
         call_args = mock_session.post.call_args
         expected_url = "http://api.example.com/api/orders/search/"
-        assert call_args[0][0] == expected_url
+        assert call_args.kwargs["url"] == expected_url
 
         # Verify json data includes today's date and correct workflow status
-        assert "json" in call_args[1]
-        json_data = call_args[1]["json"]
+        assert "json" in call_args.kwargs
+        json_data = call_args.kwargs["json"]
         assert json_data["lastModificationStartDate"] == dt.date.today().isoformat()
         assert json_data["workflowStatuses"] == ["not-started"]
 
@@ -645,6 +646,8 @@ class TestPersistOrder:
         )
 
         mock_response = Mock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {}
         mock_session.put.return_value = mock_response
 
         service.persist_order(mock_order, OrderStatus.CONFIRMED)
@@ -653,10 +656,10 @@ class TestPersistOrder:
         mock_session.put.assert_called_once()
         call_args = mock_session.put.call_args
         expected_url = "http://api.example.com/api/order/status/"
-        assert call_args[0][0] == expected_url
+        assert call_args.kwargs["url"] == expected_url
 
         # Verify json data structure
-        json_data = call_args[1]["json"]
+        json_data = call_args.kwargs["json"]
         assert json_data["purchaseOrderNumber"] == "ORDER-003"
         assert len(json_data["lineItems"]) == 2
         assert all(li["workflowStatus"] == "in-progress" for li in json_data["lineItems"])
@@ -883,6 +886,11 @@ class TestNotifyCompletedSale:
             base_url="http://api.example.com",
         )
 
+        mock_response = Mock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {}
+        mock_session.post.return_value = mock_response
+
         mock_order = mocker.Mock(spec=Order)
         mock_order.remote_order_id = "ORDER-001"
         mock_li1 = mocker.Mock()
@@ -892,8 +900,6 @@ class TestNotifyCompletedSale:
         mock_order.line_items = [mock_li1, mock_li2]
 
         notify_data = {"carrier_tracking_ref": "TRACK-123456"}
-        mock_response = Mock()
-        mock_session.post.return_value = mock_response
 
         service.notify_completed_sale(mock_order, notify_data)
 
@@ -901,10 +907,10 @@ class TestNotifyCompletedSale:
         mock_session.post.assert_called_once()
         call_args = mock_session.post.call_args
         expected_url = "http://api.example.com/api/order/ship-notification/"
-        assert call_args[0][0] == expected_url
+        assert call_args.kwargs["url"] == expected_url
 
         # Verify json data structure
-        json_data = call_args[1]["json"]
+        json_data = call_args.kwargs["json"]
         assert json_data["purchaseOrderNumber"] == "ORDER-001"
         assert len(json_data["lineItems"]) == 2
         assert json_data["lineItems"][0]["recipeSetReadableId"] == "RECIPE-001"

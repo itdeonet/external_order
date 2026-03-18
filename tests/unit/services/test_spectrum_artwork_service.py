@@ -737,15 +737,6 @@ class TestSpectrumArtworkServiceGetArtwork:
         service.get_artwork(basic_order)
         assert basic_order.line_items[0].artwork is not None
 
-    @pytest.fixture
-    def service(self, mock_client, tmp_path):
-        """Provide a SpectrumArtworkService instance."""
-        return SpectrumArtworkService(
-            session=mock_client,
-            base_url="https://spectrum.example.com",
-            digitals_dir=tmp_path,
-        )
-
     def test_download_placement_downloads_pdf(self, service, mock_client):
         """Test that _download_placement downloads and saves PDF file."""
         placement_content = b"PDF content for placement"
@@ -787,12 +778,16 @@ class TestSpectrumArtworkServiceGetArtwork:
         assert (tmp_path / "SO-999_RECIPE001_placement.pdf").exists()
 
     def test_download_placement_raises_on_http_error(self, service, mock_client):
-        """Test that HTTP errors are raised."""
+        """Test that HTTP errors are wrapped in ArtworkError."""
         mock_response = Mock(spec=requests.Response)
-        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("404 Not Found")
+        mock_response.status_code = 404
+        mock_response.reason = "Not Found"
+        http_error = requests.exceptions.HTTPError("404 Not Found")
+        http_error.response = mock_response
+        mock_response.raise_for_status.side_effect = http_error
         mock_client.get.return_value = mock_response
 
-        with pytest.raises(requests.exceptions.HTTPError):
+        with pytest.raises(ArtworkError):
             service._download_placement(recipe_set_id="RECIPE001", sale_name="SO-12345")
 
     def test_download_placement_returns_path(self, service, mock_client):
@@ -831,15 +826,6 @@ class TestSpectrumArtworkServiceGetArtwork:
         calls = mock_client.get.call_args_list
         assert len(calls) > 0
         assert any("ART123" in str(call) for call in calls)
-
-    @pytest.fixture
-    def service(self, mock_client, tmp_path):
-        """Provide a SpectrumArtworkService instance."""
-        return SpectrumArtworkService(
-            session=mock_client,
-            base_url="https://spectrum.example.com",
-            digitals_dir=tmp_path,
-        )
 
     def test_download_designs_downloads_zip(self, service, mock_client):
         """Test that _download_designs downloads and extracts zip file."""
@@ -911,12 +897,16 @@ class TestSpectrumArtworkServiceGetArtwork:
         assert len(saved_paths) == 5
 
     def test_download_designs_raises_on_http_error(self, service, mock_client):
-        """Test that HTTP errors are raised."""
+        """Test that HTTP errors are wrapped in ArtworkError."""
         mock_response = Mock(spec=requests.Response)
-        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("404 Not Found")
+        mock_response.status_code = 404
+        mock_response.reason = "Not Found"
+        http_error = requests.exceptions.HTTPError("404 Not Found")
+        http_error.response = mock_response
+        mock_response.raise_for_status.side_effect = http_error
         mock_client.get.return_value = mock_response
 
-        with pytest.raises(requests.exceptions.HTTPError):
+        with pytest.raises(ArtworkError):
             service._download_designs(recipe_set_id="RECIPE001", sale_name="SO-12345")
 
     def test_download_designs_calls_correct_endpoint(self, service, mock_client):

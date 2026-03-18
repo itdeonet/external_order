@@ -1154,14 +1154,16 @@ class TestCall:
         mock_client.post.assert_called_once()
 
     def test_call_raises_on_http_error(self, service, mock_client):
-        """Test that HTTP errors are raised."""
+        """Test that HTTP errors are wrapped in SaleError."""
         mock_response = Mock(spec=requests.Response)
-        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
-            "500 Server Error"
-        )
+        mock_response.status_code = 500
+        mock_response.reason = "Server Error"
+        http_error = requests.exceptions.HTTPError("500 Server Error")
+        http_error.response = mock_response
+        mock_response.raise_for_status.side_effect = http_error
         mock_client.post.return_value = mock_response
 
-        with pytest.raises(requests.exceptions.HTTPError):
+        with pytest.raises(SaleError):
             service._call("sale.order", "create")
 
     def test_call_raises_on_json_rpc_error(self, service, mock_client):
