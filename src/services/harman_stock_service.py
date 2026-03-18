@@ -15,6 +15,7 @@ import xmltodict  # type: ignore
 from redmail.email.sender import EmailSender
 
 from src.app.errors import get_error_store
+from src.app.registry import get_stock_services
 from src.config import get_config
 
 logger = getLogger(__name__)
@@ -29,6 +30,12 @@ class HarmanStockService:
 
     input_dir: Path = field(default_factory=lambda: Path(get_config().harman_input_dir))
     output_dir: Path = field(default_factory=lambda: Path(get_config().harman_output_dir))
+
+    @classmethod
+    def register(cls, name: str) -> None:
+        """Factory method to create and register a HarmanStockService instance."""
+        stock_service = cls()
+        get_stock_services().register(name, stock_service)
 
     def read_stock_transfers(self) -> Generator[dict[str, Any], None, None]:
         """Parse XML files and yield stock transfer info.

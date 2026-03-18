@@ -2,6 +2,7 @@
 
 import datetime as dt
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -50,6 +51,58 @@ class TestHarmanStockServiceInstantiation:
 
         with pytest.raises(AttributeError):
             service.input_dir = tmp_path  # type: ignore
+
+    def test_instantiation_with_defaults(self, mocker):
+        """Test creating HarmanStockService with default fields from config."""
+        mock_config = Mock()
+        mock_config.harman_input_dir = "/config/input"
+        mock_config.harman_output_dir = "/config/output"
+        mocker.patch("src.services.harman_stock_service.get_config", return_value=mock_config)
+
+        service = HarmanStockService()
+
+        assert service.input_dir == Path("/config/input")
+        assert service.output_dir == Path("/config/output")
+
+    def test_register_classmethod_creates_instance_with_defaults(self, mocker):
+        """Test that register() classmethod creates instance with config defaults."""
+        mock_config = Mock()
+        mock_config.harman_input_dir = "/config/input"
+        mock_config.harman_output_dir = "/config/output"
+        mocker.patch("src.services.harman_stock_service.get_config", return_value=mock_config)
+
+        mock_registry = Mock()
+        mocker.patch(
+            "src.services.harman_stock_service.get_stock_services", return_value=mock_registry
+        )
+
+        HarmanStockService.register("harman_stock")
+
+        # Verify register was called with the name and a HarmanStockService instance
+        mock_registry.register.assert_called_once()
+        call_args = mock_registry.register.call_args
+        assert call_args[0][0] == "harman_stock"
+        assert isinstance(call_args[0][1], HarmanStockService)
+
+    def test_register_classmethod_registers_in_registry(self, mocker):
+        """Test that register() classmethod registers instance in the registry."""
+        mock_config = Mock()
+        mock_config.harman_input_dir = "/input"
+        mock_config.harman_output_dir = "/output"
+        mocker.patch("src.services.harman_stock_service.get_config", return_value=mock_config)
+
+        mock_registry = Mock()
+        mocker.patch(
+            "src.services.harman_stock_service.get_stock_services", return_value=mock_registry
+        )
+
+        service_name = "harman_transfers"
+        HarmanStockService.register(service_name)
+
+        # Verify the service was registered with correct name
+        mock_registry.register.assert_called_once()
+        registered_name = mock_registry.register.call_args[0][0]
+        assert registered_name == service_name
 
 
 class TestHarmanStockServiceReadStockTransfers:
