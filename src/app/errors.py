@@ -20,13 +20,13 @@ class ErrorStore:
     Use `get_error_store()` to obtain the shared instance.
     """
 
-    _errors: list[TracebackException] = field(default_factory=list, init=False, repr=False)
+    _errors: list[Exception] = field(default_factory=list, init=False, repr=False)
     _lock: Lock = field(default_factory=Lock, init=False, repr=False)
 
     def add(self, exc: Exception) -> None:
         """Store `exc` (with traceback) in the error list."""
         with self._lock:
-            self._errors.append(TracebackException.from_exception(exc))
+            self._errors.append(exc)
 
     def clear(self) -> None:
         """Remove all stored errors."""
@@ -40,7 +40,8 @@ class ErrorStore:
                 return []
             errors = []
             for idx, error in enumerate(self._errors, 1):
-                errors.append(f"Error {idx}:\n{''.join(error.format())}")
+                traceback = TracebackException.from_exception(error)
+                errors.append(f"Error {idx}:\n{error}\n{''.join(traceback.format())}")
             return errors
 
     def get_render_email_data(self) -> dict[str, Any]:
