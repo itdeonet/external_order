@@ -104,18 +104,13 @@ class IOrderNotifier(Protocol):
         ...
 
 
-class IArtworkServiceProvider(Protocol):
-    """Select an `IArtworkService` from a registry for a given `Order`."""
-
-    def get_artwork_service(
-        self, order: "Order", artwork_services: "IRegistry[IArtworkService]"
-    ) -> IArtworkService | None:
-        """Return matching `IArtworkService` for `order`, or None."""
-        ...
-
-
-class IOrderService(IOrderReader, IOrderStore, IOrderNotifier, IArtworkServiceProvider, Protocol):
+class IOrderService(IOrderReader, IOrderStore, IOrderNotifier, Protocol):
     """Composite Protocol aggregating order read/store/notify and artwork selection."""
+
+    @property
+    def artwork_service(self) -> IArtworkService | None:
+        """Return the `IArtworkService` to use for orders handled by this service, or None."""
+        ...
 
     def should_update_sale(self, order: "Order") -> bool:
         """Determine if an existing sale should be updated based on `order` data."""

@@ -25,7 +25,9 @@ class Config:
     # Application settings
     default_box_size: tuple[int, int, int] = (24, 21, 6)  # L, W, H in cm
     digitals_dir: Path = field(init=False)
+    odoo_sale_provider: str = "ODOO"
     open_orders_dir: Path = field(init=False)
+    placement_file_suffix: str = "placement.pdf"
     sale_company_name: str = "Deonet Production B.V."
     ssl_verify: bool = os.getenv("SSL_VERIFY", "true").lower() == "true"
     templates_dir: Path = Path(__file__).parent / "templates"
@@ -45,7 +47,7 @@ class Config:
     email_stock_template: Path = Path(__file__).parent / "templates" / "stock_email.html"
 
     # Camelbak settings
-    camelbak_artwork_provider_name: str = "Spectrum CAMELBAK"
+    camelbak_artwork_provider: str = "Spectrum CAMELBAK"
     camelbak_input_dir: Path = field(init=False)
     camelbak_administration_id: int = 1
     camelbak_customer_id: int = 9999999
@@ -55,13 +57,16 @@ class Config:
     camelbak_workdays_for_delivery: int = 3
 
     # Harman settings
-    harman_artwork_provider_name: str = "Spectrum JBL"
+    harman_artwork_provider: str = "Spectrum JBL"
+    harman_b2b_order_filter: str = r"95000\d+|S\d+"
+    harman_b2c_order_filter: str = r"(HA|JB)-EM-(ST-)?\d+"
+    harman_b2b_order_provider: str = "HARMAN JBL B2B"
+    harman_b2c_order_provider: str = "HARMAN JBL B2C"
     harman_input_dir: Path = field(init=False)
     harman_output_dir: Path = field(init=False)
     harman_administration_id: int = 2
     harman_customer_id: int = 5380
     harman_pricelist_id: int = 2
-    harman_order_provider: str = "HARMAN JBL"
     harman_shipment_type: str = "harman%"
     harman_stock_supplier_name: str = "Harman JBL"
     harman_stock_upload_link: str = (
@@ -79,14 +84,31 @@ class Config:
     odoo_database: str = os.getenv("ODOO_DATABASE", "")
     odoo_rpc_user_id: int = int(os.getenv("ODOO_RPC_USER_ID", "0"))
     odoo_rpc_password: str = os.getenv("ODOO_RPC_PASSWORD", "")
+    odoo_request_timeout: tuple[int, int] = (5, 30)  # (connect, read) timeout in seconds
 
     # Spectrum settings
     spectrum_base_url: str = os.getenv("SPECTRUM_BASE_URL", "")
     spectrum_harman_api_key: str = os.getenv("SPECTRUM_HARMAN_API_KEY", "")
     spectrum_camelbak_api_key: str = os.getenv("SPECTRUM_CAMELBAK_API_KEY", "")
+    spectrum_request_timeout: tuple[int, int] = (5, 30)  # (connect, read) timeout in seconds
+    spectrum_webtoprint_endpoint: str = "/api/webtoprint/"
+    spectrum_order_endpoint: str = "/api/order/order-number/"
+    spectrum_order_search_endpoint: str = "/api/orders/search/"
+    spectrum_order_status_endpoint: str = "/api/order/status/"
+    spectrum_order_shipment_endpoint: str = "/api/order/ship-notification/"
 
     def __post_init__(self) -> None:
-        """Set derived paths from `work_dir` and create required directories."""
+        """Validate required settings and initialize derived paths."""
+        # Validate required URLs are set
+        required_urls = {
+            "ODOO_BASE_URL": self.odoo_base_url,
+            "SPECTRUM_BASE_URL": self.spectrum_base_url,
+        }
+        for name, url in required_urls.items():
+            if not url:
+                raise ValueError(f"Environment variable {name} is required but not set")
+
+        # Set derived paths from `work_dir` and create required directories
         object.__setattr__(self, "camelbak_input_dir", self.work_dir / "camelbak" / "in")
         object.__setattr__(self, "harman_input_dir", self.work_dir / "harman" / "in")
         object.__setattr__(self, "harman_output_dir", self.work_dir / "harman" / "out")

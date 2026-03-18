@@ -93,6 +93,12 @@ class InsdesError(BaseError):
     pass
 
 
+class OrderError(BaseError):
+    """Raised for order-related failures (load/validation)."""
+
+    pass
+
+
 class NotifyError(BaseError):
     """Raised when notifying an order provider fails."""
 

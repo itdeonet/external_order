@@ -5,7 +5,6 @@ from src.domain.line_item import LineItem
 from src.domain.order import Order, OrderStatus
 from src.domain.ports import (
     IArtworkService,
-    IArtworkServiceProvider,
     IOrderNotifier,
     IOrderReader,
     IOrderService,
@@ -20,7 +19,6 @@ from src.domain.ship_to import ShipTo
 __all__ = [
     "Artwork",
     "IArtworkService",
-    "IArtworkServiceProvider",
     "IOrderNotifier",
     "IOrderReader",
     "IOrderService",
