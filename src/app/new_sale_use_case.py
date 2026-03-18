@@ -42,7 +42,7 @@ class NewSaleUseCase:
 
     def execute(self) -> None:
         """Create new sales from orders across all registered providers.
-        
+
         Multi-provider orchestration workflow:
         1. For each order service provider (e.g., HARMAN B2B, HARMAN B2C, Camelbak):
            a. Read all orders from that provider
@@ -56,7 +56,7 @@ class NewSaleUseCase:
               iv. Retrieve artwork files from artwork service
               v. Organize placement files to order directory
               vi. Persist order with ARTWORK and then CONFIRMED status
-        
+
         Errors at order level are caught and stored without stopping processing of other orders.
         This multi-provider coordination allows graceful degradation if one provider is down.
         """
@@ -94,6 +94,11 @@ class NewSaleUseCase:
                                 )
                             sale_service.update_contact(order)
                             sale_service.update_sale(order)
+                        else:
+                            raise SaleError(
+                                "Existing B2C sale order or cannot update B2B sale order",
+                                order.remote_order_id,
+                            )
 
                     # when we reach this point, the order is in an expected state
                     order_service.persist_order(order, OrderStatus.CREATED)
