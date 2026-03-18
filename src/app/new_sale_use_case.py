@@ -41,7 +41,25 @@ class NewSaleUseCase:
         get_use_cases().register(name, use_case)
 
     def execute(self) -> None:
-        """Process all orders and create corresponding sales. Handle errors per-order."""
+        """Create new sales from orders across all registered providers.
+        
+        Multi-provider orchestration workflow:
+        1. For each order service provider (e.g., HARMAN B2B, HARMAN B2C, Camelbak):
+           a. Read all orders from that provider
+           b. For each order:
+              i. Persist order with NEW status
+              ii. For each sale service provider (e.g., ODOO):
+                  - Search for existing sale matching order ID and provider
+                  - If not found: Create new sale with order details
+                  - If found: Update sale if order data changed, validate line items
+              iii. Persist order with CREATED status
+              iv. Retrieve artwork files from artwork service
+              v. Organize placement files to order directory
+              vi. Persist order with ARTWORK and then CONFIRMED status
+        
+        Errors at order level are caught and stored without stopping processing of other orders.
+        This multi-provider coordination allows graceful degradation if one provider is down.
+        """
         for order_service_name, order_service in self.order_services.items():
             logger.info("Create sales from %s service...", order_service_name)
 

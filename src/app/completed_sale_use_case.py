@@ -31,9 +31,19 @@ class CompletedSaleUseCase:
         get_use_cases().register(name, use_case)
 
     def execute(self) -> None:
-        """Complete sales for all registered order service providers.
-
-        Handle errors at provider and order levels without stopping processing.
+        """Complete sales across all registered order and sale service providers.
+        
+        Multi-provider orchestration workflow:
+        1. For each order service provider (e.g., HARMAN B2B, HARMAN B2C, Camelbak):
+           2. For each sale service provider (e.g., ODOO):
+              a. Search for sales completed in this sale service for the order provider
+              b. For each completed sale (by sale_id and remote_order_id):
+                 i. Load the original order from the order provider
+                 ii. Notify the order provider that sale is complete
+                 iii. Persist order with COMPLETED status
+        
+        Errors at provider and individual sale levels are caught and stored without stopping,
+        enabling graceful degradation and resilience across multiple integrated systems.
         """
         logger.info("Complete sales for all order services...")
         error_store: ErrorStore = get_error_store()

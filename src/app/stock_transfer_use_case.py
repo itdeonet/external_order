@@ -30,9 +30,18 @@ class StockTransferUseCase:
         get_use_cases().register(name, use_case)
 
     def execute(self) -> None:
-        """Process all pending stock transfer requests from registered providers.
-
-        Handle errors per-transfer without stopping processing.
+        """Process stock transfer requests across all registered stock service providers.
+        
+        Multi-provider orchestration workflow:
+        1. For each stock service provider (e.g., Harman, Camelbak):
+           a. Read all pending stock transfer requests from that provider
+           b. For each transfer request:
+              i. Create a stock transfer reply (DESADV EDI or equivalent format)
+              ii. Send confirmation email with the reply
+              iii. Mark transfer as processed
+        
+        Errors at provider or individual transfer levels are caught and stored without
+        stopping processing of remaining transfers, enabling graceful degradation.
         """
         logger.info("Process stock transfers for all stock services...")
         for stock_service_name, stock_service in self.stock_services.items():
