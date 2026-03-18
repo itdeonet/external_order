@@ -1,4 +1,4 @@
-"""Unit tests for the SaleUseCase class."""
+"""Unit tests for the NewSaleUseCase class."""
 
 import logging
 import tempfile
@@ -66,75 +66,92 @@ def mock_artwork_services():
 
 
 @pytest.fixture
-def mock_sale_service():
-    """Create a mock sale service."""
-    return MagicMock(spec=ISaleService)
+def mock_sale_services():
+    """Create a mock sale services registry."""
+    return MagicMock(spec=IRegistry[ISaleService])
 
 
 @pytest.fixture
-def use_case(mock_order_services, mock_artwork_services, mock_sale_service, tmp_path):
-    """Create a SaleUseCase instance with mocked dependencies."""
+def use_case(mock_order_services, mock_artwork_services, mock_sale_services, tmp_path):
+    """Create a NewSaleUseCase instance with mocked dependencies."""
     return NewSaleUseCase(
         order_services=mock_order_services,
         artwork_services=mock_artwork_services,
-        sale_service=mock_sale_service,
+        sale_services=mock_sale_services,
         open_orders_dir=tmp_path,
     )
 
 
-class TestSaleUseCaseInstantiation:
-    """Tests for SaleUseCase instantiation and basic properties."""
+class TestNewSaleUseCaseInstantiation:
+    """Tests for NewSaleUseCase instantiation and basic properties."""
 
-    def test_instantiation_with_valid_dependencies(
-        self, mock_order_services, mock_artwork_services, mock_sale_service
+    def test_instantiation_with_required_fields(
+        self, mock_order_services, mock_artwork_services, mock_sale_services
     ):
-        """Test creating a SaleUseCase with valid dependencies."""
+        """Test creating a NewSaleUseCase with required fields."""
         with tempfile.TemporaryDirectory() as tmpdir:
             use_case = NewSaleUseCase(
                 order_services=mock_order_services,
                 artwork_services=mock_artwork_services,
-                sale_service=mock_sale_service,
+                sale_services=mock_sale_services,
                 open_orders_dir=Path(tmpdir),
             )
 
             assert use_case is not None
             assert use_case.order_services is mock_order_services
             assert use_case.artwork_services is mock_artwork_services
-            assert use_case.sale_service is mock_sale_service
+            assert use_case.sale_services is mock_sale_services
+
+    def test_instantiation_with_defaults(self):
+        """Test creating a NewSaleUseCase with default values from config."""
+        use_case = NewSaleUseCase()
+
+        assert use_case is not None
+        assert use_case.order_services is not None
+        assert use_case.artwork_services is not None
+        assert use_case.sale_services is not None
+        assert use_case.open_orders_dir is not None
 
     def test_instantiation_is_frozen_dataclass(self, use_case):
-        """Test that SaleUseCase is a frozen dataclass."""
+        """Test that NewSaleUseCase is a frozen dataclass."""
         with pytest.raises(AttributeError):
             use_case.order_services = MagicMock()  # type: ignore
 
-    def test_instantiation_requires_order_services(self, mock_artwork_services, mock_sale_service):
-        """Test that order_services is a required parameter."""
-        with tempfile.TemporaryDirectory() as tmpdir, pytest.raises(TypeError):
-            NewSaleUseCase(
-                artwork_services=mock_artwork_services,
-                sale_service=mock_sale_service,
-                open_orders_dir=Path(tmpdir),
-            )  # type: ignore
+    def test_register_classmethod_creates_instance(self, mocker):
+        """Test that register() classmethod creates and registers instance."""
+        mock_use_cases = MagicMock()
+        mocker.patch(
+            "src.app.new_sale_use_case.get_use_cases",
+            return_value=mock_use_cases,
+        )
 
-    def test_instantiation_requires_sale_service(self, mock_order_services, mock_artwork_services):
-        """Test that sale_service is a required parameter."""
-        with tempfile.TemporaryDirectory() as tmpdir, pytest.raises(TypeError):
-            NewSaleUseCase(
-                order_services=mock_order_services,
-                artwork_services=mock_artwork_services,
-                open_orders_dir=Path(tmpdir),
-            )  # type: ignore
+        NewSaleUseCase.register("test_use_case")
 
-    def test_instantiation_requires_open_orders_dir(
-        self, mock_order_services, mock_artwork_services, mock_sale_service
-    ):
-        """Test that open_orders_dir is a required parameter."""
-        with pytest.raises(TypeError):
-            NewSaleUseCase(
-                order_services=mock_order_services,
-                artwork_services=mock_artwork_services,
-                sale_service=mock_sale_service,
-            )  # type: ignore
+        # Verify register was called
+        mock_use_cases.register.assert_called_once()
+        call_args = mock_use_cases.register.call_args
+        assert call_args[0][0] == "test_use_case"
+        assert isinstance(call_args[0][1], NewSaleUseCase)
+
+    def test_register_classmethod_with_defaults(self, mocker):
+        """Test that register() creates instance with config defaults."""
+        mock_use_cases = MagicMock()
+        mocker.patch(
+            "src.app.new_sale_use_case.get_use_cases",
+            return_value=mock_use_cases,
+        )
+
+        NewSaleUseCase.register("default_case")
+
+        mock_use_cases.register.assert_called_once()
+        call_args = mock_use_cases.register.call_args
+        instance = call_args[0][1]
+
+        # Verify instance has defaults set
+        assert instance.order_services is not None
+        assert instance.artwork_services is not None
+        assert instance.sale_services is not None
+        assert instance.open_orders_dir is not None
 
 
 class TestCreateSalesWithNoOrders:
@@ -170,28 +187,35 @@ class TestCreateSalesNewSaleCreation:
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
         order_service.read_orders.return_value = iter([order])
-        order_service.get_artwork_service.return_value = None
+        order_service.artwork_service = None
+
+        sale_service = MagicMock(spec=ISaleService)
+        sale_service.search_sale.return_value = {}
+        sale_service.create_sale.return_value = (12345, "SO-12345")
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.search_sale.return_value = {}
-        use_case.sale_service.create_sale.return_value = 12345
+        use_case.sale_services.items.return_value = [("sale_service", sale_service)]
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.execute()
 
-        use_case.sale_service.search_sale.assert_called_once_with(order)
-        use_case.sale_service.create_sale.assert_called_once_with(order)
+        sale_service.search_sale.assert_called_once_with(order)
+        sale_service.create_sale.assert_called_once_with(order)
 
     def test_create_sales_persists_order_status_new(self, use_case, mocker):
         """Test that order is persisted with NEW status."""
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
         order_service.read_orders.return_value = iter([order])
-        order_service.get_artwork_service.return_value = None
+        order_service.artwork_service = None
+
+        sale_service = MagicMock(spec=ISaleService)
+        sale_service.search_sale.return_value = {}
+        sale_service.create_sale.return_value = (999, "SO-999")
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.search_sale.return_value = {}
+        use_case.sale_services.items.return_value = [("sale_service", sale_service)]
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -206,11 +230,14 @@ class TestCreateSalesNewSaleCreation:
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
         order_service.read_orders.return_value = iter([order])
-        order_service.get_artwork_service.return_value = None
+        order_service.artwork_service = None
+
+        sale_service = MagicMock(spec=ISaleService)
+        sale_service.search_sale.return_value = {}
+        sale_service.create_sale.return_value = (999, "SO-999")
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.search_sale.return_value = {}
-        use_case.sale_service.create_sale.return_value = (999, "SO-999")
+        use_case.sale_services.items.return_value = [("sale_service", sale_service)]
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -230,11 +257,14 @@ class TestCreateSalesNewSaleCreation:
         artwork_service.get_artwork.return_value = []
 
         order_service.read_orders.return_value = iter([order])
-        order_service.get_artwork_service.return_value = artwork_service
+        order_service.artwork_service = artwork_service
+
+        sale_service = MagicMock(spec=ISaleService)
+        sale_service.search_sale.return_value = {}
+        sale_service.create_sale.return_value = (999, "SO-ART")
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.search_sale.return_value = {}
-        use_case.sale_service.create_sale.return_value = (999, "SO-ART")
+        use_case.sale_services.items.return_value = [("sale_service", sale_service)]
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -252,11 +282,14 @@ class TestCreateSalesNewSaleCreation:
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
         order_service.read_orders.return_value = iter([order])
-        order_service.get_artwork_service.return_value = None
+        order_service.artwork_service = None
+
+        sale_service = MagicMock(spec=ISaleService)
+        sale_service.search_sale.return_value = {}
+        sale_service.create_sale.return_value = (999, "SO-CONF")
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.search_sale.return_value = {}
-        use_case.sale_service.create_sale.return_value = (999, "SO-CONF")
+        use_case.sale_services.items.return_value = [("sale_service", sale_service)]
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -274,17 +307,20 @@ class TestCreateSalesNewSaleCreation:
         artwork_service.get_artwork.return_value = []
 
         order_service.read_orders.return_value = iter([order])
-        order_service.get_artwork_service.return_value = artwork_service
+        order_service.artwork_service = artwork_service
+
+        sale_service = MagicMock(spec=ISaleService)
+        sale_service.search_sale.return_value = {}
+        sale_service.create_sale.return_value = (999, "SO-999")
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.search_sale.return_value = {}
-        use_case.sale_service.create_sale.return_value = (999, "SO-999")
+        use_case.sale_services.items.return_value = [("sale_service", sale_service)]
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.execute()
 
-        use_case.sale_service.create_sale.assert_called_once_with(order)
+        sale_service.create_sale.assert_called_once_with(order)
         assert order.sale_id == 999
         assert order.sale_name == "SO-999"
 
@@ -297,18 +333,21 @@ class TestCreateSalesExistingSaleUpdate:
         order = create_sample_order()
         order_service = MagicMock(spec=IOrderService)
         order_service.read_orders.return_value = iter([order])
-        order_service.get_artwork_service.return_value = None
+        order_service.artwork_service = None
+
+        sale_service = MagicMock(spec=ISaleService)
+        sale_service.search_sale.return_value = {"id": 12345}
+        sale_service.sale_has_expected_order_lines.return_value = True
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.search_sale.return_value = {"id": 12345}
-        use_case.sale_service.sale_has_expected_order_lines.return_value = True
+        use_case.sale_services.items.return_value = [("sale_service", sale_service)]
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.execute()
 
-        use_case.sale_service.update_contact.assert_called_once_with(order)
-        use_case.sale_service.create_sale.assert_not_called()
+        sale_service.update_contact.assert_called_once_with(order)
+        sale_service.create_sale.assert_not_called()
 
     def test_create_sales_raises_error_when_order_lines_mismatch(self, use_case, mocker):
         """Test that SaleError is handled when order lines don't match."""
@@ -316,9 +355,12 @@ class TestCreateSalesExistingSaleUpdate:
         order_service = MagicMock(spec=IOrderService)
         order_service.read_orders.return_value = iter([order])
 
+        sale_service = MagicMock(spec=ISaleService)
+        sale_service.search_sale.return_value = {"id": 12345}
+        sale_service.sale_has_expected_order_lines.return_value = False
+
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.search_sale.return_value = {"id": 12345}
-        use_case.sale_service.sale_has_expected_order_lines.return_value = False
+        use_case.sale_services.items.return_value = [("sale_service", sale_service)]
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -331,9 +373,12 @@ class TestCreateSalesExistingSaleUpdate:
         order_service = MagicMock(spec=IOrderService)
         order_service.read_orders.return_value = iter([order])
 
+        sale_service = MagicMock(spec=ISaleService)
+        sale_service.search_sale.return_value = {"id": 12345}
+        sale_service.sale_has_expected_order_lines.return_value = False
+
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.search_sale.return_value = {"id": 12345}
-        use_case.sale_service.sale_has_expected_order_lines.return_value = False
+        use_case.sale_services.items.return_value = [("sale_service", sale_service)]
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -375,10 +420,12 @@ class TestCreateSalesExceptionHandling:
             None,
             None,
         ]
-        order_service.get_artwork_service.return_value = None
+        order_service.artwork_service = None
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.search_sale.return_value = {}
+        sale_service = MagicMock(spec=ISaleService)
+        sale_service.search_sale.return_value = {}
+        use_case.sale_services.items.return_value = [("sale_service", sale_service)]
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -393,9 +440,12 @@ class TestCreateSalesExceptionHandling:
         order_service = MagicMock(spec=IOrderService)
         order_service.read_orders.return_value = iter([order])
 
+        sale_service = MagicMock(spec=ISaleService)
+        sale_service.search_sale.return_value = {}
+        sale_service.create_sale.side_effect = Exception("Sale creation failed")
+
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.search_sale.return_value = {}
-        use_case.sale_service.create_sale.side_effect = Exception("Sale creation failed")
+        use_case.sale_services.items.return_value = [("sale_service", sale_service)]
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -412,17 +462,19 @@ class TestCreateSalesWithMultipleServices:
 
         order_service1 = MagicMock(spec=IOrderService)
         order_service1.read_orders.return_value = iter([order1])
-        order_service1.get_artwork_service.return_value = None
+        order_service1.artwork_service = None
 
         order_service2 = MagicMock(spec=IOrderService)
         order_service2.read_orders.return_value = iter([order2])
-        order_service2.get_artwork_service.return_value = None
+        order_service2.artwork_service = None
 
         use_case.order_services.items.return_value = [
             ("service1", order_service1),
             ("service2", order_service2),
         ]
-        use_case.sale_service.search_sale.return_value = {}
+        sale_service = MagicMock(spec=ISaleService)
+        sale_service.search_sale.return_value = {}
+        use_case.sale_services.items.return_value = [("sale_service", sale_service)]
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -442,13 +494,15 @@ class TestCreateSalesWithMultipleServices:
 
         order_service2 = MagicMock(spec=IOrderService)
         order_service2.read_orders.return_value = iter([order2])
-        order_service2.get_artwork_service.return_value = None
+        order_service2.artwork_service = None
 
         use_case.order_services.items.return_value = [
             ("service1", order_service1),
             ("service2", order_service2),
         ]
-        use_case.sale_service.search_sale.return_value = {}
+        sale_service = MagicMock(spec=ISaleService)
+        sale_service.search_sale.return_value = {}
+        use_case.sale_services.items.return_value = [("sale_service", sale_service)]
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
@@ -651,10 +705,12 @@ class TestCreateSalesLogging:
         order = create_sample_order("ORDER123")
         order_service = MagicMock(spec=IOrderService)
         order_service.read_orders.return_value = iter([order])
-        order_service.get_artwork_service.return_value = None
+        order_service.artwork_service = None
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.search_sale.return_value = {}
+        sale_service = MagicMock(spec=ISaleService)
+        sale_service.search_sale.return_value = {}
+        use_case.sale_services.items.return_value = [("sale_service", sale_service)]
 
         with caplog.at_level(logging.INFO):
             use_case.execute()
@@ -683,8 +739,10 @@ class TestCreateSalesLogging:
         order_service.read_orders.return_value = iter([order])
 
         use_case.order_services.items.return_value = [("test_service", order_service)]
-        use_case.sale_service.search_sale.return_value = {"id": 12345}
-        use_case.sale_service.sale_has_expected_order_lines.return_value = False
+        sale_service = MagicMock(spec=ISaleService)
+        sale_service.search_sale.return_value = {"id": 12345}
+        sale_service.sale_has_expected_order_lines.return_value = False
+        use_case.sale_services.items.return_value = [("sale_service", sale_service)]
 
         with caplog.at_level(logging.ERROR):
             use_case.execute()
@@ -735,18 +793,20 @@ class TestSaleUseCaseIntegration:
             artwork_service.get_artwork.return_value = [placement_file]
 
             order_service.read_orders.return_value = iter([order])
-            order_service.get_artwork_service.return_value = artwork_service
+            order_service.artwork_service = artwork_service
 
             use_case.order_services.items.return_value = [("integration_service", order_service)]
-            use_case.sale_service.search_sale.return_value = {}
-            use_case.sale_service.create_sale.return_value = (12345, "SO-FULL")
+            sale_service = MagicMock(spec=ISaleService)
+            sale_service.search_sale.return_value = {}
+            sale_service.create_sale.return_value = (12345, "SO-FULL")
+            use_case.sale_services.items.return_value = [("sale_service", sale_service)]
 
             mocker.patch("src.app.new_sale_use_case.logger")
 
             use_case.execute()
 
             # Verify complete flow
-            use_case.sale_service.create_sale.assert_called_once_with(order)
+            sale_service.create_sale.assert_called_once_with(order)
             assert order.sale_id == 12345
             assert order.sale_name == "SO-FULL"
             assert order_service.persist_order.call_count == 4
@@ -760,19 +820,21 @@ class TestSaleUseCaseIntegration:
         order = create_sample_order("UPDATE_ORDER_001")
         order_service = MagicMock(spec=IOrderService)
         order_service.read_orders.return_value = iter([order])
-        order_service.get_artwork_service.return_value = None
+        order_service.artwork_service = None
 
         use_case.order_services.items.return_value = [("update_service", order_service)]
-        use_case.sale_service.search_sale.return_value = {"id": 54321}
-        use_case.sale_service.sale_has_expected_order_lines.return_value = True
+        sale_service = MagicMock(spec=ISaleService)
+        sale_service.search_sale.return_value = {"id": 54321}
+        sale_service.sale_has_expected_order_lines.return_value = True
+        use_case.sale_services.items.return_value = [("sale_service", sale_service)]
 
         mocker.patch("src.app.new_sale_use_case.logger")
 
         use_case.execute()
 
         # Verify flow
-        use_case.sale_service.update_contact.assert_called_once_with(order)
-        use_case.sale_service.create_sale.assert_not_called()
+        sale_service.update_contact.assert_called_once_with(order)
+        sale_service.create_sale.assert_not_called()
 
     def test_full_workflow_multiple_orders_different_statuses(self, use_case, mocker):
         """Test workflow with multiple orders having different outcomes."""
@@ -782,15 +844,18 @@ class TestSaleUseCaseIntegration:
 
         order_service = MagicMock(spec=IOrderService)
         order_service.read_orders.return_value = iter([order1, order2, order3])
-        order_service.get_artwork_service.return_value = None
+        order_service.artwork_service = None
 
         use_case.order_services.items.return_value = [("multi_service", order_service)]
 
         # Order 1: New sale
         # Order 2: Existing sale with matching lines
         # Order 3: Exception during processing
-        use_case.sale_service.search_sale.side_effect = [False, True, False]
-        use_case.sale_service.sale_has_expected_order_lines.return_value = True
+        sale_service = MagicMock(spec=ISaleService)
+        sale_service.search_sale.side_effect = [False, True, False]
+        sale_service.sale_has_expected_order_lines.return_value = True
+        use_case.sale_services.items.return_value = [("sale_service", sale_service)]
+
         order_service.persist_order.side_effect = [
             None,  # order1 NEW
             None,  # order1 CREATED

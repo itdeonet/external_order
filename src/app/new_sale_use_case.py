@@ -4,11 +4,18 @@ Create new sales in Odoo from orders received from multiple service providers.
 """
 
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from logging import getLogger
 from pathlib import Path
 
 from src.app.errors import SaleError, get_error_store
+from src.app.registry import (
+    get_artwork_services,
+    get_order_services,
+    get_sale_services,
+    get_use_cases,
+)
+from src.config import get_config
 from src.domain import IArtworkService, IOrderService, IRegistry, ISaleService, Order, OrderStatus
 
 logger = getLogger(__name__)
@@ -22,10 +29,16 @@ class NewSaleUseCase:
     Order-level errors are caught and stored without stopping other orders.
     """
 
-    order_services: IRegistry[IOrderService]
-    artwork_services: IRegistry[IArtworkService]
-    sale_service: ISaleService
-    open_orders_dir: Path
+    order_services: IRegistry[IOrderService] = field(default_factory=get_order_services)
+    artwork_services: IRegistry[IArtworkService] = field(default_factory=get_artwork_services)
+    sale_services: IRegistry[ISaleService] = field(default_factory=get_sale_services)
+    open_orders_dir: Path = field(default_factory=lambda: Path(get_config().open_orders_dir))
+
+    @classmethod
+    def register(cls, name: str) -> None:
+        """Factory method to create and register a NewSaleUseCase instance."""
+        use_case = cls()
+        get_use_cases().register(name, use_case)
 
     def execute(self) -> None:
         """Process all orders and create corresponding sales. Handle errors per-order."""
@@ -42,29 +55,33 @@ class NewSaleUseCase:
                     )
                     order_service.persist_order(order, OrderStatus.NEW)
 
-                    if not self.sale_service.search_sale(order):
-                        # no sale for this order, create it
-                        sale_id, sale_name = self.sale_service.create_sale(order)
-                        order.set_sale_id(sale_id)
-                        order.set_sale_name(sale_name)
-                    elif order_service.should_update_sale(order):
-                        # sale exists but order data has changed, update it
-                        if not self.sale_service.sale_has_expected_order_lines(order):
-                            # order lines do not match expected lines for this order, raise error
-                            raise SaleError(
-                                "Existing sale order lines do not match expected lines",
-                                order.remote_order_id,
-                            )
-                        self.sale_service.update_contact(order)
-                        self.sale_service.update_sale(order)
+                    for sale_service_name, sale_service in self.sale_services.items():
+                        logger.info(
+                            "Check if sale exists for order %s in %s service...",
+                            order.remote_order_id,
+                            sale_service_name,
+                        )
+                        if not sale_service.search_sale(order):
+                            # no sale for this order, create it
+                            sale_id, sale_name = sale_service.create_sale(order)
+                            order.set_sale_id(sale_id)
+                            order.set_sale_name(sale_name)
+                        elif order_service.should_update_sale(order):
+                            # sale exists but order data has changed, update it
+                            if not sale_service.sale_has_expected_order_lines(order):
+                                # order lines do not match expected lines for this order, raise error
+                                raise SaleError(
+                                    "Existing sale order lines do not match expected lines",
+                                    order.remote_order_id,
+                                )
+                            sale_service.update_contact(order)
+                            sale_service.update_sale(order)
 
                     # when we reach this point, the order is in an expected state
                     order_service.persist_order(order, OrderStatus.CREATED)
 
                     # get artwork for the order
-                    if artwork_service := order_service.get_artwork_service(
-                        order, self.artwork_services
-                    ):
+                    if artwork_service := order_service.artwork_service:
                         artwork_files = artwork_service.get_artwork(order)
                         self.organize_placement_files(order, artwork_files)
                         order_service.persist_order(order, OrderStatus.ARTWORK)
