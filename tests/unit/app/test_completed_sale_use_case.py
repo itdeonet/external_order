@@ -17,10 +17,10 @@ def mock_order_services():
 
 
 @pytest.fixture
-def mock_sales_service():
-    """Create a mock sales service."""
-    mock_service = MagicMock()
-    return mock_service
+def mock_sale_services():
+    """Create a mock registry for sale services."""
+    mock_registry = MagicMock()
+    return mock_registry
 
 
 @pytest.fixture
@@ -38,36 +38,92 @@ def mock_order():
 
 
 @pytest.fixture
-def completed_use_case(mock_order_services, mock_sales_service):
+def completed_use_case(mock_order_services, mock_sale_services):
     """Create a CompletedUseCase instance with mocked dependencies."""
     return CompletedSaleUseCase(
         order_services=mock_order_services,
-        sale_service=mock_sales_service,
+        sale_services=mock_sale_services,
     )
+
+
+class TestCompletedSaleUseCaseInstantiation:
+    """Tests for CompletedSaleUseCase instantiation and factory method."""
+
+    def test_instantiation_with_required_fields(self, mock_order_services, mock_sale_services):
+        """Test instantiation with explicitly provided fields."""
+        use_case = CompletedSaleUseCase(
+            order_services=mock_order_services,
+            sale_services=mock_sale_services,
+        )
+
+        assert use_case.order_services is mock_order_services
+        assert use_case.sale_services is mock_sale_services
+
+    def test_instantiation_with_defaults(self):
+        """Test instantiation with all default values."""
+        use_case = CompletedSaleUseCase()
+
+        assert use_case.order_services is not None
+        assert use_case.sale_services is not None
+
+    def test_instantiation_is_frozen_dataclass(self, mock_order_services, mock_sale_services):
+        """Test that CompletedSaleUseCase is a frozen dataclass."""
+        use_case = CompletedSaleUseCase(
+            order_services=mock_order_services,
+            sale_services=mock_sale_services,
+        )
+
+        with pytest.raises(AttributeError):
+            use_case.sale_services = None  # type: ignore
+
+    def test_register_classmethod_creates_instance(self, mocker):
+        """Test that register classmethod creates instance and registers it."""
+        mock_use_cases = MagicMock()
+        mocker.patch("src.app.completed_sale_use_case.get_use_cases", return_value=mock_use_cases)
+
+        CompletedSaleUseCase.register("completed_sales")
+
+        mock_use_cases.register.assert_called_once()
+        call_args = mock_use_cases.register.call_args
+        assert call_args[0][0] == "completed_sales"
+        assert isinstance(call_args[0][1], CompletedSaleUseCase)
+
+    def test_register_classmethod_with_defaults(self, mocker):
+        """Test that register creates instance with default dependencies."""
+        mock_use_cases = MagicMock()
+        mocker.patch("src.app.completed_sale_use_case.get_use_cases", return_value=mock_use_cases)
+
+        CompletedSaleUseCase.register("test_use_case")
+
+        # Verify the registered instance has default values
+        call_args = mock_use_cases.register.call_args
+        registered_instance = call_args[0][1]
+        assert registered_instance.order_services is not None
+        assert registered_instance.sale_services is not None
 
 
 class TestCompletedUseCaseInit:
     """Tests for CompletedUseCase initialization."""
 
-    def test_initialization_with_valid_dependencies(self, mock_order_services, mock_sales_service):
+    def test_initialization_with_valid_dependencies(self, mock_order_services, mock_sale_services):
         """Test that CompletedUseCase initializes correctly with valid dependencies."""
         use_case = CompletedSaleUseCase(
             order_services=mock_order_services,
-            sale_service=mock_sales_service,
+            sale_services=mock_sale_services,
         )
 
         assert use_case.order_services is mock_order_services
-        assert use_case.sale_service is mock_sales_service
+        assert use_case.sale_services is mock_sale_services
 
-    def test_initialization_creates_frozen_dataclass(self, mock_order_services, mock_sales_service):
+    def test_initialization_creates_frozen_dataclass(self, mock_order_services, mock_sale_services):
         """Test that CompletedUseCase is a frozen dataclass."""
         use_case = CompletedSaleUseCase(
             order_services=mock_order_services,
-            sale_service=mock_sales_service,
+            sale_services=mock_sale_services,
         )
 
         with pytest.raises(AttributeError):
-            use_case.sale_service = None  # type: ignore
+            use_case.sale_services = None  # type: ignore
 
 
 class TestCompletedUseCaseCompleteSales:
@@ -77,7 +133,7 @@ class TestCompletedUseCaseCompleteSales:
         self,
         completed_use_case,
         mock_order_services,
-        mock_sales_service,
+        mock_sale_services,
         mock_order,
     ):
         """Test execute with a single sale from one provider."""
@@ -85,12 +141,14 @@ class TestCompletedUseCaseCompleteSales:
         sale_id = 100
         remote_order_id = "remote_123"
         mock_order_service = MagicMock()
+        mock_sale_service = MagicMock()
 
         # Mock the registry items method
         mock_order_services.items.return_value = [(provider_name, mock_order_service)]
+        mock_sale_services.items.return_value = [("TestSaleService", mock_sale_service)]
 
         # Mock completed sales
-        mock_sales_service.search_completed_sales.return_value = [(sale_id, remote_order_id)]
+        mock_sale_service.search_completed_sales.return_value = [(sale_id, remote_order_id)]
 
         # Mock order loading
         mock_order_service.load_order.return_value = mock_order
@@ -100,32 +158,35 @@ class TestCompletedUseCaseCompleteSales:
         completed_use_case.execute()
 
         # Verify interactions
-        mock_sales_service.search_completed_sales.assert_called_once_with(provider_name)
+        mock_sale_service.search_completed_sales.assert_called_once_with(provider_name)
         mock_order_service.load_order.assert_called_once_with(remote_order_id)
-        mock_order_service.get_notify_data.assert_called_once_with(mock_order, mock_sales_service)
+        mock_order_service.get_notify_data.assert_called_once_with(mock_order, mock_sale_service)
         mock_order_service.notify_completed_sale.assert_called_once_with(
             mock_order, mock_notify_data
         )
-        mock_sales_service.mark_sale_notified.assert_called_once_with(sale_id)
+        mock_sale_service.mark_sale_notified.assert_called_once_with(sale_id)
         mock_order_service.persist_order.assert_called_once_with(mock_order, OrderStatus.COMPLETED)
 
     def test_execute_with_multiple_providers(
-        self, completed_use_case, mock_order_services, mock_sales_service, mock_order
+        self, completed_use_case, mock_order_services, mock_sale_services, mock_order
     ):
         """Test completing sales from multiple providers."""
         provider1 = "provider1"
         provider2 = "provider2"
         mock_order_service1 = MagicMock()
         mock_order_service2 = MagicMock()
+        mock_sale_service = MagicMock()
 
         # Mock registry items with multiple providers
         mock_order_services.items.return_value = [
             (provider1, mock_order_service1),
             (provider2, mock_order_service2),
         ]
+        mock_sale_service = MagicMock()
+        mock_sale_services.items.return_value = [("TestSaleService", mock_sale_service)]
 
         # Mock completed sales
-        mock_sales_service.search_completed_sales.side_effect = [
+        mock_sale_service.search_completed_sales.side_effect = [
             [(1, "remote_1")],
             [(2, "remote_2")],
         ]
@@ -137,12 +198,12 @@ class TestCompletedUseCaseCompleteSales:
         completed_use_case.execute()
 
         # Verify both providers were processed
-        assert mock_sales_service.search_completed_sales.call_count == 2
+        assert mock_sale_service.search_completed_sales.call_count == 2
         assert mock_order_service1.load_order.called
         assert mock_order_service2.load_order.called
 
     def test_execute_with_multiple_sales_per_provider(
-        self, completed_use_case, mock_order_services, mock_sales_service, mock_order
+        self, completed_use_case, mock_order_services, mock_sale_services, mock_order
     ):
         """Test execute with multiple sales from a single provider."""
         provider_name = "test_provider"
@@ -151,12 +212,14 @@ class TestCompletedUseCaseCompleteSales:
 
         mock_order_services.items.return_value = [(provider_name, mock_order_service)]
 
-        # Return multiple completed sales
-        mock_sales_service.search_completed_sales.return_value = [
+        # Create and register mock sale service
+        mock_sale_service = MagicMock()
+        mock_sale_service.search_completed_sales.return_value = [
             (100, "remote_1"),
             (101, "remote_2"),
             (102, "remote_3"),
         ]
+        mock_sale_services.items.return_value = [("TestSaleService", mock_sale_service)]
 
         mock_order_service.load_order.return_value = mock_order
         mock_order_service.get_notify_data.return_value = mock_notify_data
@@ -164,22 +227,24 @@ class TestCompletedUseCaseCompleteSales:
         completed_use_case.execute()
 
         # Verify all sales were processed
-        assert mock_sales_service.search_completed_sales.call_count == 1
+        assert mock_sale_service.search_completed_sales.call_count == 1
         assert mock_order_service.load_order.call_count == 3
         assert mock_order_service.get_notify_data.call_count == 3
         assert mock_order_service.notify_completed_sale.call_count == 3
-        assert mock_sales_service.mark_sale_notified.call_count == 3
+        assert mock_sale_service.mark_sale_notified.call_count == 3
         assert mock_order_service.persist_order.call_count == 3
 
     def test_execute_skips_when_order_not_found(
-        self, completed_use_case, mock_order_services, mock_sales_service
+        self, completed_use_case, mock_order_services, mock_sale_services
     ):
         """Test that execute skips when order is not found."""
         provider_name = "test_provider"
         mock_order_service = MagicMock()
 
         mock_order_services.items.return_value = [(provider_name, mock_order_service)]
-        mock_sales_service.search_completed_sales.return_value = [(100, "remote_123")]
+        mock_sale_service = MagicMock()
+        mock_sale_service.search_completed_sales.return_value = [(100, "remote_123")]
+        mock_sale_services.items.return_value = [("TestSaleService", mock_sale_service)]
 
         # Return None to indicate order not found
         mock_order_service.load_order.return_value = None
@@ -192,7 +257,7 @@ class TestCompletedUseCaseCompleteSales:
         mock_order_service.persist_order.assert_not_called()
 
     def test_execute_with_no_completed_sales(
-        self, completed_use_case, mock_order_services, mock_sales_service
+        self, completed_use_case, mock_order_services, mock_sale_services
     ):
         """Test execute when there are no completed sales."""
         provider_name = "test_provider"
@@ -200,17 +265,19 @@ class TestCompletedUseCaseCompleteSales:
 
         mock_order_services.items.return_value = [(provider_name, mock_order_service)]
 
-        # Return empty list
-        mock_sales_service.search_completed_sales.return_value = []
+        # Create and register mock sale service
+        mock_sale_service = MagicMock()
+        mock_sale_service.search_completed_sales.return_value = []
+        mock_sale_services.items.return_value = [("TestSaleService", mock_sale_service)]
 
         completed_use_case.execute()
 
         # Verify sales service was called but no orders were processed
-        mock_sales_service.search_completed_sales.assert_called_once_with(provider_name)
+        mock_sale_service.search_completed_sales.assert_called_once_with(provider_name)
         mock_order_service.load_order.assert_not_called()
 
     def test_execute_with_no_providers(
-        self, completed_use_case, mock_order_services, mock_sales_service
+        self, completed_use_case, mock_order_services, mock_sale_services
     ):
         """Test execute when there are no registered providers."""
         mock_order_services.items.return_value = []
@@ -218,14 +285,14 @@ class TestCompletedUseCaseCompleteSales:
         completed_use_case.execute()
 
         # Verify sales service was never called
-        mock_sales_service.search_completed_sales.assert_not_called()
+        mock_sale_services.items.assert_not_called()
 
 
 class TestCompletedUseCaseErrorHandling:
     """Tests for error handling in execute method."""
 
     def test_execute_handles_exception_from_search_completed_sales(
-        self, completed_use_case, mock_order_services, mock_sales_service, mock_error_store
+        self, completed_use_case, mock_order_services, mock_sale_services, mock_error_store
     ):
         """Test that exceptions from search_completed_sales are caught and queued."""
         provider_name = "test_provider"
@@ -233,8 +300,10 @@ class TestCompletedUseCaseErrorHandling:
 
         mock_order_services.items.return_value = [(provider_name, mock_order_service)]
 
-        # Raise exception from sales service
-        mock_sales_service.search_completed_sales.side_effect = RuntimeError("Service unavailable")
+        # Create and register mock sale service that raises
+        mock_sale_service = MagicMock()
+        mock_sale_service.search_completed_sales.side_effect = RuntimeError("Service unavailable")
+        mock_sale_services.items.return_value = [("TestSaleService", mock_sale_service)]
 
         completed_use_case.execute()
 
@@ -248,7 +317,7 @@ class TestCompletedUseCaseErrorHandling:
         self,
         completed_use_case,
         mock_order_services,
-        mock_sales_service,
+        mock_sale_services,
         mock_error_store,
     ):
         """Test that exceptions from load_order are caught and stored."""
@@ -256,7 +325,9 @@ class TestCompletedUseCaseErrorHandling:
         mock_order_service = MagicMock()
 
         mock_order_services.items.return_value = [(provider_name, mock_order_service)]
-        mock_sales_service.search_completed_sales.return_value = [(100, "remote_123")]
+        mock_sale_service = MagicMock()
+        mock_sale_service.search_completed_sales.return_value = [(100, "remote_123")]
+        mock_sale_services.items.return_value = [("TestSaleService", mock_sale_service)]
 
         # Raise exception from order service
         mock_order_service.load_order.side_effect = ValueError("Invalid order ID")
@@ -273,7 +344,7 @@ class TestCompletedUseCaseErrorHandling:
         self,
         completed_use_case,
         mock_order_services,
-        mock_sales_service,
+        mock_sale_services,
         mock_error_store,
         mock_order,
     ):
@@ -283,7 +354,9 @@ class TestCompletedUseCaseErrorHandling:
         mock_notify_data = {"test": "data"}
 
         mock_order_services.items.return_value = [(provider_name, mock_order_service)]
-        mock_sales_service.search_completed_sales.return_value = [(100, "remote_123")]
+        mock_sale_service = MagicMock()
+        mock_sale_service.search_completed_sales.return_value = [(100, "remote_123")]
+        mock_sale_services.items.return_value = [("TestSaleService", mock_sale_service)]
         mock_order_service.load_order.return_value = mock_order
         mock_order_service.get_notify_data.return_value = mock_notify_data
 
@@ -297,13 +370,13 @@ class TestCompletedUseCaseErrorHandling:
         error_arg = mock_error_store.add.call_args[0][0]
         assert isinstance(error_arg, RuntimeError)
         assert "Notification failed" in str(error_arg)
-        mock_sales_service.mark_sale_notified.assert_not_called()
+        mock_sale_service.mark_sale_notified.assert_not_called()
 
     def test_execute_handles_exception_from_persist_order(
         self,
         completed_use_case,
         mock_order_services,
-        mock_sales_service,
+        mock_sale_services,
         mock_error_store,
         mock_order,
     ):
@@ -313,7 +386,9 @@ class TestCompletedUseCaseErrorHandling:
         mock_notify_data = {"test": "data"}
 
         mock_order_services.items.return_value = [(provider_name, mock_order_service)]
-        mock_sales_service.search_completed_sales.return_value = [(100, "remote_123")]
+        mock_sale_service = MagicMock()
+        mock_sale_service.search_completed_sales.return_value = [(100, "remote_123")]
+        mock_sale_services.items.return_value = [("TestSaleService", mock_sale_service)]
         mock_order_service.load_order.return_value = mock_order
         mock_order_service.get_notify_data.return_value = mock_notify_data
 
@@ -327,13 +402,13 @@ class TestCompletedUseCaseErrorHandling:
         error_arg = mock_error_store.add.call_args[0][0]
         assert isinstance(error_arg, OSError)
         assert "Persistence failed" in str(error_arg)
-        mock_sales_service.mark_sale_notified.assert_called_once_with(100)
+        mock_sale_service.mark_sale_notified.assert_called_once_with(100)
 
     def test_execute_continues_after_exception(
         self,
         completed_use_case,
         mock_order_services,
-        mock_sales_service,
+        mock_sale_services,
         mock_error_store,
         mock_order,
     ):
@@ -348,18 +423,20 @@ class TestCompletedUseCaseErrorHandling:
             (provider2, mock_order_service2),
         ]
 
-        # First provider raises exception, second provider succeeds
-        mock_sales_service.search_completed_sales.side_effect = [
+        # Create and register mock sale service
+        mock_sale_service = MagicMock()
+        mock_sale_service.search_completed_sales.side_effect = [
             RuntimeError("Provider 1 error"),
             [(200, "remote_200")],
         ]
+        mock_sale_services.items.return_value = [("TestSaleService", mock_sale_service)]
 
         mock_order_service2.load_order.return_value = mock_order
 
         completed_use_case.execute()
 
         # Verify second provider was still processed
-        assert mock_sales_service.search_completed_sales.call_count == 2
+        assert mock_sale_service.search_completed_sales.call_count == 2
         mock_order_service2.load_order.assert_called_once()
         assert mock_error_store.add.call_count == 1
 
@@ -371,7 +448,7 @@ class TestCompletedUseCaseIntegration:
         self,
         completed_use_case,
         mock_order_services,
-        mock_sales_service,
+        mock_sale_services,
         mock_error_store,
         mock_order,
     ):
@@ -387,10 +464,12 @@ class TestCompletedUseCaseIntegration:
             (provider2, mock_order_service2),
         ]
 
-        mock_sales_service.search_completed_sales.side_effect = [
+        mock_sale_service = MagicMock()
+        mock_sale_service.search_completed_sales.side_effect = [
             [(1, "remote_1"), (2, "remote_2")],
             [(3, "remote_3")],
         ]
+        mock_sale_services.items.return_value = [("TestSaleService", mock_sale_service)]
 
         mock_order_service1.load_order.side_effect = [mock_order, mock_order]
         mock_order_service2.load_order.return_value = mock_order
@@ -406,14 +485,14 @@ class TestCompletedUseCaseIntegration:
         assert mock_order_service2.get_notify_data.call_count == 1
         assert mock_order_service2.notify_completed_sale.call_count == 1
         assert mock_order_service2.persist_order.call_count == 1
-        assert mock_sales_service.mark_sale_notified.call_count == 3
+        assert mock_sale_service.mark_sale_notified.call_count == 3
         mock_error_store.add.assert_not_called()
 
     def test_execute_with_mixed_success_and_missing_orders(
         self,
         completed_use_case,
         mock_order_services,
-        mock_sales_service,
+        mock_sale_services,
         mock_error_store,
         mock_order,
     ):
@@ -423,11 +502,13 @@ class TestCompletedUseCaseIntegration:
         mock_notify_data = {"test": "data"}
 
         mock_order_services.items.return_value = [(provider, mock_order_service)]
-        mock_sales_service.search_completed_sales.return_value = [
+        mock_sale_service = MagicMock()
+        mock_sale_service.search_completed_sales.return_value = [
             (1, "remote_1"),
             (2, "missing_order"),
             (3, "remote_3"),
         ]
+        mock_sale_services.items.return_value = [("TestSaleService", mock_sale_service)]
 
         # Second call returns None to indicate order not found
         mock_order_service.load_order.side_effect = [mock_order, None, mock_order]
@@ -439,7 +520,7 @@ class TestCompletedUseCaseIntegration:
         assert mock_order_service.get_notify_data.call_count == 2
         assert mock_order_service.notify_completed_sale.call_count == 2
         assert mock_order_service.persist_order.call_count == 2
-        assert mock_sales_service.mark_sale_notified.call_count == 2
+        assert mock_sale_service.mark_sale_notified.call_count == 2
         # Verify missing order error was stored
         mock_error_store.add.assert_called_once()
         error_arg = mock_error_store.add.call_args[0][0]
