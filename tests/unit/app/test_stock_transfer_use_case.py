@@ -24,17 +24,23 @@ def stock_transfer_use_case(mock_stock_services):
 
 
 class TestStockTransferUseCaseInstantiation:
-    """Tests for StockTransferUseCase instantiation."""
+    """Tests for StockTransferUseCase instantiation and factory method."""
 
-    def test_instantiation_with_valid_dependencies(self, mock_stock_services):
-        """Test that StockTransferUseCase initializes correctly."""
+    def test_instantiation_with_required_fields(self, mock_stock_services):
+        """Test instantiation with explicitly provided fields."""
         use_case = StockTransferUseCase(
             stock_services=mock_stock_services,
         )
 
         assert use_case.stock_services is mock_stock_services
 
-    def test_instantiation_creates_frozen_dataclass(self, mock_stock_services):
+    def test_instantiation_with_defaults(self):
+        """Test instantiation with all default values."""
+        use_case = StockTransferUseCase()
+
+        assert use_case.stock_services is not None
+
+    def test_instantiation_is_frozen_dataclass(self, mock_stock_services):
         """Test that StockTransferUseCase is a frozen dataclass."""
         use_case = StockTransferUseCase(
             stock_services=mock_stock_services,
@@ -43,10 +49,29 @@ class TestStockTransferUseCaseInstantiation:
         with pytest.raises(AttributeError):
             use_case.stock_services = None  # type: ignore
 
-    def test_instantiation_requires_stock_services(self):
-        """Test that stock_services parameter is required."""
-        with pytest.raises(TypeError):
-            StockTransferUseCase()  # type: ignore
+    def test_register_classmethod_creates_instance(self, mocker):
+        """Test that register classmethod creates instance and registers it."""
+        mock_use_cases = MagicMock()
+        mocker.patch("src.app.stock_transfer_use_case.get_use_cases", return_value=mock_use_cases)
+
+        StockTransferUseCase.register("stock_transfers")
+
+        mock_use_cases.register.assert_called_once()
+        call_args = mock_use_cases.register.call_args
+        assert call_args[0][0] == "stock_transfers"
+        assert isinstance(call_args[0][1], StockTransferUseCase)
+
+    def test_register_classmethod_with_defaults(self, mocker):
+        """Test that register creates instance with default dependencies."""
+        mock_use_cases = MagicMock()
+        mocker.patch("src.app.stock_transfer_use_case.get_use_cases", return_value=mock_use_cases)
+
+        StockTransferUseCase.register("test_use_case")
+
+        # Verify the registered instance has default values
+        call_args = mock_use_cases.register.call_args
+        registered_instance = call_args[0][1]
+        assert registered_instance.stock_services is not None
 
 
 class TestStockTransferUseCaseExecute:

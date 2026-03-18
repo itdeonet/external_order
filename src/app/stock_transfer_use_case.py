@@ -3,10 +3,11 @@
 Process inbound stock transfer delivery notifications from multiple providers.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from logging import getLogger
 
 from src.app.errors import get_error_store
+from src.app.registry import get_stock_services, get_use_cases
 from src.domain import IRegistry, IStockService
 
 logger = getLogger(__name__)
@@ -20,7 +21,13 @@ class StockTransferUseCase:
     Handles errors per-transfer without stopping processing.
     """
 
-    stock_services: IRegistry[IStockService]
+    stock_services: IRegistry[IStockService] = field(default_factory=get_stock_services)
+
+    @classmethod
+    def register(cls, name: str) -> None:
+        """Factory method to create and register a StockTransferUseCase instance."""
+        use_case = cls()
+        get_use_cases().register(name, use_case)
 
     def execute(self) -> None:
         """Process all pending stock transfer requests from registered providers.
