@@ -20,14 +20,14 @@ A modular order synchronization system that imports orders from external provide
 
 This application orchestrates a multi-step workflow for processing external orders:
 
-1. **Read Orders** - Import order data from external providers (Harman via EDIFACT, Camelbak via REST API)
-2. **Create Sales** - Create corresponding sales in Odoo ERP system
+1. **Read Orders** - Import order data from external providers (Harman via EDIFACT, Spectrum/Camelbak via REST API)
+2. **Create Sales** - Create corresponding sales in Odoo ERP system with wrapped HTTP error handling
 3. **Manage Artwork** - Fetch and manage product artwork from external services (Spectrum)
 4. **Confirm Sales** - Complete the sales workflow in Odoo
 5. **Stock Transfers** - Handle inventory movements between warehouse systems (Harman)
-6. **Notifications** - Send delivery notifications (EDIFACT format)
+6. **Notifications** - Send delivery notifications (EDIFACT format) and error alerts
 
-The system is designed as a **pluggable service architecture** where new order providers, artwork services, and stock systems can be added without modifying core logic.
+The system is designed as a **pluggable service architecture** where new order providers, artwork services, and stock systems can be added without modifying core logic. All operations include per-item error collection without stopping execution, enabling robust processing of multiple orders/transfers even when individual items fail.
 
 ## File Structure
 
@@ -1061,19 +1061,28 @@ class SpectrumArtworkService:
 
 ### Test Coverage
 
-Comprehensive test suite with **862 unit tests** and high code coverage:
+Comprehensive test suite with **969 total tests** and **91% code coverage**:
 
 **Module Coverage Levels:**
 - **Domain Layer** (100% coverage) - Order, ShipTo, LineItem, Artwork, Validators - comprehensive validation and state transition testing
-- **Application Layer** (100% coverage) - All use cases (NewSalesUseCase, CompletedSaleUseCase, StockTransferUseCase) with mocked services
-- **Services Layer** (78-100% coverage):
-  - HarmanOrderService: 52 tests (78% coverage) - Order parsing, EDIFACT processing
-  - OdooSaleService: 66 tests (95% coverage) - Sale management, JSON-RPC integration
-  - SpectrumArtworkService: 35+ tests (100% coverage) - Design retrieval, file handling
+- **Application Layer** (100% coverage) - All use cases (NewSaleUseCase, CompletedSaleUseCase, StockTransferUseCase) with mocked services and error isolation patterns
+- **Entry Point** (96% coverage) - main.py service registration and orchestration with use case execution and error handling
+- **Config** (100% coverage) - Configuration management with validation and environment variable handling
+- **Services Layer** (81-100% coverage):
+  - HarmanOrderService: 81% coverage - Order parsing, EDIFACT processing, error handling
+  - OdooSaleService: 96% coverage - Sale management, JSON-RPC integration, contact conversion
+  - SpectrumArtworkService: 99% coverage - Design retrieval, file handling
   - RenderService: 100% coverage - Template rendering
-  - HarmanStockService: 100% coverage - Stock transfers
+  - HarmanStockService: 100% coverage - Stock transfers, email notifications
+  - SpectrumOrderService: 91% coverage - REST API order integration
   
-**Overall:** 87% code coverage across all modules
+**Recent Improvements:**
+- Added 3 new integration tests for main() execution (main.py coverage: 46% → 96%)
+- Added 17 new unit tests for edge cases and error paths (coverage_gaps.py)
+- Improved error handling test coverage with network failure and exception path scenarios
+- Validates multi-provider orchestration and error isolation between use cases
+
+**Overall:** 91% code coverage across all modules
 
 **Test Files (24 total):**
 - Unit tests: `tests/unit/` (19 test files)
@@ -1084,13 +1093,14 @@ Comprehensive test suite with **862 unit tests** and high code coverage:
 - Integration tests: `tests/integration/` (5 test files)
   - Cross-module testing validating service interactions
   - Main setup and workflow integration tests
+  - Edge case and resilience testing
 
 ```bash
-# Run all unit tests
-uv run pytest tests/unit/ -v
+# Run all tests with summary
+uv run pytest tests/ -v
 
 # Run with coverage report
-uv run pytest tests/unit/ --cov=src --cov-report=html --cov-report=term-missing
+uv run pytest tests/ --cov=src --cov-report=html --cov-report=term-missing
 
 # Run specific test file
 uv run pytest tests/unit/domain/test_order.py -v
@@ -1100,6 +1110,35 @@ uv run pytest tests/unit/services/test_odoo_sale_service.py::TestMarkSaleNotifie
 
 # Run integration tests
 uv run pytest tests/integration/ -v
+
+# Run only edge case tests
+uv run pytest tests/integration/test_edge_cases.py -v
+```
+
+### Key Testing Patterns
+
+#### Error Collection & Isolation
+Tests validate that errors in one use case don't stop others:
+```python
+# Tests confirm: NewSale fails → CompletedSale and StockTransfer still execute
+# Errors collected in ErrorStore for centralized alerting
+```
+
+#### Multi-Provider Orchestration
+Tests validate service registry and multi-provider iteration:
+```python
+# Multiple SpectrumArtworkService instances registered (Harman + Camelbak)
+# Each use case iterates over all registered services
+# Per-service and per-order error handling tested
+```
+
+#### HTTP Error Context Wrapping
+Tests validate domain-specific errors from HTTP failures:
+```python
+# requests.HTTPError wrapped in domain exceptions:
+# - ArtworkError (SpectrumArtworkService)
+# - SaleError (OdooSaleService)
+# - OrderError (HarmanOrderService)
 ```
 
 ### Writing Tests for New Services
@@ -1158,28 +1197,59 @@ Instead of exceptions propagating up the stack and stopping execution, they're c
 # In main.py
 error_store = get_error_store()
 
-# Execute each use case, collecting errors
+# Execute each use case, collecting errors without stopping
 for _, use_case in use_cases.items():
     try:
+        logger.info("Execute use case: %s", use_case_name)
         use_case.execute()
     except Exception as exc:
         error_store.add(exc)
-        logger.error(f"Error executing use case: {exc!s}")
+        logger.error("Failed to execute use case %s: %s", use_case_name, exc)
 
-# At the end, check if errors occurred and send alert email
+# At the end, check if errors occurred and send alert email if needed
 if error_store.has_errors():
-    emailer = EmailSender(...)
-    emailer.send(
-        subject="Deonet External Order - Errors during execution",
-        body_params=error_store.get_render_email_data(),
-    )
+    logger.info("Errors were collected during execution, sending alert email...")
+    try:
+        emailer = EmailSender(host=config.smtp_host, port=config.smtp_port, use_starttls=True)
+        emailer.set_template_paths(config.templates_dir)
+        emailer.send(
+            subject=f"Deonet External Order - Errors during execution on {socket.gethostname()}",
+            sender=config.email_sender,
+            receivers=config.email_alert_to,
+            html_template=config.email_alert_template.name,
+            body_params=error_store.get_render_email_data(),
+        )
+        logger.info("Error alert email sent successfully.")
+    except Exception as exc:
+        logger.error("Failed to send error alert email: %s", exc)
 ```
 
 This ensures that:
-- One failing service doesn't stop other services from executing
-- All errors are collected and reported together
-- The IT team receives an email alert with complete error details
-- Execution continues even if individual orders fail
+- One failing use case doesn't stop other use cases from executing
+- One failing order doesn't stop other orders from processing within a use case
+- All errors are collected and reported together at application end
+- The IT team receives an email alert with complete error context
+- HTTP errors are wrapped with domain-specific exceptions for better error tracking
+- Execution continues even if individual orders/transfers fail
+
+### HTTP Error Context Wrapping
+
+External HTTP errors are wrapped with domain context before collection:
+
+```python
+# In services - HTTP errors wrapped with domain context
+try:
+    response = self.session.post(url, json=payload)
+    response.raise_for_status()
+except requests.HTTPError as http_err:
+    # Wrap with domain context
+    raise SaleError(f"Failed to create sale for order {order.remote_order_id}: {http_err}") from http_err
+```
+
+**Exception Hierarchy:**
+- `ArtworkError` - Spectrum API artwork retrieval failures
+- `SaleError` - Odoo sale creation/update failures  
+- `OrderError` - Order processing failures (parsing, validation, storage)
 
 ### Custom Error Types
 
@@ -1187,20 +1257,40 @@ This ensures that:
 # src/app/errors.py
 
 class SaleError(Exception):
-    """Error during sale creation/processing."""
-    def __init__(self, message: str, order_id: str):
-        self.order_id = order_id
-        super().__init__(message)
+    """Error during sale creation/processing in Odoo."""
+    pass
 
-class NotifyError(Exception):
-    """Error during order notification."""
-    def __init__(self, message: str, order_id: str):
-        self.order_id = order_id
-        super().__init__(message)
+class OrderError(Exception):
+    """Error during order processing (parsing, validation, storage)."""
+    pass
 
 class ArtworkError(Exception):
-    """Error during artwork retrieval."""
+    """Error during artwork retrieval from external service."""
     pass
+
+class ErrorStore:
+    """Thread-safe singleton for collecting errors during operation.
+    
+    Allows each operation (use case, order processing, etc.) to continue
+    even when errors occur, collecting all errors for centralized reporting.
+    """
+    
+    def add(self, exc: Exception) -> None:
+        """Add exception to store (thread-safe)."""
+    
+    def has_errors(self) -> bool:
+        """Check if any errors were collected."""
+    
+    def get_render_email_data(self) -> dict[str, Any]:
+        """Get error summary data for email template rendering."""
+        return {
+            "errors": [str(e) for e in self._errors],
+            "error_count": len(self._errors),
+            "timestamp": self._timestamp,
+        }
+    
+    def clear(self) -> None:
+        """Clear all collected errors."""
 ```
 
 Throw errors for critical failures:
@@ -1208,7 +1298,11 @@ Throw errors for critical failures:
 ```python
 # In order service
 if not order_data:
-    raise NotifyError("No valid order data found", order_id=order.remote_order_id)
+    raise OrderError(f"No valid order data found for {order.remote_order_id}")
+
+# In sale service
+if response.status_code != 200:
+    raise SaleError(f"Odoo API error for sale {order.remote_order_id}: {response.text}")
 ```
 
 ## Development Workflow
@@ -1225,9 +1319,14 @@ if not order_data:
 - **Frozen dataclasses** used for immutable domain objects with validation in `__post_init__()`
 - **Protocols** instead of abstract base classes for interfaces (contract-based design)
 - **Single responsibility** - each class has one reason to change
-- **Error handling**: Exceptions collected in ErrorStore, not propagated (fail-safe pattern)
+- **Error handling**: 
+  - HTTP errors wrapped with domain context (ArtworkError, SaleError, OrderError)
+  - Exceptions collected in ErrorStore, not propagated (fail-safe pattern)
+  - Per-item error handling without stopping execution (isolation pattern)
 - **init=False fields**: Use for state that's derived/set in `__post_init__()` (requires `object.__setattr__()` due to frozen dataclass)
 - **Conditional workflow steps**: Use walrus operator in conditionals when assigning and testing simultaneously (e.g., `if (artwork := get_artwork()) is not None:`)
+- **Magic constants extracted**: All hardcoded values moved to configuration or descriptive named constants
+- **Logging format**: Use `%s` with lazy evaluation instead of f-strings for performance
 
 ### Project Structure Decisions
 

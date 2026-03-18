@@ -635,7 +635,203 @@ SPECTRUM_HARMAN_API_KEY="api_key_token"                       # API token
 
 ---
 
-## 7. Error Response Codes & Handling
+## 7. Error Handling & Resilience
+
+### HTTP Error Context Wrapping
+
+All HTTP errors (`requests.HTTPError`) from external services are caught and wrapped with domain-specific context to preserve order/operation information:
+
+```python
+# In OdooSaleService
+try:
+    response = self.session.post(f"{self.base_url}/jsonrpc", json=payload)
+    response.raise_for_status()
+except requests.HTTPError as http_err:
+    # Wrap with domain context
+    raise SaleError(
+        f"Odoo RPC failed for order {order.remote_order_id}: "
+        f"Status {response.status_code}, Response: {response.text}"
+    ) from http_err
+
+# In SpectrumArtworkService
+try:
+    response = self.session.get(f"{self.base_url}/api/order/{recipe_set_id}/")
+    response.raise_for_status()
+except requests.HTTPError as http_err:
+    raise ArtworkError(
+        f"Failed to fetch artwork for order {order.remote_order_id}: {http_err}"
+    ) from http_err
+
+# In HarmanOrderService
+try:
+    response = self.session.get(url)
+    response.raise_for_status()
+except requests.HTTPError as http_err:
+    raise OrderError(
+        f"Failed to reach Harman for order {order.remote_order_id}: {http_err}"
+    ) from http_err
+```
+
+**Benefits:**
+- Preserves stack trace (`from http_err` maintains exception chain)
+- Adds order/operation context for debugging
+- Enables targeted error handling based on service type
+- Makes error emails more actionable
+
+### Exception Hierarchy
+
+```
+Exception
+├─ SaleError                          # Odoo sale operations
+├─ ArtworkError                       # Spectrum artwork service
+├─ OrderError                         # Order processing, EDIFACT parsing
+└─ (built-in exceptions)
+   ├─ ValueError                      # Validation failures
+   ├─ requests.HTTPError              # HTTP failures (wrapped above)
+   └─ other exceptions
+```
+
+### Error Collection & Reporting
+
+#### Per-Use-Case Error Isolation
+Each use case executes with per-item error handling:
+
+```python
+# In use cases
+for order in orders:
+    try:
+        # Process order
+    except Exception as exc:
+        error_store.add(exc)            # Collect error
+        logger.error("Order failed: %s", exc)  # Log with context
+        # Continue to next order - don't stop execution
+```
+
+#### ErrorStore (Singleton)
+
+```python
+from src.app.errors import get_error_store
+
+error_store = get_error_store()
+
+# Add errors during operation
+if artwork_urls_missing:
+    error_store.add(ArtworkError("Artwork not found for line items"))
+
+# Check if errors occurred
+if error_store.has_errors():
+    # Get data for error email template
+    email_data = error_store.get_render_email_data()
+    # email_data = {
+    #     "errors": ["Error 1", "Error 2", ...],
+    #     "error_count": 2,
+    #     "timestamp": "2024-01-15 10:30:45"
+    # }
+```
+
+### Error Email Contents
+
+When errors are collected during execution, an alert email is sent with:
+```python
+{
+    "error_count": int,
+    "errors": list[str],          # Formatted error messages with context
+    "timestamp": "YYYY-MM-DD HH:MM:SS",
+    "hostname": "server-name"
+}
+```
+
+**Email Template:** `error_alert.html` (rendered with above data)
+
+### Resilience Patterns
+
+#### 1. Multi-Provider Continuation
+```python
+# In NewSaleUseCase
+for order_service_name, order_service in order_services.items():
+    try:
+        for order in order_service.read_orders():
+            # Process order
+    except Exception as exc:
+        error_store.add(exc)
+        # Continue to next provider even if this one fails
+```
+
+#### 2. Multi-Order Continuation
+```python
+# Within a provider's workflow
+for order in orders:
+    try:
+        create_sale(order)
+        get_artwork(order)
+        confirm_order(order)
+    except Exception as exc:
+        error_store.add(exc)
+        # Continue to next order
+```
+
+#### 3. Multi-Step Continuation Without Rollback
+```python
+# In CompletedSaleUseCase
+try:
+    notify_data = order_service.get_notify_data(order)
+    order_service.notify_completed_sale(order, notify_data)  # Step 1
+    sale_service.mark_sale_notified(sale_id)                 # Step 2
+    order_service.persist_order(order, OrderStatus.COMPLETED) # Step 3
+except Exception as exc:
+    error_store.add(exc)
+    # If step 1 fails: no mark_sale_notified, no persist
+    # If step 2 fails: sale marked but persist not called
+    # If step 3 fails: sale marked (no rollback of step 2)
+```
+
+### Response Codes & Handling
+
+#### Odoo RPC Error Response
+```python
+{
+    "jsonrpc": "2.0",
+    "error": {
+        "code": 200,
+        "message": "odoo.exceptions.AccessError",
+        "data": {
+            "type": "client_error",
+            "arguments": ["..."],
+            "message": "..."
+        }
+    },
+    "id": counter
+}
+```
+
+#### Spectrum API Error Response
+```python
+# HTTP 4xx/5xx status codes trigger requests.HTTPError
+# Wrapped as ArtworkError with order context
+```
+
+#### Handling Patterns
+
+**Retriable Errors (temporary failures):**
+- Network timeouts
+- 429 Too Many Requests
+- 503 Service Unavailable
+→ Currently: Collected in ErrorStore, reported in alert email (no automatic retry)
+→ Future: Could implement exponential backoff
+
+**Non-Retriable Errors (data problems):**
+- 404 Not Found
+- 400 Bad Request
+- 401 Unauthorized
+→ Collected and reported, manual investigation needed
+
+### Data Response Formats
+
+See Section 6 above for complete field specifications and validation rules.
+
+---
+
+## 8. Error Response Codes & Handling (Legacy)
 
 ### Exception Hierarchy
 ```

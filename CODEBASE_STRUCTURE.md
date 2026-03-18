@@ -1,7 +1,7 @@
 # Deonet External Order - Codebase Structure & API Reference
 
 ## Overview
-This is a Python application for processing external orders from multiple order providers (Harman, Spectrum) and integrating them with an Odoo sales system. It follows hexagonal architecture principles with clear separation of domain models, service implementations, and use case orchestration.
+This is a Python application for processing external orders from multiple order providers (Harman, Spectrum/Camelbak) and integrating them with an Odoo sales system. It follows hexagonal architecture principles with clear separation of domain models, service implementations, and use case orchestration. The codebase has been improved with enhanced error handling (HTTP error wrapping, context preservation), comprehensive testing (974 tests, 93% coverage), and robust error isolation patterns.
 
 ---
 
@@ -28,14 +28,14 @@ src/
 │   ├── stock_transfer_use_case.py  # Process stock transfer requests
 │   ├── registry.py                 # Thread-safe registry for service instances
 │   ├── odoo_auth.py                # Odoo RPC credentials (frozen dataclass)
-│   ├── errors.py                   # ErrorStore & custom exception classes
+│   ├── errors.py                   # ErrorStore, custom exceptions, error wrapping
 │   └── log_setup.py                # Logging configuration
 │
 ├── services/                        # Service implementations (external integrations)
 │   ├── harman_order_service.py     # EDIFACT order parsing & Harman integration
-│   ├── camelbak_order_service.py   # Camelbak/Spectrum REST API order integration
-│   ├── harman_stock_service.py     # Stock transfer XML processing
-│   ├── odoo_sale_service.py        # Odoo sales RPC operations
+│   ├── spectrum_order_service.py   # Spectrum REST API order integration (commented out)
+│   ├── harman_stock_service.py     # Stock transfer XML processing & IDOC replies
+│   ├── odoo_sale_service.py        # Odoo sales RPC operations with error wrapping
 │   ├── spectrum_artwork_service.py # Spectrum API artwork retrieval
 │   └── render_service.py           # Jinja2 template rendering
 │
@@ -71,12 +71,23 @@ class IRegistry[T](Protocol):
     def items(self) -> Generator[tuple[str, T], None, None]
 ```
 
+### Service Registration
+Services are registered at runtime via subclassing and class method factories:
+```python
+class SpectrumArtworkService:
+    @classmethod
+    def register(cls, name: str, session: requests.Session, api_key: str) -> None:
+        """Factory method for runtime registration."""
+        service = cls(session=session, api_key=api_key)
+        get_artwork_services().register(name, service)
+```
+
 ### `IArtworkService`
 Retrieves artwork files for an order.
 ```python
 class IArtworkService(Protocol):
-    def get_artwork(self, order: "Order") -> list[Path]:
-        """Return local file list of artwork files for order."""
+    def get_artwork(self, order: "Order") -> list[Artwork]:
+        """Return list of Artwork objects with file paths for order."""
 ```
 
 ### `IOrderReader`
