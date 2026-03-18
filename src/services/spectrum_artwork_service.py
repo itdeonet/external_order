@@ -1,7 +1,7 @@
 """Spectrum artwork service for retrieving and managing digital assets from Spectrum API."""
 
 import io
-from dataclasses import InitVar, dataclass, field
+from dataclasses import dataclass, field
 from logging import getLogger
 from pathlib import Path
 from typing import Any
@@ -10,6 +10,7 @@ from zipfile import ZipFile
 import requests
 
 from src.app.errors import ArtworkError
+from src.app.registry import get_artwork_services
 from src.config import get_config
 from src.domain import Artwork, Order
 
@@ -29,15 +30,17 @@ class SpectrumArtworkService:
     """
 
     session: requests.Session
-    api_key: InitVar[str] = field(repr=False)
     base_url: str = field(default_factory=lambda: get_config().spectrum_base_url)
     digitals_dir: Path = field(default_factory=lambda: Path(get_config().digitals_dir))
     client_handle: str = field(default="", init=False)
     order_data: dict[str, Any] = field(default_factory=dict, init=False)
 
-    def __post_init__(self, api_key: str) -> None:
-        """post init to ensure the object is valid."""
-        self.session.headers.update({"SPECTRUM_API_TOKEN": api_key})
+    @classmethod
+    def register(cls, name: str, session: requests.Session, api_key: str) -> None:
+        """Factory method to create and register a SpectrumArtworkService instance."""
+        session.headers.update({"SPECTRUM_API_TOKEN": api_key})
+        artwork_service = cls(session=session)
+        get_artwork_services().register(name, artwork_service)
 
     def get_artwork(self, order: Order) -> list[Path]:
         """Retrieve and download artwork assets for an order.
@@ -74,10 +77,13 @@ class SpectrumArtworkService:
         logger.debug("Artwork data extracted from Spectrum response: %s", artwork_data)
 
         file_paths: list[Path] = []
+        config = get_config()
         for li in order.line_items:
             for li_id, sku, qty, recipe_set_id in artwork_data:
                 if li.product_code == sku and li.quantity == qty:
-                    design_endpoint = f"/api/webtoprint/{recipe_set_id}/"
+                    design_endpoint = (
+                        f"{config.spectrum_webtoprint_endpoint.rstrip('/')}/{recipe_set_id}/"
+                    )
                     placement_endpoint = f"/{self.client_handle}/specification/{recipe_set_id}/pdf/"
 
                     artwork = Artwork(
@@ -119,10 +125,21 @@ class SpectrumArtworkService:
         Raises:
             requests.exceptions.RequestException: If API request fails.
         """
-        logger.info(f"Get Spectrum order data for order {order.remote_order_id}")
-        endpoint = f"/api/order/order-number/{order.remote_order_id}/"
-        response = self.session.get(url=f"{self.base_url.rstrip('/')}{endpoint}", timeout=(5, 30))
-        response.raise_for_status()
+        logger.info("Get Spectrum order data for order %s", order.remote_order_id)
+        config = get_config()
+        endpoint = f"{config.spectrum_order_endpoint.rstrip('/')}/{order.remote_order_id}/"
+        url = f"{self.base_url.rstrip('/')}{endpoint}"
+        timeout = config.spectrum_request_timeout
+
+        try:
+            response = self.session.get(url=url, timeout=timeout)
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as exc:
+            raise ArtworkError(
+                message=f"Spectrum API error: {exc.response.status_code} {exc.response.reason}",
+                order_id=order.remote_order_id,
+            ) from exc
+
         order_data = response.json()
         object.__setattr__(self, "order_data", order_data)
         object.__setattr__(self, "client_handle", order_data.get("clientHandle", ""))
@@ -144,9 +161,19 @@ class SpectrumArtworkService:
             requests.exceptions.RequestException: If API request fails.
         """
         logger.info("Get designs for artwork %s with order name %s", recipe_set_id, sale_name)
-        endpoint = f"/api/webtoprint/{recipe_set_id}/"
-        response = self.session.get(url=f"{self.base_url.rstrip('/')}{endpoint}", timeout=(5, 30))
-        response.raise_for_status()
+        config = get_config()
+        endpoint = f"{config.spectrum_webtoprint_endpoint.rstrip('/')}/{recipe_set_id}/"
+        url = f"{self.base_url.rstrip('/')}{endpoint}"
+        timeout = config.spectrum_request_timeout
+
+        try:
+            response = self.session.get(url=url, timeout=timeout)
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as exc:
+            raise ArtworkError(
+                message=f"Spectrum API error: {exc.response.status_code} {exc.response.reason}",
+                order_id=sale_name,
+            ) from exc
 
         saved_as: list[Path] = []
         with ZipFile(io.BytesIO(response.content)) as zip_file:
@@ -156,7 +183,7 @@ class SpectrumArtworkService:
                 zip_file.extract(member, path=self.digitals_dir)
                 saved_as.append(self.digitals_dir / member.filename)
                 saved_as[-1].touch()  # update modified time to now
-                logger.debug(f"Extracted {member.filename} to {saved_as[-1]}")
+                logger.debug("Extracted %s to %s", member.filename, saved_as[-1])
 
         return saved_as
 
@@ -176,11 +203,22 @@ class SpectrumArtworkService:
             requests.exceptions.RequestException: If API request fails.
         """
         logger.info("Get placement for artwork %s with order name %s", recipe_set_id, sale_name)
+        config = get_config()
         endpoint = f"/{self.client_handle}/specification/{recipe_set_id}/pdf/"
-        response = self.session.get(url=f"{self.base_url.rstrip('/')}{endpoint}", timeout=(5, 30))
-        response.raise_for_status()
-        save_as = self.digitals_dir / f"{sale_name}_{recipe_set_id}_placement.pdf"
+        url = f"{self.base_url.rstrip('/')}{endpoint}"
+        timeout = config.spectrum_request_timeout
+
+        try:
+            response = self.session.get(url=url, timeout=timeout)
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as exc:
+            raise ArtworkError(
+                message=f"Spectrum API error: {exc.response.status_code} {exc.response.reason}",
+                order_id=sale_name,
+            ) from exc
+
+        save_as = self.digitals_dir / f"{sale_name}_{recipe_set_id}_{config.placement_file_suffix}"
         save_as.write_bytes(response.content)
         save_as.touch()  # update modified time to now
-        logger.debug(f"Saved placement PDF to {save_as}")
+        logger.debug("Saved placement PDF to %s", save_as)
         return save_as

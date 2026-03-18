@@ -30,20 +30,33 @@ class TestSpectrumArtworkServiceInstantiation:
 
         service = SpectrumArtworkService(
             session=mock_client,
-            api_key="test-key",
             base_url="https://spectrum.example.com",
             digitals_dir=digitals_dir,
         )
 
         assert service.session is mock_client
+        assert service.base_url == "https://spectrum.example.com"
         assert service.digitals_dir == digitals_dir
+
+    def test_instantiation_with_defaults(self, mocker):
+        """Test creating SpectrumArtworkService with config defaults."""
+        mock_client = _create_mock_session()
+        mock_config = Mock()
+        mock_config.spectrum_base_url = "https://spectrum.default.com"
+        mock_config.digitals_dir = "/default/digitals"
+        mocker.patch("src.services.spectrum_artwork_service.get_config", return_value=mock_config)
+
+        service = SpectrumArtworkService(session=mock_client)
+
+        assert service.session is mock_client
+        assert service.base_url == "https://spectrum.default.com"
+        assert service.digitals_dir == Path("/default/digitals")
 
     def test_instantiation_initializes_empty_client(self):
         """Test that client is initialized as empty string."""
         mock_client = _create_mock_session()
         service = SpectrumArtworkService(
             session=mock_client,
-            api_key="test-key",
             base_url="https://spectrum.example.com",
             digitals_dir=Path("/tmp"),
         )
@@ -51,10 +64,88 @@ class TestSpectrumArtworkServiceInstantiation:
         assert isinstance(service.client_handle, str)
         assert service.client_handle == ""
 
+    def test_instantiation_initializes_empty_order_data(self):
+        """Test that order_data is initialized as empty dict."""
+        mock_client = _create_mock_session()
+        service = SpectrumArtworkService(
+            session=mock_client,
+            base_url="https://spectrum.example.com",
+            digitals_dir=Path("/tmp"),
+        )
+
+        assert isinstance(service.order_data, dict)
+        assert service.order_data == {}
+
     def test_instantiation_raises_without_session(self):
         """Test that session is required."""
         with pytest.raises(TypeError):
-            SpectrumArtworkService(api_key="test-key", base_url="https://spectrum.example.com")  # type: ignore
+            SpectrumArtworkService(base_url="https://spectrum.example.com")  # type: ignore
+
+    def test_register_classmethod_creates_instance_with_defaults(self, mocker):
+        """Test that register() classmethod creates instance with config defaults."""
+        mock_client = _create_mock_session()
+        mock_registry = Mock()
+        mock_config = Mock()
+        mock_config.spectrum_base_url = "https://spectrum.default.com"
+        mock_config.digitals_dir = "/default/digitals"
+
+        mocker.patch(
+            "src.services.spectrum_artwork_service.get_artwork_services", return_value=mock_registry
+        )
+        mocker.patch("src.services.spectrum_artwork_service.get_config", return_value=mock_config)
+
+        SpectrumArtworkService.register("spectrum_artwork", mock_client, "test-api-key")
+
+        # Verify headers were updated with API key
+        assert mock_client.headers.get("SPECTRUM_API_TOKEN") == "test-api-key"
+
+        # Verify register was called
+        mock_registry.register.assert_called_once()
+        call_args = mock_registry.register.call_args
+        assert call_args[0][0] == "spectrum_artwork"
+        assert isinstance(call_args[0][1], SpectrumArtworkService)
+
+    def test_register_classmethod_registers_with_provided_session(self, mocker):
+        """Test that register() classmethod registers instance with provided session."""
+        mock_client = _create_mock_session()
+        mock_registry = Mock()
+        mock_config = Mock()
+        mock_config.spectrum_base_url = "https://spectrum.default.com"
+        mock_config.digitals_dir = "/default/digitals"
+
+        mocker.patch(
+            "src.services.spectrum_artwork_service.get_artwork_services", return_value=mock_registry
+        )
+        mocker.patch("src.services.spectrum_artwork_service.get_config", return_value=mock_config)
+
+        service_name = "test_artwork_service"
+        api_key = "test-api-key-123"
+        SpectrumArtworkService.register(service_name, mock_client, api_key)
+
+        # Verify the service was registered with the provided session
+        mock_registry.register.assert_called_once()
+        registered_name, registered_service = mock_registry.register.call_args[0]
+        assert registered_name == service_name
+        assert registered_service.session is mock_client
+
+    def test_register_classmethod_updates_session_headers(self, mocker):
+        """Test that register() classmethod updates session headers with API key."""
+        mock_client = _create_mock_session()
+        mock_registry = Mock()
+        mock_config = Mock()
+        mock_config.spectrum_base_url = "https://spectrum.default.com"
+        mock_config.digitals_dir = "/default/digitals"
+
+        mocker.patch(
+            "src.services.spectrum_artwork_service.get_artwork_services", return_value=mock_registry
+        )
+        mocker.patch("src.services.spectrum_artwork_service.get_config", return_value=mock_config)
+
+        api_key = "my-secret-api-key"
+        SpectrumArtworkService.register("spectrum_art", mock_client, api_key)
+
+        # Verify correct header was set
+        assert mock_client.headers["SPECTRUM_API_TOKEN"] == api_key
 
 
 class TestSpectrumArtworkServiceClientAttribute:
@@ -65,7 +156,6 @@ class TestSpectrumArtworkServiceClientAttribute:
         mock_client = _create_mock_session()
         service = SpectrumArtworkService(
             session=mock_client,
-            api_key="test-key",
             base_url="https://spectrum.example.com",
             digitals_dir=Path("/tmp"),
         )
@@ -77,7 +167,6 @@ class TestSpectrumArtworkServiceClientAttribute:
         mock_client = _create_mock_session()
         service = SpectrumArtworkService(
             session=mock_client,
-            api_key="test-key",
             base_url="https://spectrum.example.com",
             digitals_dir=Path("/tmp"),
         )
@@ -91,7 +180,6 @@ class TestSpectrumArtworkServiceClientAttribute:
         with pytest.raises(TypeError):
             SpectrumArtworkService(
                 session=mock_client,
-                api_key="test-key",
                 base_url="https://spectrum.example.com",
                 digitals_dir=Path("/tmp"),
                 client_handle="CLIENT123",  # type: ignore
@@ -111,7 +199,6 @@ class TestSpectrumArtworkServiceGetArtwork:
         """Provide a SpectrumArtworkService instance."""
         return SpectrumArtworkService(
             session=mock_client,
-            api_key="test-key",
             base_url="https://spectrum.example.com",
             digitals_dir=tmp_path,
         )
@@ -650,21 +737,11 @@ class TestSpectrumArtworkServiceGetArtwork:
         service.get_artwork(basic_order)
         assert basic_order.line_items[0].artwork is not None
 
-
-class TestSpectrumArtworkServiceGetPlacement:
-    """Tests for the _download_placement method."""
-
-    @pytest.fixture
-    def mock_client(self):
-        """Provide a mocked requests.Session."""
-        return _create_mock_session()
-
     @pytest.fixture
     def service(self, mock_client, tmp_path):
         """Provide a SpectrumArtworkService instance."""
         return SpectrumArtworkService(
             session=mock_client,
-            api_key="test-key",
             base_url="https://spectrum.example.com",
             digitals_dir=tmp_path,
         )
@@ -755,21 +832,11 @@ class TestSpectrumArtworkServiceGetPlacement:
         assert len(calls) > 0
         assert any("ART123" in str(call) for call in calls)
 
-
-class TestSpectrumArtworkServiceGetDesigns:
-    """Tests for the _download_designs method."""
-
-    @pytest.fixture
-    def mock_client(self):
-        """Provide a mocked requests.Session."""
-        return _create_mock_session()
-
     @pytest.fixture
     def service(self, mock_client, tmp_path):
         """Provide a SpectrumArtworkService instance."""
         return SpectrumArtworkService(
             session=mock_client,
-            api_key="test-key",
             base_url="https://spectrum.example.com",
             digitals_dir=tmp_path,
         )
