@@ -6,8 +6,18 @@ named objects in a thread-safe manner.
 
 from collections.abc import Generator
 from dataclasses import dataclass, field
+from functools import cache
 from logging import getLogger
 from threading import Lock
+
+from src.domain import (
+    IArtworkService,
+    IOrderService,
+    IRegistry,
+    ISaleService,
+    IStockService,
+    IUseCase,
+)
 
 logger = getLogger(__name__)
 
@@ -57,3 +67,28 @@ class Registry[T]:
             # Create a snapshot to avoid RuntimeError during iteration
             items_snapshot = list(self._registry.items())
         yield from items_snapshot
+
+
+@cache
+def get_artwork_services() -> IRegistry[IArtworkService]:
+    return Registry[IArtworkService]()
+
+
+@cache
+def get_order_services() -> IRegistry[IOrderService]:
+    return Registry[IOrderService]()
+
+
+@cache
+def get_sale_services() -> IRegistry[ISaleService]:
+    return Registry[ISaleService]()
+
+
+@cache
+def get_stock_services() -> IRegistry[IStockService]:
+    return Registry[IStockService]()
+
+
+@cache
+def get_use_cases() -> IRegistry[IUseCase]:
+    return Registry[IUseCase]()
