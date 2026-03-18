@@ -9,8 +9,31 @@ import requests
 
 from src.app.errors import ErrorStore
 from src.app.odoo_auth import OdooAuth
-from src.app.registry import Registry
+from src.app.registry import (
+    Registry,
+    get_artwork_services,
+    get_order_services,
+    get_sale_services,
+    get_stock_services,
+    get_use_cases,
+)
 from src.domain import LineItem, Order, ShipTo
+
+
+@pytest.fixture(autouse=True)
+def clear_registry_caches():
+    """Clear all cached registries before each test to prevent test pollution.
+
+    This fixture runs automatically before each test and clears the singleton
+    caches created by functools.cache decorator on the registry getter functions.
+    """
+    yield  # Run test first
+    # Clear caches after test to ensure clean state for next test
+    get_artwork_services.cache_clear()
+    get_order_services.cache_clear()
+    get_sale_services.cache_clear()
+    get_stock_services.cache_clear()
+    get_use_cases.cache_clear()
 
 
 @pytest.fixture

@@ -117,7 +117,6 @@ class TestNewSaleUseCaseIntegration:
 
         artwork_service = SpectrumArtworkService(
             session=mock_session,
-            api_key="test-key",
             base_url="https://spectrum.example.com",
             digitals_dir=temp_dir,
         )
@@ -152,10 +151,13 @@ class TestNewSaleUseCaseIntegration:
             auth=odoo_auth, session=odoo_client, base_url="http://localhost:8069"
         )
 
+        sale_services = Registry()
+        sale_services.register("TestSaleService", sale_service)
+
         use_case = NewSaleUseCase(
             order_services=order_services,
             artwork_services=artwork_services,
-            sale_service=sale_service,
+            sale_services=sale_services,
             open_orders_dir=temp_dir,
         )
 
@@ -194,10 +196,13 @@ class TestNewSaleUseCaseIntegration:
             auth=odoo_auth, session=odoo_client, base_url="http://localhost:8069"
         )
 
+        sale_services = Registry()
+        sale_services.register("TestSaleService", sale_service)
+
         use_case = NewSaleUseCase(
             order_services=order_services,
             artwork_services=artwork_services,
-            sale_service=sale_service,
+            sale_services=sale_services,
             open_orders_dir=temp_dir,
         )
 

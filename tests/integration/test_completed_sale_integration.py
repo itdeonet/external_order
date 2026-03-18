@@ -55,9 +55,12 @@ class TestCompletedSaleUseCaseIntegration:
             (100, "ORDER123"),
         ]
 
+        sale_services = Registry()
+        sale_services.register("TestSaleService", sale_service)
+
         use_case = CompletedSaleUseCase(
             order_services=order_services,
-            sale_service=sale_service,
+            sale_services=sale_services,
         )
 
         # Execute the use case
@@ -94,9 +97,12 @@ class TestCompletedSaleUseCaseIntegration:
             (102, "ORDER125"),
         ]
 
+        sale_services = Registry()
+        sale_services.register("TestSaleService", sale_service)
+
         use_case = CompletedSaleUseCase(
             order_services=order_services,
-            sale_service=sale_service,
+            sale_services=sale_services,
         )
 
         # Execute the use case
@@ -122,9 +128,12 @@ class TestCompletedSaleUseCaseIntegration:
             (100, "NONEXISTENT_ORDER"),
         ]
 
+        sale_services = Registry()
+        sale_services.register("TestSaleService", sale_service)
+
         use_case = CompletedSaleUseCase(
             order_services=order_services,
-            sale_service=sale_service,
+            sale_services=sale_services,
         )
 
         # Execute the use case
@@ -151,9 +160,12 @@ class TestCompletedSaleUseCaseIntegration:
             (100, "ORDER123"),
         ]
 
+        sale_services = Registry()
+        sale_services.register("TestSaleService", sale_service)
+
         use_case = CompletedSaleUseCase(
             order_services=order_services,
-            sale_service=sale_service,
+            sale_services=sale_services,
         )
 
         # Execute the use case
@@ -177,9 +189,12 @@ class TestCompletedSaleUseCaseIntegration:
         sale_service = Mock()
         sale_service.search_completed_sales.return_value = []
 
+        sale_services = Registry()
+        sale_services.register("TestSaleService", sale_service)
+
         use_case = CompletedSaleUseCase(
             order_services=order_services,
-            sale_service=sale_service,
+            sale_services=sale_services,
         )
 
         # Execute the use case
@@ -197,9 +212,12 @@ class TestCompletedSaleUseCaseIntegration:
         sale_service = Mock()
         sale_service.search_completed_sales.side_effect = Exception("Sale service error")
 
+        sale_services = Registry()
+        sale_services.register("TestSaleService", sale_service)
+
         use_case = CompletedSaleUseCase(
             order_services=order_services,
-            sale_service=sale_service,
+            sale_services=sale_services,
         )
 
         # Execute the use case
