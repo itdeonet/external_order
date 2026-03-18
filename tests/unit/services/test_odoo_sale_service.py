@@ -1,7 +1,7 @@
 """Unit tests for OdooSaleService."""
 
 from datetime import date
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 import requests
@@ -61,6 +61,62 @@ class TestOdooSaleServiceInstantiation:
 
         assert next(service._id_counter) == 1
         assert next(service._id_counter) == 2
+
+    def test_register_classmethod_creates_instance_with_defaults(self, mock_client):
+        """Test that register() classmethod creates instance with defaults."""
+        mock_registry = Mock()
+        with patch("src.services.odoo_sale_service.get_sale_services", return_value=mock_registry):
+            with patch("src.services.odoo_sale_service.get_config") as mock_config_func:
+                mock_config = Mock()
+                mock_config.odoo_base_url = "http://test.url"
+                mock_config.ssl_verify = True
+                mock_config_func.return_value = mock_config
+
+                OdooSaleService.register("odoo_sales", mock_client)
+
+                # Verify register was called
+                mock_registry.register.assert_called_once()
+                call_args = mock_registry.register.call_args
+                assert call_args[0][0] == "odoo_sales"
+                assert isinstance(call_args[0][1], OdooSaleService)
+
+    def test_register_classmethod_registers_with_provided_session(self, mock_client):
+        """Test that register() classmethod registers instance with provided session."""
+        mock_registry = Mock()
+        with patch("src.services.odoo_sale_service.get_sale_services", return_value=mock_registry):
+            with patch("src.services.odoo_sale_service.get_config") as mock_config_func:
+                mock_config = Mock()
+                mock_config.odoo_base_url = "http://test.url"
+                mock_config.ssl_verify = True
+                mock_config_func.return_value = mock_config
+
+                service_name = "test_sales_service"
+                OdooSaleService.register(service_name, mock_client)
+
+                # Verify the service was registered with the provided session
+                mock_registry.register.assert_called_once()
+                registered_name, registered_service = mock_registry.register.call_args[0]
+                assert registered_name == service_name
+                assert registered_service.session is mock_client
+
+    def test_register_classmethod_uses_config_defaults(self):
+        """Test that register() classmethod uses configuration defaults."""
+        mock_client = Mock(spec=requests.Session)
+        mock_registry = Mock()
+
+        with patch("src.services.odoo_sale_service.get_sale_services", return_value=mock_registry):
+            with patch("src.services.odoo_sale_service.get_config") as mock_config_func:
+                mock_config = Mock()
+                mock_config.odoo_base_url = "https://odoo.example.com"
+                mock_config.ssl_verify = True
+                mock_config_func.return_value = mock_config
+
+                OdooSaleService.register("odoo_sales_service", mock_client)
+
+                # Verify register was called with a valid service
+                mock_registry.register.assert_called_once()
+                registered_service = mock_registry.register.call_args[0][1]
+                assert registered_service.base_url == "https://odoo.example.com"
 
 
 class TestSearchSaleData:

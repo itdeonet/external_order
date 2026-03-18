@@ -14,6 +14,7 @@ import requests
 
 from src.app.errors import SaleError
 from src.app.odoo_auth import OdooAuth
+from src.app.registry import get_sale_services
 from src.config import get_config
 from src.domain import Order
 
@@ -38,6 +39,12 @@ class OdooSaleService:
         if not (self.base_url):
             raise ValueError("Odoo base URL is not set")
         self.session.verify = get_config().ssl_verify
+
+    @classmethod
+    def register(cls, name: str, session: requests.Session) -> None:
+        """Factory method to create and register an OdooSaleService instance."""
+        sale_service = cls(session=session)
+        get_sale_services().register(name, sale_service)
 
     def search_sale(self, order: Order) -> dict[str, Any]:
         """Search sale matching order's remote_order_id.
@@ -392,8 +399,8 @@ class OdooSaleService:
             (line["product_id"][0], line["product_uom_qty"])
             for line in self._call(
                 model="sale.order.line",
-                method="read",
-                query_data=sale_data.get("order_line", []),
+                method="search_read",
+                query_data=[[["order_id", "=", sale_data["id"]]]],
                 query_options={"fields": ["product_id", "product_uom_qty"]},
             )
         }
@@ -527,6 +534,8 @@ class OdooSaleService:
             method="search_read",
             query_data=[
                 [
+                    ["carrier_id", "!=", False],
+                    ["company_id", "=", order.administration_id],
                     ["sale_id", "=", sale_data.get("id", 0)],
                     ["state", "=", "done"],
                     ["picking_type_code", "=", "outgoing"],
@@ -638,6 +647,7 @@ class OdooSaleService:
         query_options: dict[str, Any] | None = None,
     ) -> Any:
         """Perform authenticated JSON-RPC call to Odoo and return `result`."""
+        config = get_config()
         payload = {
             "jsonrpc": "2.0",
             "method": "call",
@@ -660,12 +670,23 @@ class OdooSaleService:
         payload_copy: dict[str, Any] = copy.deepcopy(payload)
         payload_copy.get("params", {}).get("args", [])[2] = "********"  # mask password for logging
         logger.debug("Make JSON_RPC call with payload: %s", payload_copy)
-        response = self.session.post(f"{self.base_url}/jsonrpc", json=payload, timeout=(5, 30))
-        response.raise_for_status()
-        data = response.json()
+        config = get_config()
+        url = f"{self.base_url.rstrip('/')}/jsonrpc"
+        timeout = config.odoo_request_timeout
+
+        try:
+            response = self.session.post(url=url, json=payload, timeout=timeout)
+            response.raise_for_status()
+            data = response.json()
+        except requests.exceptions.HTTPError as exc:
+            raise SaleError(
+                message=f"Odoo JSON-RPC error: {exc.response.status_code} {exc.response.reason}",
+                order_id=None,
+            ) from exc
 
         if error := data.get("error"):
-            message = f"Odoo JSON-RPC error: {error.get('message')} ({error.get('data', {}).get('message')})"
+            data = error.get("data", {})
+            message = f"Odoo JSON-RPC error: {error.get('message')} ({data.get('message')})"
             logger.warning(
                 "%s, model=%s, method=%s, data=%s",
                 message,
