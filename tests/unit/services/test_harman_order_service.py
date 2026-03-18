@@ -4,6 +4,7 @@ import contextlib
 import datetime as dt
 import json
 import pathlib
+from unittest.mock import Mock
 
 import pytest
 from pydifact import Segment  # type: ignore
@@ -21,19 +22,45 @@ def mock_renderer(mocker):
     return mocker.Mock(spec=RenderService)
 
 
+@pytest.fixture
+def mock_artwork_service():
+    """Provide a mocked IArtworkService."""
+    return Mock(spec=IArtworkService)
+
+
 class TestHarmanOrderServiceInstantiation:
     """Tests for HarmanOrderService instantiation."""
 
-    def test_instantiation_with_all_fields(self, tmp_path, mock_renderer):
-        """Test creating HarmanOrderService with all fields."""
+    def test_instantiation_with_required_fields_only(
+        self, tmp_path, mock_renderer, mock_artwork_service
+    ):
+        """Test creating HarmanOrderService with only required fields."""
+        service = HarmanOrderService(
+            artwork_service=mock_artwork_service,
+            name_filter=".*",
+            order_provider="Harman",
+        )
+
+        assert service.artwork_service is mock_artwork_service
+        assert service.name_filter == ".*"
+        assert service.order_provider == "Harman"
+        # Verify defaults are used for other fields
+        assert service.administration_id == get_config().harman_administration_id
+        assert service.customer_id == get_config().harman_customer_id
+        assert service.pricelist_id == get_config().harman_pricelist_id
+
+    def test_instantiation_with_all_fields(self, tmp_path, mock_renderer, mock_artwork_service):
+        """Test creating HarmanOrderService with all fields specified."""
         input_dir = tmp_path / "input"
         output_dir = tmp_path / "output"
 
         service = HarmanOrderService(
+            artwork_service=mock_artwork_service,
+            name_filter="TEST_*",
+            order_provider="Harman",
             administration_id=1,
             customer_id=100,
             pricelist_id=50,
-            order_provider="Harman",
             shipment_type="standard",
             workdays_for_delivery=5,
             input_dir=input_dir,
@@ -41,6 +68,8 @@ class TestHarmanOrderServiceInstantiation:
             renderer=mock_renderer,
         )
 
+        assert service.artwork_service is mock_artwork_service
+        assert service.name_filter == "TEST_*"
         assert service.administration_id == 1
         assert service.customer_id == 100
         assert service.pricelist_id == 50
@@ -51,18 +80,96 @@ class TestHarmanOrderServiceInstantiation:
         assert service.output_dir == output_dir
         assert service.renderer is mock_renderer
 
+    def test_instantiation_with_none_artwork_service(self):
+        """Test creating HarmanOrderService with no artwork service."""
+        service = HarmanOrderService(
+            artwork_service=None,
+            name_filter="*.insdes",
+            order_provider="TestProvider",
+        )
+
+        assert service.artwork_service is None
+        assert service.name_filter == "*.insdes"
+        assert service.order_provider == "TestProvider"
+
+    def test_register_classmethod_with_artwork_provider(self, mocker):
+        """Test register classmethod when artwork provider exists."""
+        # Setup
+        mock_artwork_service = Mock(spec=IArtworkService)
+        mock_get_artwork = mocker.patch("src.services.harman_order_service.get_artwork_services")
+        mock_get_orders = mocker.patch("src.services.harman_order_service.get_order_services")
+        mock_artwork_registry = Mock()
+        mock_artwork_registry.get.return_value = mock_artwork_service
+        mock_get_artwork.return_value = mock_artwork_registry
+
+        mock_order_registry = Mock()
+        mock_get_orders.return_value = mock_order_registry
+
+        # Execute
+        HarmanOrderService.register(
+            name="TestHarman", artwork_provider="spectrum", name_filter="*.insdes"
+        )
+
+        # Verify
+        mock_artwork_registry.get.assert_called_once_with("spectrum")
+        mock_order_registry.register.assert_called_once()
+        call_args = mock_order_registry.register.call_args
+        assert call_args[0][0] == "TestHarman"
+        service = call_args[0][1]
+        assert isinstance(service, HarmanOrderService)
+        assert service.order_provider == "TestHarman"
+        assert service.name_filter == "*.insdes"
+        assert service.artwork_service is mock_artwork_service
+
+    def test_register_classmethod_without_artwork_provider(self, mocker):
+        """Test register classmethod when no artwork provider is specified."""
+        # Setup
+        mock_get_artwork = mocker.patch("src.services.harman_order_service.get_artwork_services")
+        mock_get_orders = mocker.patch("src.services.harman_order_service.get_order_services")
+        mock_artwork_registry = Mock()
+        mock_artwork_registry.get.return_value = None
+        mock_get_artwork.return_value = mock_artwork_registry
+
+        mock_order_registry = Mock()
+        mock_get_orders.return_value = mock_order_registry
+
+        # Execute
+        HarmanOrderService.register(name="TestHarman", artwork_provider="", name_filter="*.insdes")
+
+        # Verify - service should be registered with None artwork_service
+        mock_order_registry.register.assert_called_once()
+        call_args = mock_order_registry.register.call_args
+        service = call_args[0][1]
+        assert service.artwork_service is None
+
+    def test_register_classmethod_raises_when_artwork_provider_not_found(self, mocker):
+        """Test register classmethod raises error when artwork provider not found."""
+        # Setup
+        mock_get_artwork = mocker.patch("src.services.harman_order_service.get_artwork_services")
+        mock_artwork_registry = Mock()
+        mock_artwork_registry.get.return_value = None
+        mock_get_artwork.return_value = mock_artwork_registry
+
+        # Execute and verify
+        with pytest.raises(ValueError, match="Artwork service 'spectrum' not found"):
+            HarmanOrderService.register(
+                name="TestHarman", artwork_provider="spectrum", name_filter="*.insdes"
+            )
+
 
 class TestReadOrderData:
     """Tests for _read_order_data and _get_segment_data methods."""
 
     @pytest.fixture
-    def service(self, tmp_path, mock_renderer):
+    def service(self, tmp_path, mock_renderer, mock_artwork_service):
         """Provide a HarmanOrderService instance."""
         return HarmanOrderService(
+            artwork_service=mock_artwork_service,
+            name_filter=".*",
+            order_provider="Harman",
             administration_id=1,
             customer_id=100,
             pricelist_id=50,
-            order_provider="Harman",
             shipment_type="standard",
             workdays_for_delivery=5,
             input_dir=tmp_path / "input",
@@ -219,13 +326,15 @@ class TestMakeOrder:
     """Tests for _make_order method."""
 
     @pytest.fixture
-    def service(self, tmp_path, mock_renderer):
+    def service(self, tmp_path, mock_renderer, mock_artwork_service):
         """Provide a HarmanOrderService instance."""
         return HarmanOrderService(
+            artwork_service=mock_artwork_service,
+            name_filter=".*",
+            order_provider="Harman",
             administration_id=1,
             customer_id=100,
             pricelist_id=50,
-            order_provider="Harman",
             shipment_type="standard",
             workdays_for_delivery=5,
             input_dir=tmp_path / "input",
@@ -399,107 +508,17 @@ class TestMakeOrder:
         assert result["line_items"][0]["stock_status"] == "In stock"
 
 
-class TestGetArtworkService:
-    """Tests for get_artwork_service method."""
-
-    @pytest.fixture
-    def service(self, tmp_path, mock_renderer):
-        """Provide a HarmanOrderService instance."""
-        return HarmanOrderService(
-            administration_id=1,
-            customer_id=100,
-            pricelist_id=50,
-            order_provider="Harman",
-            shipment_type="standard",
-            workdays_for_delivery=5,
-            input_dir=tmp_path / "input",
-            output_dir=tmp_path / "output",
-            renderer=mock_renderer,
-        )
-
-    @pytest.fixture
-    def mock_order(self, mocker):
-        """Provide a mock Order instance."""
-        return mocker.Mock(spec=Order)
-
-    @pytest.fixture
-    def mock_registry(self, mocker):
-        """Provide a mock Registry."""
-        registry = mocker.Mock()
-        registry.get = mocker.Mock()
-        return registry
-
-    def test_get_artwork_service_ha_format(self, service, mock_order, mock_registry, mocker):
-        """Test getting artwork service for HA format order ID."""
-        mock_order.remote_order_id = "HA-EM-12345"
-        mock_spectrum = mocker.Mock(spec=IArtworkService)
-        mock_registry.get.return_value = mock_spectrum
-
-        result = service.get_artwork_service(mock_order, mock_registry)
-
-        assert result is mock_spectrum
-        mock_registry.get.assert_called_once_with(get_config().harman_artwork_provider_name)
-
-    def test_get_artwork_service_jb_format(self, service, mock_order, mock_registry, mocker):
-        """Test getting artwork service for JB format order ID."""
-        mock_order.remote_order_id = "JB-EM-ST-99999"
-        mock_spectrum = mocker.Mock(spec=IArtworkService)
-        mock_registry.get.return_value = mock_spectrum
-
-        result = service.get_artwork_service(mock_order, mock_registry)
-
-        assert result is mock_spectrum
-        mock_registry.get.assert_called_once_with(get_config().harman_artwork_provider_name)
-
-    def test_get_artwork_service_ha_format_no_st(self, service, mock_order, mock_registry, mocker):
-        """Test getting artwork service for HA format without ST."""
-        mock_order.remote_order_id = "HA-EM-ST-54321"
-        mock_spectrum = mocker.Mock(spec=IArtworkService)
-        mock_registry.get.return_value = mock_spectrum
-
-        result = service.get_artwork_service(mock_order, mock_registry)
-
-        assert result is mock_spectrum
-
-    def test_get_artwork_service_non_matching_format(self, service, mock_order, mock_registry):
-        """Test that non-matching format returns None."""
-        mock_order.remote_order_id = "ORD-12345"
-
-        result = service.get_artwork_service(mock_order, mock_registry)
-
-        assert result is None
-        mock_registry.get.assert_not_called()
-
-    def test_get_artwork_service_multiple_formats(self, service, mock_registry, mocker):
-        """Test various matching formats."""
-        matching_formats = [
-            "HA-EM-0",
-            "JB-EM-0",
-            "HA-EM-ST-0",
-            "JB-EM-ST-99999",
-        ]
-        mock_spectrum = mocker.Mock(spec=IArtworkService)
-        mock_registry.get.return_value = mock_spectrum
-
-        for format_id in matching_formats:
-            mock_order = mocker.Mock(spec=Order)
-            mock_order.remote_order_id = format_id
-            mock_registry.get.reset_mock()
-
-            result = service.get_artwork_service(mock_order, mock_registry)
-
-            assert result is mock_spectrum, f"Failed for format: {format_id}"
-
-
 class TestPersistOrder:
     """Tests for persist_order method."""
 
     @pytest.fixture
-    def service(self, tmp_path, mock_renderer):
+    def service(self, tmp_path, mock_renderer, mock_artwork_service):
         """Provide a HarmanOrderService instance."""
         (tmp_path / "input").mkdir(parents=True, exist_ok=True)
         (tmp_path / "output").mkdir(parents=True, exist_ok=True)
         return HarmanOrderService(
+            artwork_service=mock_artwork_service,
+            name_filter=".*",
             administration_id=1,
             customer_id=100,
             pricelist_id=50,
@@ -621,10 +640,12 @@ class TestReadOrders:
     """Tests for read_orders generator method."""
 
     @pytest.fixture
-    def service(self, tmp_path, mock_renderer):
+    def service(self, tmp_path, mock_renderer, mock_artwork_service):
         """Provide a HarmanOrderService instance."""
         (tmp_path / "input").mkdir(parents=True, exist_ok=True)
         return HarmanOrderService(
+            artwork_service=mock_artwork_service,
+            name_filter=".*",
             administration_id=1,
             customer_id=100,
             pricelist_id=50,
@@ -892,9 +913,11 @@ class TestImmutability:
     """Tests for HarmanOrderService immutability (frozen dataclass)."""
 
     @pytest.fixture
-    def service(self, tmp_path, mock_renderer):
+    def service(self, tmp_path, mock_renderer, mock_artwork_service):
         """Provide a HarmanOrderService instance."""
         return HarmanOrderService(
+            artwork_service=mock_artwork_service,
+            name_filter=".*",
             administration_id=1,
             customer_id=100,
             pricelist_id=50,
@@ -956,10 +979,12 @@ class TestLoadOrder:
     """Tests for load_order method."""
 
     @pytest.fixture
-    def service(self, tmp_path, mock_renderer):
+    def service(self, tmp_path, mock_renderer, mock_artwork_service):
         """Provide a HarmanOrderService instance."""
         (tmp_path / "input").mkdir(parents=True, exist_ok=True)
         return HarmanOrderService(
+            artwork_service=mock_artwork_service,
+            name_filter=".*",
             administration_id=1,
             customer_id=100,
             pricelist_id=50,
@@ -1145,12 +1170,14 @@ class TestNotifyCompletedSale:
     """Tests for notify_completed_sale method."""
 
     @pytest.fixture
-    def service(self, tmp_path, mock_renderer):
+    def service(self, tmp_path, mock_renderer, mock_artwork_service):
         """Provide a HarmanOrderService instance."""
         (tmp_path / "output").mkdir(parents=True, exist_ok=True)
         (tmp_path / "templates").mkdir(parents=True, exist_ok=True)
         mock_renderer.directory = tmp_path / "templates"
         return HarmanOrderService(
+            artwork_service=mock_artwork_service,
+            name_filter=".*",
             administration_id=1,
             customer_id=100,
             pricelist_id=50,
@@ -1194,7 +1221,7 @@ class TestNotifyCompletedSale:
 class TestShouldUpdateSale:
     """Tests for should_update_sale method."""
 
-    def test_should_update_sale_returns_true_for_s_format(self):
+    def test_should_update_sale_returns_true_for_s_format(self, mock_artwork_service):
         """Test that S-format IDs should be updated."""
         import tempfile
         from pathlib import Path
@@ -1205,10 +1232,12 @@ class TestShouldUpdateSale:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             service = HarmanOrderService(
+                artwork_service=mock_artwork_service,
+                name_filter=".*",
                 administration_id=1,
                 customer_id=100,
                 pricelist_id=50,
-                order_provider="Harman",
+                order_provider="B2B",
                 shipment_type="standard",
                 workdays_for_delivery=5,
                 input_dir=tmp_path / "input",
@@ -1222,7 +1251,7 @@ class TestShouldUpdateSale:
             result = service.should_update_sale(mock_order)
             assert result is True
 
-    def test_should_update_sale_returns_false_for_non_s_format(self):
+    def test_should_update_sale_returns_false_for_non_s_format(self, mock_artwork_service):
         """Test that non-S-format IDs should not be updated."""
         import tempfile
         from pathlib import Path
@@ -1233,6 +1262,8 @@ class TestShouldUpdateSale:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             service = HarmanOrderService(
+                artwork_service=mock_artwork_service,
+                name_filter=".*",
                 administration_id=1,
                 customer_id=100,
                 pricelist_id=50,
@@ -1254,7 +1285,9 @@ class TestShouldUpdateSale:
 class TestReadOrderDataByRemoteOrderId:
     """Tests for read_order_data_by_remote_order_id method."""
 
-    def test_read_order_data_by_remote_order_id_returns_none_when_not_found(self):
+    def test_read_order_data_by_remote_order_id_returns_none_when_not_found(
+        self, mock_artwork_service
+    ):
         """Test that None is returned when order file not found."""
         import tempfile
         from pathlib import Path
@@ -1268,6 +1301,8 @@ class TestReadOrderDataByRemoteOrderId:
             input_dir.mkdir()
 
             service = HarmanOrderService(
+                artwork_service=mock_artwork_service,
+                name_filter=".*",
                 administration_id=1,
                 customer_id=100,
                 pricelist_id=50,

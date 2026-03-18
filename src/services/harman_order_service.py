@@ -20,11 +20,11 @@ from typing import Any
 from pydifact import Parser, Segment, Serializer  # type: ignore
 
 from src.app.errors import NotifyError, get_error_store
+from src.app.registry import get_artwork_services, get_order_services
 from src.config import Config, get_config
 from src.domain import (
     Artwork,
     IArtworkService,
-    IRegistry,
     ISaleService,
     LineItem,
     Order,
@@ -43,13 +43,12 @@ class HarmanOrderService:
     Configuration-driven; integrates with `RenderService` and `ErrorStore`.
     """
 
-    artwork_provider_name: str = field(
-        default_factory=lambda: get_config().harman_artwork_provider_name
-    )
+    artwork_service: IArtworkService | None
+    name_filter: str
+    order_provider: str
     administration_id: int = field(default_factory=lambda: get_config().harman_administration_id)
     customer_id: int = field(default_factory=lambda: get_config().harman_customer_id)
     pricelist_id: int = field(default_factory=lambda: get_config().harman_pricelist_id)
-    order_provider: str = field(default_factory=lambda: get_config().harman_order_provider)
     shipment_type: str = field(default_factory=lambda: get_config().harman_shipment_type)
     workdays_for_delivery: int = field(
         default_factory=lambda: get_config().harman_workdays_for_delivery
@@ -57,6 +56,17 @@ class HarmanOrderService:
     input_dir: Path = field(default_factory=lambda: Path(get_config().harman_input_dir))
     output_dir: Path = field(default_factory=lambda: Path(get_config().harman_output_dir))
     renderer: RenderService = field(default_factory=lambda: RenderService())
+
+    @classmethod
+    def register(cls, name: str, artwork_provider: str, name_filter: str) -> None:
+        """Factory method to create and register a HarmanOrderService instance."""
+        artwork_service = get_artwork_services().get(artwork_provider)
+        if artwork_provider and not artwork_service:
+            raise ValueError(f"Artwork service '{artwork_provider}' not found in registry")
+        order_service = cls(
+            artwork_service=artwork_service, order_provider=name, name_filter=name_filter
+        )
+        get_order_services().register(name, order_service)
 
     def read_orders(self) -> Generator[Order, None, None]:
         """Parse EDIFACT files and yield Order instances.
@@ -81,6 +91,8 @@ class HarmanOrderService:
             ]
         )
         for file in chain:
+            if not re.match(self.name_filter, file.stem, re.IGNORECASE):
+                continue
             try:
                 logger.info("Process file: %s", file)
                 order_data = self._read_order_data(file)
@@ -214,23 +226,10 @@ class HarmanOrderService:
             return self._read_order_data(file)
         return None
 
-    def get_artwork_service(
-        self, order: Order, artwork_services: IRegistry[IArtworkService]
-    ) -> IArtworkService | None:
-        """Return the matching artwork service for `order`, or `None` if none."""
-        logger.info("Get artwork service for order: %s", order.remote_order_id)
-        if re.match(r"(HA|JB)-EM-(ST-)?\d+", order.remote_order_id):
-            return artwork_services.get(self.artwork_provider_name)
-        return None
-
     def should_update_sale(self, order: Order) -> bool:
         """Determine if an existing sale should be updated based on remote_order_id."""
         logger.info("Check if sale should be updated for order: %s", order.remote_order_id)
-        # For Harman orders, we want to update a B2B sale
-        # A B2B sale is created in the sale system, but contact data and delivery instructions may
-        # be missing or incomplete
-        # A sale created in the sale system has a remote order ID in format S12345
-        return re.match(r"S\d+", order.remote_order_id) is not None
+        return "B2B" in self.order_provider.upper()
 
     def persist_order(self, order: Order, status: OrderStatus) -> None:
         """Persist `order` as JSON in `input_dir` and update file status."""
