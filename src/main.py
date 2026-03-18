@@ -6,7 +6,6 @@ all use cases and sends error alerts if exceptions occur.
 
 import socket
 from logging import getLogger
-from typing import TYPE_CHECKING
 
 import requests
 from redmail.email.sender import EmailSender
@@ -15,24 +14,13 @@ from src.app.completed_sale_use_case import CompletedSaleUseCase
 from src.app.errors import get_error_store
 from src.app.log_setup import configure_logging
 from src.app.new_sale_use_case import NewSaleUseCase
-from src.app.registry import Registry
+from src.app.registry import get_use_cases
 from src.app.stock_transfer_use_case import StockTransferUseCase
 from src.config import Config, get_config
-from src.domain import (
-    IArtworkService,
-    IOrderService,
-    ISaleService,
-    IStockService,
-    IUseCase,
-)
-from src.services.camelbak_order_service import CamelbakOrderService
 from src.services.harman_order_service import HarmanOrderService
 from src.services.harman_stock_service import HarmanStockService
 from src.services.odoo_sale_service import OdooSaleService
 from src.services.spectrum_artwork_service import SpectrumArtworkService
-
-if TYPE_CHECKING:
-    from src.domain import IRegistry, ISaleService
 
 logger = getLogger(__name__)
 
@@ -44,7 +32,6 @@ def main() -> None:
     if any errors are collected.
     """
 
-    # make sure directories exist
     config: Config = get_config()
     error_store = get_error_store()
     configure_logging(
@@ -54,59 +41,49 @@ def main() -> None:
     )
     logger.info("Application started")
 
-    artwork_services: IRegistry[IArtworkService] = Registry[IArtworkService]()
-    order_services: IRegistry[IOrderService] = Registry[IOrderService]()
-    order_services.register(config.harman_order_provider, HarmanOrderService())
-    stock_services: IRegistry[IStockService] = Registry[IStockService]()
-    stock_services.register(config.harman_stock_supplier_name, HarmanStockService())
-    use_cases: IRegistry[IUseCase] = Registry[IUseCase]()  # type: ignore[type-arg]
-
     with (
         requests.Session() as odoo_session,
         requests.Session() as spectrum_harman_session,
         requests.Session() as spectrum_camelbak_session,
     ):
-        artwork_services.register(
-            config.harman_artwork_provider_name,
-            SpectrumArtworkService(
-                session=spectrum_harman_session, api_key=config.spectrum_harman_api_key
-            ),
+        # register services
+        SpectrumArtworkService.register(
+            name=config.harman_artwork_provider,
+            session=spectrum_harman_session,
+            api_key=config.spectrum_harman_api_key,
         )
-        artwork_services.register(
-            config.camelbak_artwork_provider_name,
-            SpectrumArtworkService(
-                session=spectrum_camelbak_session, api_key=config.spectrum_camelbak_api_key
-            ),
+        SpectrumArtworkService.register(
+            name=config.camelbak_artwork_provider,
+            session=spectrum_camelbak_session,
+            api_key=config.spectrum_camelbak_api_key,
         )
+        HarmanOrderService.register(
+            name=config.harman_b2c_order_provider,
+            artwork_provider=config.harman_artwork_provider,
+            name_filter=config.harman_b2c_order_filter,
+        )
+        HarmanOrderService.register(
+            name=config.harman_b2b_order_provider,
+            artwork_provider="",
+            name_filter=config.harman_b2b_order_filter,
+        )
+        HarmanStockService.register(name=config.harman_stock_supplier_name)
+        # TODO: Re-enable Camelbak order service when API is available
+        # SpectrumOrderService.register(
+        #     name=config.camelbak_order_provider,
+        #     session=spectrum_camelbak_session,
+        #     api_key=config.spectrum_camelbak_api_key,
+        #     artwork_provider=config.camelbak_artwork_provider,
+        # )
+        OdooSaleService.register(name=config.odoo_sale_provider, session=odoo_session)
 
-        order_services.register(
-            config.camelbak_order_provider,
-            CamelbakOrderService(
-                session=spectrum_camelbak_session, api_key=config.spectrum_camelbak_api_key
-            ),
-        )
+        # register use cases
+        NewSaleUseCase.register(name="NewSale")
+        CompletedSaleUseCase.register(name="CompletedSale")
+        StockTransferUseCase.register(name="StockTransfer")
 
-        sale_service: ISaleService = OdooSaleService(session=odoo_session)
-        # use cases
-        use_cases.register(
-            "NewSale",
-            NewSaleUseCase(
-                order_services=order_services,
-                artwork_services=artwork_services,
-                sale_service=sale_service,
-                open_orders_dir=config.open_orders_dir,
-            ),
-        )
-        use_cases.register(
-            "CompletedSale",
-            CompletedSaleUseCase(order_services=order_services, sale_service=sale_service),
-        )
-        use_cases.register(
-            "StockTransfer",
-            StockTransferUseCase(stock_services=stock_services),
-        )
         # execute use cases
-        for use_case_name, use_case in use_cases.items():
+        for use_case_name, use_case in get_use_cases().items():
             try:
                 logger.info(f"Execute use case: {use_case_name}")
                 use_case.execute()
