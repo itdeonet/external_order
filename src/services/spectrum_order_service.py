@@ -7,7 +7,7 @@ Provides `SpectrumOrderService` for parsing Spectrum API orders, creating
 import datetime as dt
 import json
 from collections.abc import Generator
-from dataclasses import InitVar, asdict, dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from logging import getLogger
 from pathlib import Path
@@ -15,12 +15,12 @@ from typing import Any
 
 import requests
 
-from src.app.errors import get_error_store
+from src.app.errors import NotifyError, OrderError, get_error_store
+from src.app.registry import get_artwork_services, get_order_services
 from src.config import get_config
 from src.domain import (
     Artwork,
     IArtworkService,
-    IRegistry,
     ISaleService,
     LineItem,
     Order,
@@ -32,18 +32,15 @@ logger = getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class CamelbakOrderService:
-    """Service to parse Spectrum API for Camelbak orders and manage their lifecycle.
+class SpectrumOrderService:
+    """Service to parse Spectrum API for orders and manage their lifecycle.
 
     Configuration-driven; integrates with `RenderService` and `ErrorStore`.
     """
 
     session: requests.Session
-    api_key: InitVar[str] = field(repr=False)
     base_url: str = field(default_factory=lambda: get_config().spectrum_base_url)
-    artwork_provider_name: str = field(
-        default_factory=lambda: get_config().camelbak_artwork_provider_name
-    )
+    artwork_service: IArtworkService
     administration_id: int = field(default_factory=lambda: get_config().camelbak_administration_id)
     customer_id: int = field(default_factory=lambda: get_config().camelbak_customer_id)
     pricelist_id: int = field(default_factory=lambda: get_config().camelbak_pricelist_id)
@@ -54,9 +51,17 @@ class CamelbakOrderService:
     )
     input_dir: Path = field(default_factory=lambda: Path(get_config().camelbak_input_dir))
 
-    def __post_init__(self, api_key: str) -> None:
-        """post init to ensure the object is valid."""
-        self.session.headers.update({"SPECTRUM_API_TOKEN": api_key})
+    @classmethod
+    def register(
+        cls, name: str, session: requests.Session, api_key: str, artwork_provider: str
+    ) -> None:
+        """Factory method to create and register a SpectrumOrderService instance."""
+        session.headers.update({"SPECTRUM_API_TOKEN": api_key})
+        artwork_service = get_artwork_services().get(artwork_provider)
+        if not artwork_service:
+            raise ValueError(f"Artwork service '{artwork_provider}' not found in registry")
+        order_service = cls(session=session, artwork_service=artwork_service)
+        get_order_services().register(name, order_service)
 
     def read_orders(self) -> Generator[Order, None, None]:
         """Search the API for new orders and yield Order instances.
@@ -68,14 +73,28 @@ class CamelbakOrderService:
             Parsing errors are recorded in ErrorStore and do not stop iteration.
         """
         logger.info("Generate orders...")
+        config = get_config()
         # search the API and yield an Order instance
-        endpoint = "/api/orders/search/"
         json_data = {
             "lastModificationStartDate": dt.date.today().isoformat(),
             "workflowStatuses": ["not-started"],
         }
-        response = self.session.post(f"{self.base_url.rstrip('/')}{endpoint}", json=json_data)
-        response.raise_for_status()
+        url = f"{self.base_url.rstrip('/')}/{config.spectrum_order_search_endpoint.lstrip('/')}"
+        timeout = config.spectrum_request_timeout
+
+        try:
+            response = self.session.post(
+                url=url,
+                json=json_data,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as exc:
+            raise OrderError(
+                message=f"Spectrum API error: {exc.response.status_code} {exc.response.reason}",
+                order_id=None,
+            ) from exc
+
         data: list[dict[str, Any]] = response.json()
         for order_data in data:
             try:
@@ -131,13 +150,6 @@ class CamelbakOrderService:
         order.set_ship_at(Order.calculate_delivery_date(self.workdays_for_delivery))
         return order
 
-    def get_artwork_service(
-        self, order: Order, artwork_services: IRegistry[IArtworkService]
-    ) -> IArtworkService | None:
-        """Return the matching artwork service for `order`, or `None` if none."""
-        logger.info("Get artwork service for order: %s", order.remote_order_id)
-        return artwork_services.get(self.artwork_provider_name)
-
     def should_update_sale(self, order: Order) -> bool:
         """Determine if an existing sale should be updated based on remote_order_id."""
         logger.info("Check if sale should be updated for order: %s", order.remote_order_id)
@@ -166,7 +178,7 @@ class CamelbakOrderService:
         file_path.write_text(text, encoding="utf-8")
 
         # update the API with the new workflow status
-        endpoint = "/api/order/status/"
+        config = get_config()
         json_data = {
             "purchaseOrderNumber": order.remote_order_id,
             "lineItems": [
@@ -174,8 +186,17 @@ class CamelbakOrderService:
                 for li in order.line_items
             ],
         }
-        response = self.session.put(f"{self.base_url.rstrip('/')}{endpoint}", json=json_data)
-        response.raise_for_status()
+        url = f"{self.base_url.rstrip('/')}/{config.spectrum_order_status_endpoint.lstrip('/')}"
+        timeout = config.spectrum_request_timeout
+
+        try:
+            response = self.session.put(url=url, json=json_data, timeout=timeout)
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as exc:
+            raise OrderError(
+                message=f"Spectrum API error: {exc.response.status_code} {exc.response.reason}",
+                order_id=order.remote_order_id,
+            ) from exc
 
     def load_order(self, remote_order_id: str) -> Order:
         """Load and return an `Order` previously persisted as JSON."""
@@ -233,7 +254,7 @@ class CamelbakOrderService:
             May raise exceptions if file writing fails
         """
         logger.info("Notify completed sale for order: %s", order.remote_order_id)
-        endpoint = "/api/order/ship-notification/"
+        config = get_config()
         json_data = {
             "purchaseOrderNumber": order.remote_order_id,
             "lineItems": [
@@ -245,8 +266,21 @@ class CamelbakOrderService:
                 for li in order.line_items
             ],
         }
-        response = self.session.post(f"{self.base_url.rstrip('/')}{endpoint}", json=json_data)
-        response.raise_for_status()
+        url = f"{self.base_url.rstrip('/')}/{config.spectrum_order_shipment_endpoint.lstrip('/')}"
+        timeout = config.spectrum_request_timeout
+
+        try:
+            response = self.session.post(
+                url=url,
+                json=json_data,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as exc:
+            raise NotifyError(
+                message=f"Spectrum API error: {exc.response.status_code} {exc.response.reason}",
+                order_id=order.remote_order_id,
+            ) from exc
 
     def get_notify_data(self, order: Order, sale_service: ISaleService) -> dict[str, Any]:
         """Get the data needed for notification.

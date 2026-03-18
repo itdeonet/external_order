@@ -9,7 +9,7 @@ import requests
 
 from src.config import get_config
 from src.domain import IArtworkService, Order, OrderStatus
-from src.services.camelbak_order_service import CamelbakOrderService
+from src.services.spectrum_order_service import SpectrumOrderService
 
 
 @pytest.fixture
@@ -20,16 +20,36 @@ def mock_session(mocker):
     return mock
 
 
-class TestCamelbakOrderServiceInstantiation:
-    """Tests for CamelbakOrderService instantiation."""
+@pytest.fixture
+def mock_artwork_service():
+    """Provide a mocked IArtworkService."""
+    mock = Mock(spec=IArtworkService)
+    return mock
 
-    def test_instantiation_with_defaults(self, mock_session):
-        """Test creating CamelbakOrderService with default values from config."""
-        service = CamelbakOrderService(session=mock_session, api_key="test-api-key")
+
+class TestSpectrumOrderServiceInstantiation:
+    """Tests for SpectrumOrderService instantiation."""
+
+    def test_instantiation_with_required_fields(self, mock_session, mock_artwork_service):
+        """Test creating SpectrumOrderService with required fields."""
+        service = SpectrumOrderService(
+            session=mock_session,
+            artwork_service=mock_artwork_service,
+        )
 
         assert service.session is mock_session
+        assert service.artwork_service is mock_artwork_service
+
+    def test_instantiation_with_defaults(self, mock_session, mock_artwork_service):
+        """Test creating SpectrumOrderService with default values from config."""
+        service = SpectrumOrderService(
+            session=mock_session,
+            artwork_service=mock_artwork_service,
+        )
+
+        assert service.session is mock_session
+        assert service.artwork_service is mock_artwork_service
         assert service.base_url == get_config().spectrum_base_url
-        assert service.artwork_provider_name == get_config().camelbak_artwork_provider_name
         assert service.administration_id == get_config().camelbak_administration_id
         assert service.customer_id == get_config().camelbak_customer_id
         assert service.pricelist_id == get_config().camelbak_pricelist_id
@@ -37,14 +57,13 @@ class TestCamelbakOrderServiceInstantiation:
         assert service.shipment_type == get_config().camelbak_shipment_type
         assert service.workdays_for_delivery == get_config().camelbak_workdays_for_delivery
 
-    def test_instantiation_with_custom_values(self, tmp_path, mock_session):
-        """Test creating CamelbakOrderService with custom values."""
+    def test_instantiation_with_custom_values(self, tmp_path, mock_session, mock_artwork_service):
+        """Test creating SpectrumOrderService with custom values."""
         input_dir = tmp_path / "input"
-        service = CamelbakOrderService(
+        service = SpectrumOrderService(
             session=mock_session,
-            api_key="test-api-key",
+            artwork_service=mock_artwork_service,
             base_url="http://custom.example.com",
-            artwork_provider_name="Custom Spectrum",
             administration_id=10,
             customer_id=200,
             pricelist_id=5,
@@ -54,8 +73,9 @@ class TestCamelbakOrderServiceInstantiation:
             input_dir=input_dir,
         )
 
+        assert service.session is mock_session
+        assert service.artwork_service is mock_artwork_service
         assert service.base_url == "http://custom.example.com"
-        assert service.artwork_provider_name == "Custom Spectrum"
         assert service.administration_id == 10
         assert service.customer_id == 200
         assert service.pricelist_id == 5
@@ -64,20 +84,71 @@ class TestCamelbakOrderServiceInstantiation:
         assert service.workdays_for_delivery == 7
         assert service.input_dir == input_dir
 
+    def test_register_classmethod_creates_instance_with_defaults(self, mock_session, mocker):
+        """Test that register() classmethod creates instance with config defaults."""
+        mock_artwork_service = Mock(spec=IArtworkService)
+        mock_registry = Mock()
+        mock_order_registry = Mock()
+
+        mocker.patch(
+            "src.services.spectrum_order_service.get_artwork_services",
+            return_value=mock_registry,
+        )
+        mocker.patch(
+            "src.services.spectrum_order_service.get_order_services",
+            return_value=mock_order_registry,
+        )
+        mock_registry.get.return_value = mock_artwork_service
+
+        SpectrumOrderService.register(
+            "spectrum_orders", mock_session, "test-api-key", "spectrum_artwork"
+        )
+
+        # Verify headers were updated with API key
+        assert mock_session.headers.get("SPECTRUM_API_TOKEN") == "test-api-key"
+
+        # Verify artwork service was retrieved from registry
+        mock_registry.get.assert_called_once_with("spectrum_artwork")
+
+        # Verify register was called
+        mock_order_registry.register.assert_called_once()
+        call_args = mock_order_registry.register.call_args
+        assert call_args[0][0] == "spectrum_orders"
+        assert isinstance(call_args[0][1], SpectrumOrderService)
+
+    def test_register_classmethod_raises_when_artwork_provider_not_found(
+        self, mock_session, mocker
+    ):
+        """Test that register() raises error when artwork provider not found."""
+        mock_registry = Mock()
+        mocker.patch(
+            "src.services.spectrum_order_service.get_artwork_services",
+            return_value=mock_registry,
+        )
+        mock_registry.get.return_value = None
+
+        with pytest.raises(ValueError, match="Artwork service .* not found in registry"):
+            SpectrumOrderService.register(
+                "spectrum_orders", mock_session, "test-api-key", "nonexistent_artwork"
+            )
+
 
 class TestReadOrders:
     """Tests for read_orders generator method."""
 
-    def test_read_orders_is_generator(self, mock_session):
+    def test_read_orders_is_generator(self, mock_session, mock_artwork_service):
         """Test that read_orders returns a generator."""
         from collections.abc import Generator
 
-        service = CamelbakOrderService(session=mock_session, api_key="test-api-key")
+        service = SpectrumOrderService(
+            session=mock_session,
+            artwork_service=mock_artwork_service,
+        )
         result = service.read_orders()
 
         assert isinstance(result, Generator)
 
-    def test_read_orders_yields_orders_from_api(self, mock_session, mocker):
+    def test_read_orders_yields_orders_from_api(self, mock_session, mock_artwork_service, mocker):
         """Test that read_orders calls API and yields Order instances."""
         api_response = [
             {
@@ -107,8 +178,10 @@ class TestReadOrders:
         mock_response.json.return_value = api_response
         mock_session.post.return_value = mock_response
 
-        service = CamelbakOrderService(
-            session=mock_session, api_key="test-api-key", customer_id=100
+        service = SpectrumOrderService(
+            session=mock_session,
+            artwork_service=mock_artwork_service,
+            customer_id=100,
         )
         orders = list(service.read_orders())
 
@@ -117,14 +190,16 @@ class TestReadOrders:
         assert orders[0].remote_order_id == "ORDER-001"
         mock_session.post.assert_called_once()
 
-    def test_read_orders_posts_correct_data(self, mock_session, mocker):
+    def test_read_orders_posts_correct_data(self, mock_session, mock_artwork_service, mocker):
         """Test that read_orders posts the correct search parameters."""
         mock_response = Mock()
         mock_response.json.return_value = []
         mock_session.post.return_value = mock_response
 
-        service = CamelbakOrderService(
-            session=mock_session, api_key="test-api-key", base_url="http://api.example.com"
+        service = SpectrumOrderService(
+            session=mock_session,
+            artwork_service=mock_artwork_service,
+            base_url="http://api.example.com",
         )
         list(service.read_orders())
 
@@ -140,18 +215,21 @@ class TestReadOrders:
         assert json_data["lastModificationStartDate"] == dt.date.today().isoformat()
         assert json_data["workflowStatuses"] == ["not-started"]
 
-    def test_read_orders_empty_response(self, mock_session, mocker):
+    def test_read_orders_empty_response(self, mock_session, mock_artwork_service, mocker):
         """Test that read_orders handles empty API response."""
         mock_response = Mock()
         mock_response.json.return_value = []
         mock_session.post.return_value = mock_response
 
-        service = CamelbakOrderService(session=mock_session, api_key="test-api-key")
+        service = SpectrumOrderService(
+            session=mock_session,
+            artwork_service=mock_artwork_service,
+        )
         orders = list(service.read_orders())
 
         assert len(orders) == 0
 
-    def test_read_orders_multiple_orders(self, mock_session, mocker):
+    def test_read_orders_multiple_orders(self, mock_session, mock_artwork_service, mocker):
         """Test that read_orders yields multiple orders."""
         api_response = [
             {
@@ -181,8 +259,8 @@ class TestReadOrders:
         mock_response.json.return_value = api_response
         mock_session.post.return_value = mock_response
 
-        service = CamelbakOrderService(
-            session=mock_session, api_key="test-api-key", customer_id=100
+        service = SpectrumOrderService(
+            session=mock_session, artwork_service=mock_artwork_service, customer_id=100
         )
         orders = list(service.read_orders())
 
@@ -190,7 +268,9 @@ class TestReadOrders:
         order_ids = {order.remote_order_id for order in orders}
         assert order_ids == {"ORDER-000", "ORDER-001", "ORDER-002"}
 
-    def test_read_orders_handles_parsing_exception(self, mock_session, mocker):
+    def test_read_orders_handles_parsing_exception(
+        self, mock_session, mock_artwork_service, mocker
+    ):
         """Test that read_orders records errors and continues iteration."""
         api_response = [
             {
@@ -244,11 +324,11 @@ class TestReadOrders:
 
         mock_error_store = mocker.Mock()
         mocker.patch(
-            "src.services.camelbak_order_service.get_error_store", return_value=mock_error_store
+            "src.services.spectrum_order_service.get_error_store", return_value=mock_error_store
         )
 
-        service = CamelbakOrderService(
-            session=mock_session, api_key="test-api-key", customer_id=100
+        service = SpectrumOrderService(
+            session=mock_session, artwork_service=mock_artwork_service, customer_id=100
         )
         orders = list(service.read_orders())
 
@@ -262,11 +342,11 @@ class TestMakeOrder:
     """Tests for _make_order method."""
 
     @pytest.fixture
-    def service(self, tmp_path, mock_session):
+    def service(self, tmp_path, mock_session, mock_artwork_service):
         """Provide a CamelbakOrderService instance."""
-        return CamelbakOrderService(
+        return SpectrumOrderService(
             session=mock_session,
-            api_key="test-api-key",
+            artwork_service=mock_artwork_service,
             administration_id=1,
             customer_id=100,
             pricelist_id=2,
@@ -450,51 +530,12 @@ class TestMakeOrder:
         assert order.ship_to.state == "ON"
 
 
-class TestGetArtworkService:
-    """Tests for get_artwork_service method."""
-
-    def test_get_artwork_service_returns_service(self, mock_session, mocker):
-        """Test that get_artwork_service returns the artwork service."""
-        service = CamelbakOrderService(
-            session=mock_session,
-            api_key="test-api-key",
-            artwork_provider_name=get_config().camelbak_artwork_provider_name,
-        )
-        mock_order = mocker.Mock(spec=Order)
-        mock_order.remote_order_id = "ORDER-123"
-        mock_registry = mocker.Mock()
-        mock_artwork_service = mocker.Mock(spec=IArtworkService)
-        mock_registry.get.return_value = mock_artwork_service
-
-        result = service.get_artwork_service(mock_order, mock_registry)
-
-        assert result is mock_artwork_service
-        mock_registry.get.assert_called_once_with(get_config().camelbak_artwork_provider_name)
-
-    def test_get_artwork_service_uses_provider_name(self, mock_session, mocker):
-        """Test that get_artwork_service uses the configured artwork_provider_name."""
-        custom_provider = "Custom Provider"
-        service = CamelbakOrderService(
-            session=mock_session,
-            api_key="test-api-key",
-            artwork_provider_name=custom_provider,
-        )
-        mock_order = mocker.Mock(spec=Order)
-        mock_registry = mocker.Mock()
-        mock_artwork_service = mocker.Mock(spec=IArtworkService)
-        mock_registry.get.return_value = mock_artwork_service
-
-        service.get_artwork_service(mock_order, mock_registry)
-
-        mock_registry.get.assert_called_once_with(custom_provider)
-
-
 class TestShouldUpdateSale:
     """Tests for should_update_sale method."""
 
-    def test_should_update_sale_always_returns_false(self, mock_session):
+    def test_should_update_sale_always_returns_false(self, mock_session, mock_artwork_service):
         """Test that should_update_sale always returns False for Camelbak."""
-        service = CamelbakOrderService(session=mock_session, api_key="test-api-key")
+        service = SpectrumOrderService(session=mock_session, artwork_service=mock_artwork_service)
         mock_order = Mock(spec=Order)
         mock_order.remote_order_id = "ANY-ORDER"
 
@@ -507,13 +548,13 @@ class TestPersistOrder:
     """Tests for persist_order method."""
 
     @pytest.fixture
-    def service(self, tmp_path, mock_session):
+    def service(self, tmp_path, mock_session, mock_artwork_service):
         """Provide a CamelbakOrderService instance with temp directories."""
         input_dir = tmp_path / "input"
         input_dir.mkdir(parents=True, exist_ok=True)
-        return CamelbakOrderService(
+        return SpectrumOrderService(
             session=mock_session,
-            api_key="test-api-key",
+            artwork_service=mock_artwork_service,
             base_url="http://api.example.com",
             input_dir=input_dir,
         )
@@ -540,7 +581,7 @@ class TestPersistOrder:
             "line_items": [],
         }
         mocker.patch(
-            "src.services.camelbak_order_service.asdict",
+            "src.services.spectrum_order_service.asdict",
             return_value=order_dict,
         )
 
@@ -571,7 +612,7 @@ class TestPersistOrder:
         mock_order.set_status = mock_set_status
 
         mocker.patch(
-            "src.services.camelbak_order_service.asdict",
+            "src.services.spectrum_order_service.asdict",
             return_value={"remote_order_id": "ORDER-002"},
         )
 
@@ -599,7 +640,7 @@ class TestPersistOrder:
         mock_order.set_status = mock_set_status
 
         mocker.patch(
-            "src.services.camelbak_order_service.asdict",
+            "src.services.spectrum_order_service.asdict",
             return_value={"remote_order_id": "ORDER-003"},
         )
 
@@ -639,7 +680,7 @@ class TestPersistOrder:
             "ship_at": dt.date(2025, 3, 18),
         }
         mocker.patch(
-            "src.services.camelbak_order_service.asdict",
+            "src.services.spectrum_order_service.asdict",
             return_value=order_dict,
         )
 
@@ -659,13 +700,13 @@ class TestLoadOrder:
     """Tests for load_order method."""
 
     @pytest.fixture
-    def service(self, tmp_path, mock_session):
+    def service(self, tmp_path, mock_session, mock_artwork_service):
         """Provide a CamelbakOrderService instance with temp directories."""
         input_dir = tmp_path / "input"
         input_dir.mkdir(parents=True, exist_ok=True)
-        return CamelbakOrderService(
+        return SpectrumOrderService(
             session=mock_session,
-            api_key="test-api-key",
+            artwork_service=mock_artwork_service,
             input_dir=input_dir,
         )
 
@@ -834,11 +875,11 @@ class TestLoadOrder:
 class TestNotifyCompletedSale:
     """Tests for notify_completed_sale method."""
 
-    def test_notify_completed_sale_calls_api(self, mock_session, mocker):
+    def test_notify_completed_sale_calls_api(self, mock_session, mock_artwork_service, mocker):
         """Test that notify_completed_sale calls the API with correct data."""
-        service = CamelbakOrderService(
+        service = SpectrumOrderService(
             session=mock_session,
-            api_key="test-api-key",
+            artwork_service=mock_artwork_service,
             base_url="http://api.example.com",
         )
 
@@ -869,10 +910,12 @@ class TestNotifyCompletedSale:
         assert json_data["lineItems"][0]["recipeSetReadableId"] == "RECIPE-001"
         assert json_data["lineItems"][0]["shipmentTracking"] == "TRACK-123456"
 
-    def test_notify_completed_sale_empty_tracking(self, mock_session, mocker):
+    def test_notify_completed_sale_empty_tracking(self, mock_session, mock_artwork_service, mocker):
         """Test notify_completed_sale with empty tracking reference."""
-        service = CamelbakOrderService(
-            session=mock_session, api_key="test-api-key", base_url="http://api.example.com"
+        service = SpectrumOrderService(
+            session=mock_session,
+            artwork_service=mock_artwork_service,
+            base_url="http://api.example.com",
         )
 
         mock_order = mocker.Mock(spec=Order)
@@ -895,9 +938,11 @@ class TestNotifyCompletedSale:
 class TestGetNotifyData:
     """Tests for get_notify_data method."""
 
-    def test_get_notify_data_retrieves_shipping_info(self, mock_session, mocker):
+    def test_get_notify_data_retrieves_shipping_info(
+        self, mock_session, mock_artwork_service, mocker
+    ):
         """Test that get_notify_data retrieves shipping info from sale service."""
-        service = CamelbakOrderService(session=mock_session, api_key="test-api-key")
+        service = SpectrumOrderService(session=mock_session, artwork_service=mock_artwork_service)
 
         mock_order = mocker.Mock(spec=Order)
         mock_order.remote_order_id = "ORDER-001"
@@ -912,9 +957,9 @@ class TestGetNotifyData:
         assert "carrier_tracking_ref" in result
         mock_sale_service.search_shipping_info.assert_called_once_with(mock_order)
 
-    def test_get_notify_data_splits_tracking_refs(self, mock_session, mocker):
+    def test_get_notify_data_splits_tracking_refs(self, mock_session, mock_artwork_service, mocker):
         """Test that get_notify_data properly splits tracking references."""
-        service = CamelbakOrderService(session=mock_session, api_key="test-api-key")
+        service = SpectrumOrderService(session=mock_session, artwork_service=mock_artwork_service)
 
         mock_order = mocker.Mock(spec=Order)
         mock_sale_service = mocker.Mock()
