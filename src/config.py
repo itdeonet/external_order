@@ -58,7 +58,10 @@ class Config:
 
     # Harman settings
     harman_artwork_provider: str = "Spectrum JBL"
+    # Regex patterns to distinguish B2B vs B2C orders by invoice number.
+    # B2B pattern examples: 950001234, S123, S4567 (corporate/wholesale invoices)
     harman_b2b_order_filter: str = r"95000\d+|S\d+"
+    # B2C pattern examples: HA-EM-123, JB-EM-ST-456, HA-EM-ST-789 (consumer/retail invoices)
     harman_b2c_order_filter: str = r"(HA|JB)-EM-(ST-)?\d+"
     harman_b2b_order_provider: str = "HARMAN JBL B2B"
     harman_b2c_order_provider: str = "HARMAN JBL B2C"

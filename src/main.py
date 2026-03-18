@@ -85,11 +85,11 @@ def main() -> None:
         # execute use cases
         for use_case_name, use_case in get_use_cases().items():
             try:
-                logger.info(f"Execute use case: {use_case_name}")
+                logger.info("Execute use case: %s", use_case_name)
                 use_case.execute()
             except Exception as exc:
                 error_store.add(exc)
-                logger.error(f"Failed to execute use case {use_case_name}: {exc!s}")
+                logger.error("Failed to execute use case %s: %s", use_case_name, exc)
 
     # After all use cases have executed, check if there were any errors and send email if so
     if error_store.has_errors():
@@ -107,7 +107,7 @@ def main() -> None:
 
             logger.info("Error alert email sent successfully.")
         except Exception as exc:
-            logger.error(f"Failed to send error alert email: {exc!s}")
+            logger.error("Failed to send error alert email: %s", exc)
 
     logger.info("Application finished")
     with config.log_file.open("a", encoding="utf-8") as log_file:
