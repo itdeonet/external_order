@@ -62,7 +62,9 @@ class OdooSaleService:
             query_data=[
                 [
                     ["company_id", "=", order.administration_id],
-                    ["x_remote_order_id", "=", order.remote_order_id],
+                    ["id", "=", order.sale_id]
+                    if order.sale_id
+                    else ["x_remote_order_id", "=", order.remote_order_id],
                     ["x_remote_order_provider", "=", order.order_provider],
                 ]
             ],
@@ -72,8 +74,8 @@ class OdooSaleService:
         if not (result and isinstance(result, list) and isinstance(result[0], dict)):
             return {}
 
-        sale_id: int = result[0].get("id", 0)
-        order.set_sale_id(sale_id)
+        order.set_sale_id(result[0].get("id", 0))
+        order.set_sale_name(result[0].get("name", ""))
         return result[0]
 
     def _search_country_id(self, country_code: str) -> int:

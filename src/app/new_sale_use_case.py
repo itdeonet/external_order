@@ -94,11 +94,6 @@ class NewSaleUseCase:
                                 )
                             sale_service.update_contact(order)
                             sale_service.update_sale(order)
-                        else:
-                            raise SaleError(
-                                "Existing B2C sale order or cannot update B2B sale order",
-                                order.remote_order_id,
-                            )
 
                     # when we reach this point, the order is in an expected state
                     order_service.persist_order(order, OrderStatus.CREATED)
