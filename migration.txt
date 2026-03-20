@@ -1,0 +1,2 @@
+-c "select x_remote_order_provider, x_remote_order_id from sale_order where x_remote_order_id like '95000%'"
+-c "update sale_order set x_remote_order_provider = 'HARMAN JBL B2C' where x_remote_order_provider = 'HARMAN JBL'"
