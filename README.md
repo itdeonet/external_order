@@ -87,7 +87,6 @@ deonet-external-order/
 - **`src/app/`** - Use cases & application orchestration (no business logic, pure coordination)
 - **`src/domain/`** - Pure business logic & validation rules (framework-agnostic)
 - **`src/services/`** - External system integrations & HTTP clients
-- **`src/interfaces/`** - Protocol definitions (TypeScript-like interfaces for Python)
 
 ## Architecture
 

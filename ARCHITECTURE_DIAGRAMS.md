@@ -12,7 +12,7 @@ graph TD
     
     OrderSvc1["HarmanOrderService<br/>(EDIFACT)<br/>- read_orders()<br/>- persist_order()<br/>- load_order()<br/>- notify_completed_sale()"]
     
-    OrderSvc2["CamelbakOrderService<br/>(REST API)<br/>- read_orders()<br/>- persist_order()<br/>- load_order()<br/>- notify_completed_sale()"]
+    OrderSvc2["SpectrumOrderService<br/>(REST API)<br/>- read_orders()<br/>- persist_order()<br/>- load_order()<br/>- notify_completed_sale()"]
     
     SaleSvc["OdooSaleService<br/>- create_sale()<br/>- update_contact()<br/>- update_sale()<br/>- mark_sale_notified()"]
     

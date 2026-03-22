@@ -33,7 +33,7 @@ src/
 │
 ├── services/                        # Service implementations (external integrations)
 │   ├── harman_order_service.py     # EDIFACT order parsing & Harman integration
-│   ├── spectrum_order_service.py   # Spectrum REST API order integration (commented out)
+│   ├── spectrum_order_service.py   # Spectrum/Camelbak REST API order integration
 │   ├── harman_stock_service.py     # Stock transfer XML processing & IDOC replies
 │   ├── odoo_sale_service.py        # Odoo sales RPC operations with error wrapping
 │   ├── spectrum_artwork_service.py # Spectrum API artwork retrieval
@@ -302,8 +302,8 @@ Implements: `IOrderService` (read, store, notify, artwork selection)
 - `_make_order(data) -> Order` - Create Order from parsed data
 - `read_order_data_by_remote_order_id(remote_order_id) -> dict[str, Any] | None` - Find archived file
 
-### `CamelbakOrderService`
-Located in [src/services/camelbak_order_service.py](src/services/camelbak_order_service.py)
+### `SpectrumOrderService`
+Located in [src/services/spectrum_order_service.py](src/services/spectrum_order_service.py)
 
 Implements: `IOrderService` (read, store, notify, artwork selection)
 
@@ -605,7 +605,7 @@ Located in [src/config.py](src/config.py)
 - `harman_pricelist_id: int` - Odoo pricelist (default: 2)
 - `harman_order_provider: str` - "HARMAN JBL"
 - `harman_shipment_type: str` - "harman%"
-- `harman_stock_supplier_name: str` - "Harman JBL"
+- `harman_stock_supplier_name: str` - "HARMAN JBL"
 - `harman_stock_upload_link: str` - Google Drive folder link
 - `harman_workdays_for_delivery: int` - Delivery lead time (default: 2)
 
@@ -648,7 +648,7 @@ def main() -> None:
     order_services: IRegistry[IOrderService] = Registry[IOrderService]()
     order_services.register("HARMAN JBL", HarmanOrderService())
     stock_services: IRegistry[IStockService] = Registry[IStockService]()
-    stock_services.register("Harman JBL", HarmanStockService())
+    stock_services.register("HARMAN JBL", HarmanStockService())
     use_cases: IRegistry[IUseCase] = Registry[IUseCase]()
 
     # 3. Create service instances and register use cases
