@@ -30,7 +30,7 @@ class TestConfigInitialization:
         assert config.harman_pricelist_id == 2
         assert config.harman_b2b_order_provider == "HARMAN JBL B2B"
         assert config.harman_b2c_order_provider == "HARMAN JBL B2C"
-        assert config.harman_shipment_type == "harman%"
+        assert config.harman_shipment_type == "HARMAN%"
         assert config.harman_workdays_for_delivery == 2
 
     def test_config_has_templates_dir(self):

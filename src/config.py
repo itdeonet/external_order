@@ -47,17 +47,17 @@ class Config:
     email_stock_template: Path = Path(__file__).parent / "templates" / "stock_email.html"
 
     # Camelbak settings
-    camelbak_artwork_provider: str = "Spectrum CAMELBAK"
+    camelbak_artwork_provider: str = "SPECTRUM CAMELBAK"
     camelbak_input_dir: Path = field(init=False)
     camelbak_administration_id: int = 1
     camelbak_customer_id: int = 9999999
     camelbak_pricelist_id: int = 2
     camelbak_order_provider: str = "CAMELBAK"
-    camelbak_shipment_type: str = "camelbak%"
+    camelbak_shipment_type: str = "CAMELBAK%"
     camelbak_workdays_for_delivery: int = 3
 
     # Harman settings
-    harman_artwork_provider: str = "Spectrum JBL"
+    harman_artwork_provider: str = "SPECTRUM JBL"
     # Regex patterns to distinguish B2B vs B2C orders by invoice number.
     # B2B pattern examples: 950001234, S123, S4567 (corporate/wholesale invoices)
     harman_b2b_order_filter: str = r"95000\d+|S\d+"
@@ -70,8 +70,8 @@ class Config:
     harman_administration_id: int = 2
     harman_customer_id: int = 5380
     harman_pricelist_id: int = 2
-    harman_shipment_type: str = "harman%"
-    harman_stock_supplier_name: str = "Harman JBL"
+    harman_shipment_type: str = "HARMAN%"
+    harman_stock_supplier_name: str = "HARMAN JBL"
     harman_stock_upload_link: str = (
         "https://drive.google.com/drive/u/0/folders/1-jWQEY9jrjKxDWNYNYsYqMqonQtZb3cD"
     )
