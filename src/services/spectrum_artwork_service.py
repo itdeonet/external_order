@@ -81,6 +81,9 @@ class SpectrumArtworkService:
         for li in order.line_items:
             for li_id, sku, qty, recipe_set_id in artwork_data:
                 if li.product_code == sku and li.quantity == qty:
+                    # prevent matching the same item in artwork_data multiple times
+                    artwork_data.remove((li_id, sku, qty, recipe_set_id))
+
                     design_endpoint = (
                         f"{config.spectrum_webtoprint_endpoint.rstrip('/')}/{recipe_set_id}/"
                     )

@@ -956,3 +956,211 @@ class TestSpectrumArtworkServiceGetArtwork:
         service._download_designs(recipe_set_id="RECIPE001", sale_name="SO-111")
 
         assert (tmp_path / "SO-111_design.pdf").exists()
+
+    def test_get_artwork_removes_item_from_artwork_data_after_match(
+        self, service, mock_client, tmp_path, mocker
+    ):
+        """Test that matched items are removed from artwork_data to prevent duplicate matches."""
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item = LineItem(line_id="RL-001", product_code="PROD001", quantity=100)
+
+        order = Order(
+            administration_id=1,
+            customer_id=100,
+            order_provider="Harman",
+            pricelist_id=50,
+            remote_order_id="HA-EM-REMOVE-TEST",
+            shipment_type="standard",
+            description="Test order",
+            ship_to=ship_to,
+            line_items=[line_item],
+        )
+        order.set_sale_id(12345)
+
+        # Setup mock to track that artwork is matched and removed
+        zip_buffer = io.BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            zip_file.writestr("design.pdf", "design content")
+        zip_buffer.seek(0)
+        design_zip_bytes = zip_buffer.getvalue()
+
+        placement_bytes = b"PDF placement content"
+
+        def mock_get_side_effect(url=None, **kwargs):
+            response = Mock(spec=requests.Response)
+            if url and "webtoprint" in url:
+                response.content = design_zip_bytes
+            elif url and "pdf" in url:
+                response.content = placement_bytes
+            else:
+                response.json.return_value = {
+                    "clientHandle": "CLIENT123",
+                    "lineItems": [
+                        {
+                            "id": 101,
+                            "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
+                            "recipeSetId": "RECIPE001",
+                        }
+                    ],
+                }
+            return response
+
+        mock_client.get.side_effect = mock_get_side_effect
+
+        service.get_artwork(order)
+
+        # If the removal worked, the line item should have artwork
+        assert line_item.artwork is not None
+        assert line_item.artwork.artwork_id == "RECIPE001"
+
+    def test_get_artwork_prevents_duplicate_match_when_multiple_same_entries(
+        self, service, mock_client, tmp_path, mocker
+    ):
+        """Test that when artwork_data has duplicate entries, only one line item matches."""
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        # Two line items with same product and quantity
+        line_item1 = LineItem(line_id="RL-001", product_code="PROD001", quantity=100)
+        line_item2 = LineItem(line_id="RL-002", product_code="PROD001", quantity=100)
+
+        order = Order(
+            administration_id=1,
+            customer_id=100,
+            order_provider="Harman",
+            pricelist_id=50,
+            remote_order_id="HA-EM-DUP-TEST",
+            shipment_type="standard",
+            description="Test order",
+            ship_to=ship_to,
+            line_items=[line_item1, line_item2],
+        )
+        order.set_sale_id(12345)
+
+        # Setup mock - API returns only ONE matching artwork for both line items
+        zip_buffer = io.BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            zip_file.writestr("design.pdf", "design content")
+        zip_buffer.seek(0)
+        design_zip_bytes = zip_buffer.getvalue()
+
+        placement_bytes = b"PDF placement content"
+
+        def mock_get_side_effect(url=None, **kwargs):
+            response = Mock(spec=requests.Response)
+            if url and "webtoprint" in url:
+                response.content = design_zip_bytes
+            elif url and "pdf" in url:
+                response.content = placement_bytes
+            else:
+                response.json.return_value = {
+                    "clientHandle": "CLIENT123",
+                    "lineItems": [
+                        {
+                            "id": 101,
+                            "skuQuantities": [{"sku": "PROD001", "quantity": 100}],
+                            "recipeSetId": "RECIPE001",
+                        }
+                    ],
+                }
+            return response
+
+        mock_client.get.side_effect = mock_get_side_effect
+
+        # First line item matches and removes the artwork, second should fail
+        with pytest.raises(ArtworkError, match="No artwork found"):
+            service.get_artwork(order)
+
+        # Verify first line item got the artwork
+        assert line_item1.artwork is not None
+        assert line_item1.artwork.artwork_id == "RECIPE001"
+        # Second line item should not have artwork (would raise before setting)
+
+    def test_get_artwork_matches_correct_recipe_when_multiple_recipes_same_sku(
+        self, service, mock_client, tmp_path, mocker
+    ):
+        """Test that removal prevents first match from blocking second distinct match."""
+        ship_to = ShipTo(
+            remote_customer_id="CUST123",
+            contact_name="John Doe",
+            email="john@example.com",
+            phone="555-0123",
+            street1="123 Main St",
+            city="Chicago",
+            postal_code="60601",
+            country_code="US",
+        )
+        line_item1 = LineItem(line_id="RL-001", product_code="PROD001", quantity=50)
+        line_item2 = LineItem(line_id="RL-002", product_code="PROD001", quantity=75)
+
+        order = Order(
+            administration_id=1,
+            customer_id=100,
+            order_provider="Harman",
+            pricelist_id=50,
+            remote_order_id="HA-EM-RECIPE-TEST",
+            shipment_type="standard",
+            description="Test order",
+            ship_to=ship_to,
+            line_items=[line_item1, line_item2],
+        )
+        order.set_sale_id(12345)
+
+        # Setup mock with two different recipes for different quantities
+        zip_buffer = io.BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            zip_file.writestr("design.pdf", "design content")
+        zip_buffer.seek(0)
+        design_zip_bytes = zip_buffer.getvalue()
+
+        placement_bytes = b"PDF placement content"
+
+        def mock_get_side_effect(url=None, **kwargs):
+            response = Mock(spec=requests.Response)
+            if url and "webtoprint" in url:
+                response.content = design_zip_bytes
+            elif url and "pdf" in url:
+                response.content = placement_bytes
+            else:
+                response.json.return_value = {
+                    "clientHandle": "CLIENT123",
+                    "lineItems": [
+                        {
+                            "id": 101,
+                            "skuQuantities": [{"sku": "PROD001", "quantity": 50}],
+                            "recipeSetId": "RECIPE001",
+                        },
+                        {
+                            "id": 102,
+                            "skuQuantities": [{"sku": "PROD001", "quantity": 75}],
+                            "recipeSetId": "RECIPE002",
+                        },
+                    ],
+                }
+            return response
+
+        mock_client.get.side_effect = mock_get_side_effect
+
+        service.get_artwork(order)
+
+        # Both line items should have different recipes
+        assert line_item1.artwork is not None
+        assert line_item2.artwork is not None
+        assert line_item1.artwork.artwork_id == "RECIPE001"
+        assert line_item2.artwork.artwork_id == "RECIPE002"
