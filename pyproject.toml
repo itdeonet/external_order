@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "jinja2>=3.1.6",
     "pydifact>=0.1.8",
+    "pymupdf>=1.27.2.2",
     "python-dotenv>=1.2.1",
     "redmail>=0.6.0",
     "requests>=2.32.5",
