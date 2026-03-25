@@ -1189,3 +1189,255 @@ class TestRegistryDataPersistence:
 
         assert retrieved is obj
         assert id(retrieved) == id(obj)
+
+
+class TestFactoryFunctionsSingleton:
+    """Tests for singleton factory functions with @cache decorator."""
+
+    def test_get_workflow_services_returns_registry(self):
+        """Test that get_workflow_services returns a Registry instance."""
+        from src.app.registry import get_workflow_services
+
+        registry = get_workflow_services()
+        assert isinstance(registry, Registry)
+
+    def test_get_workflow_services_returns_same_instance(self):
+        """Test that get_workflow_services returns the same instance (singleton)."""
+        from src.app.registry import get_workflow_services
+
+        first_call = get_workflow_services()
+        second_call = get_workflow_services()
+        third_call = get_workflow_services()
+
+        assert first_call is second_call
+        assert second_call is third_call
+        assert id(first_call) == id(second_call) == id(third_call)
+
+    def test_get_workflow_services_works_as_registry(self):
+        """Test that get_workflow_services registry can register and retrieve items."""
+        from unittest.mock import Mock
+
+        from src.app.registry import get_workflow_services
+
+        registry = get_workflow_services()
+        registry.clear()  # Clear any previous state
+
+        # Create a mock IWorkflowService
+        mock_service = Mock()
+        mock_service.create_batch_pdf = Mock(return_value=[])
+
+        registry.register("test_service", mock_service)
+        assert registry.get("test_service") is mock_service
+
+    def test_get_artwork_services_returns_singleton(self):
+        """Test that get_artwork_services returns the same instance."""
+        from src.app.registry import get_artwork_services
+
+        first = get_artwork_services()
+        second = get_artwork_services()
+
+        assert first is second
+
+    def test_get_order_services_returns_singleton(self):
+        """Test that get_order_services returns the same instance."""
+        from src.app.registry import get_order_services
+
+        first = get_order_services()
+        second = get_order_services()
+
+        assert first is second
+
+    def test_get_sale_services_returns_singleton(self):
+        """Test that get_sale_services returns the same instance."""
+        from src.app.registry import get_sale_services
+
+        first = get_sale_services()
+        second = get_sale_services()
+
+        assert first is second
+
+    def test_get_stock_services_returns_singleton(self):
+        """Test that get_stock_services returns the same instance."""
+        from src.app.registry import get_stock_services
+
+        first = get_stock_services()
+        second = get_stock_services()
+
+        assert first is second
+
+    def test_get_use_cases_returns_singleton(self):
+        """Test that get_use_cases returns the same instance."""
+        from src.app.registry import get_use_cases
+
+        first = get_use_cases()
+        second = get_use_cases()
+
+        assert first is second
+
+    def test_factory_functions_return_different_instances(self):
+        """Test that different factory functions return different instances."""
+        from src.app.registry import (
+            get_artwork_services,
+            get_order_services,
+            get_sale_services,
+            get_stock_services,
+            get_use_cases,
+            get_workflow_services,
+        )
+
+        artwork = get_artwork_services()
+        order = get_order_services()
+        sale = get_sale_services()
+        stock = get_stock_services()
+        workflow = get_workflow_services()
+        use_cases = get_use_cases()
+
+        # All should be different instances
+        instances = [artwork, order, sale, stock, workflow, use_cases]
+        assert len({id(inst) for inst in instances}) == 6
+
+    def test_workflow_services_persists_data_across_calls(self):
+        """Test that data persists in workflow_services across multiple get calls."""
+        from unittest.mock import Mock
+
+        from src.app.registry import get_workflow_services
+
+        # Get first instance and register data
+        registry1 = get_workflow_services()
+        registry1.clear()
+
+        mock_service = Mock()
+        registry1.register("persistent_key", mock_service)
+
+        # Get second instance and verify data is still there
+        registry2 = get_workflow_services()
+        assert registry2.get("persistent_key") is mock_service
+
+        # Since they're the same instance, this should be true
+        assert registry1 is registry2
+
+    def test_multiple_registrations_in_singleton(self):
+        """Test multiple registrations in singleton workflow_services."""
+        from unittest.mock import Mock
+
+        from src.app.registry import get_workflow_services
+
+        registry = get_workflow_services()
+        registry.clear()
+
+        service1 = Mock(name="service1")
+        service2 = Mock(name="service2")
+        service3 = Mock(name="service3")
+
+        registry.register("service1", service1)
+        registry.register("service2", service2)
+        registry.register("service3", service3)
+
+        assert registry.get("service1") is service1
+        assert registry.get("service2") is service2
+        assert registry.get("service3") is service3
+
+    def test_clear_in_singleton_affects_subsequent_calls(self):
+        """Test that clear in singleton affects subsequent get calls."""
+        from unittest.mock import Mock
+
+        from src.app.registry import get_workflow_services
+
+        registry = get_workflow_services()
+        registry.clear()
+
+        mock_service = Mock()
+        registry.register("test_item", mock_service)
+
+        assert registry.get("test_item") is mock_service
+
+        registry.clear()
+
+        # Get another reference - should be empty
+        registry2 = get_workflow_services()
+        assert registry2.get("test_item") is None
+
+    def test_cache_decorator_is_applied(self):
+        """Test that @cache decorator is applied by checking the wrapper."""
+        from src.app.registry import get_workflow_services
+
+        # The function should be wrapped by functools.cache
+        # Calling it multiple times should not create new instances
+        instance1 = get_workflow_services()
+        instance2 = get_workflow_services()
+
+        # If cache is properly applied, these are the same object
+        assert instance1 is instance2
+        assert instance1.__class__.__name__ == "Registry"
+
+    def test_all_factory_functions_are_callable(self):
+        """Test that all factory functions are callable."""
+        from src.app.registry import (
+            get_artwork_services,
+            get_order_services,
+            get_sale_services,
+            get_stock_services,
+            get_use_cases,
+            get_workflow_services,
+        )
+
+        functions = [
+            get_artwork_services,
+            get_order_services,
+            get_sale_services,
+            get_stock_services,
+            get_workflow_services,
+            get_use_cases,
+        ]
+
+        for func in functions:
+            assert callable(func)
+            result = func()
+            assert isinstance(result, Registry)
+
+    def test_workflow_services_concurrent_access_singleton(self):
+        """Test that concurrent access to workflow_services returns same instance."""
+        import threading
+
+        from src.app.registry import get_workflow_services
+
+        instances = []
+        lock = threading.Lock()
+
+        def get_and_store():
+            instance = get_workflow_services()
+            with lock:
+                instances.append(instance)
+
+        threads = [threading.Thread(target=get_and_store) for _ in range(10)]
+
+        for thread in threads:
+            thread.start()
+
+        for thread in threads:
+            thread.join()
+
+        # All instances should be the same
+        assert len(instances) == 10
+        assert all(inst is instances[0] for inst in instances)
+
+    def test_workflow_services_register_and_unregister_in_singleton(self):
+        """Test register and unregister operations in singleton workflow_services."""
+        from unittest.mock import Mock
+
+        from src.app.registry import get_workflow_services
+
+        registry = get_workflow_services()
+        registry.clear()
+
+        mock_service = Mock()
+        registry.register("temp_service", mock_service)
+        assert registry.get("temp_service") is mock_service
+
+        registry.unregister("temp_service")
+        assert registry.get("temp_service") is None
+
+        # Verify same instance
+        registry2 = get_workflow_services()
+        assert registry2.get("temp_service") is None
+        assert registry2 is registry

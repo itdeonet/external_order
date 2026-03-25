@@ -185,3 +185,16 @@ class IStockService(Protocol):
     def mark_transfer_as_processed(self, transfer_data: dict[str, Any]) -> None:
         """Mark the stock transfer as processed by renaming the input file."""
         ...
+
+
+# ============================================================================
+# Workflow Service Interface
+# ============================================================================
+
+
+class IWorkflowService(Protocol):
+    """Protocol for processing orders through the workflow (e.g. creating batch PDFs)."""
+
+    def create_batch_pdf(self, order: "Order") -> list[Path]:
+        """Create batch PDF files for the given `order` based on workflow data."""
+        ...

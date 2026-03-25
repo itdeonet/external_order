@@ -17,6 +17,7 @@ from src.domain import (
     ISaleService,
     IStockService,
     IUseCase,
+    IWorkflowService,
 )
 
 logger = getLogger(__name__)
@@ -87,6 +88,11 @@ def get_sale_services() -> IRegistry[ISaleService]:
 @cache
 def get_stock_services() -> IRegistry[IStockService]:
     return Registry[IStockService]()
+
+
+@cache
+def get_workflow_services() -> IRegistry[IWorkflowService]:
+    return Registry[IWorkflowService]()
 
 
 @cache

@@ -13,6 +13,7 @@ from src.domain.ports import (
     ISaleService,
     IStockService,
     IUseCase,
+    IWorkflowService,
 )
 from src.domain.ship_to import ShipTo
 
@@ -27,6 +28,7 @@ __all__ = [
     "ISaleService",
     "IStockService",
     "IUseCase",
+    "IWorkflowService",
     "LineItem",
     "Order",
     "OrderStatus",
