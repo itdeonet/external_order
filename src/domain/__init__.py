@@ -9,11 +9,11 @@ from src.domain.ports import (
     IOrderReader,
     IOrderService,
     IOrderStore,
+    IPreProductionService,
     IRegistry,
     ISaleService,
     IStockService,
     IUseCase,
-    IWorkflowService,
 )
 from src.domain.ship_to import ShipTo
 
@@ -24,11 +24,11 @@ __all__ = [
     "IOrderReader",
     "IOrderService",
     "IOrderStore",
+    "IPreProductionService",
     "IRegistry",
     "ISaleService",
     "IStockService",
     "IUseCase",
-    "IWorkflowService",
     "LineItem",
     "Order",
     "OrderStatus",

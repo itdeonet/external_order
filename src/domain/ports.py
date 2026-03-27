@@ -188,12 +188,12 @@ class IStockService(Protocol):
 
 
 # ============================================================================
-# Workflow Service Interface
+# Pre-Production Service Interface
 # ============================================================================
 
 
-class IWorkflowService(Protocol):
-    """Protocol for processing orders through the workflow (e.g. creating batch PDFs)."""
+class IPreProductionService(Protocol):
+    """Protocol for processing orders through pre-production (e.g. creating batch PDFs)."""
 
     def create_batch_pdf(self, order: "Order") -> list[Path]:
         """Create batch PDF files for the given `order` based on workflow data."""

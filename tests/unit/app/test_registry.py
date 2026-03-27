@@ -1194,35 +1194,35 @@ class TestRegistryDataPersistence:
 class TestFactoryFunctionsSingleton:
     """Tests for singleton factory functions with @cache decorator."""
 
-    def test_get_workflow_services_returns_registry(self):
-        """Test that get_workflow_services returns a Registry instance."""
-        from src.app.registry import get_workflow_services
+    def test_get_pre_production_services_returns_registry(self):
+        """Test that get_pre_production_services returns a Registry instance."""
+        from src.app.registry import get_pre_production_services
 
-        registry = get_workflow_services()
+        registry = get_pre_production_services()
         assert isinstance(registry, Registry)
 
-    def test_get_workflow_services_returns_same_instance(self):
-        """Test that get_workflow_services returns the same instance (singleton)."""
-        from src.app.registry import get_workflow_services
+    def test_get_pre_production_services_returns_same_instance(self):
+        """Test that get_pre_production_services returns the same instance (singleton)."""
+        from src.app.registry import get_pre_production_services
 
-        first_call = get_workflow_services()
-        second_call = get_workflow_services()
-        third_call = get_workflow_services()
+        first_call = get_pre_production_services()
+        second_call = get_pre_production_services()
+        third_call = get_pre_production_services()
 
         assert first_call is second_call
         assert second_call is third_call
         assert id(first_call) == id(second_call) == id(third_call)
 
-    def test_get_workflow_services_works_as_registry(self):
-        """Test that get_workflow_services registry can register and retrieve items."""
+    def test_get_pre_production_services_works_as_registry(self):
+        """Test that get_pre_production_services registry can register and retrieve items."""
         from unittest.mock import Mock
 
-        from src.app.registry import get_workflow_services
+        from src.app.registry import get_pre_production_services
 
-        registry = get_workflow_services()
+        registry = get_pre_production_services()
         registry.clear()  # Clear any previous state
 
-        # Create a mock IWorkflowService
+        # Create a mock IPreProductionService
         mock_service = Mock()
         mock_service.create_batch_pdf = Mock(return_value=[])
 
@@ -1279,17 +1279,17 @@ class TestFactoryFunctionsSingleton:
         from src.app.registry import (
             get_artwork_services,
             get_order_services,
+            get_pre_production_services,
             get_sale_services,
             get_stock_services,
             get_use_cases,
-            get_workflow_services,
         )
 
         artwork = get_artwork_services()
         order = get_order_services()
         sale = get_sale_services()
         stock = get_stock_services()
-        workflow = get_workflow_services()
+        workflow = get_pre_production_services()
         use_cases = get_use_cases()
 
         # All should be different instances
@@ -1300,17 +1300,17 @@ class TestFactoryFunctionsSingleton:
         """Test that data persists in workflow_services across multiple get calls."""
         from unittest.mock import Mock
 
-        from src.app.registry import get_workflow_services
+        from src.app.registry import get_pre_production_services
 
         # Get first instance and register data
-        registry1 = get_workflow_services()
+        registry1 = get_pre_production_services()
         registry1.clear()
 
         mock_service = Mock()
         registry1.register("persistent_key", mock_service)
 
         # Get second instance and verify data is still there
-        registry2 = get_workflow_services()
+        registry2 = get_pre_production_services()
         assert registry2.get("persistent_key") is mock_service
 
         # Since they're the same instance, this should be true
@@ -1320,9 +1320,9 @@ class TestFactoryFunctionsSingleton:
         """Test multiple registrations in singleton workflow_services."""
         from unittest.mock import Mock
 
-        from src.app.registry import get_workflow_services
+        from src.app.registry import get_pre_production_services
 
-        registry = get_workflow_services()
+        registry = get_pre_production_services()
         registry.clear()
 
         service1 = Mock(name="service1")
@@ -1341,9 +1341,9 @@ class TestFactoryFunctionsSingleton:
         """Test that clear in singleton affects subsequent get calls."""
         from unittest.mock import Mock
 
-        from src.app.registry import get_workflow_services
+        from src.app.registry import get_pre_production_services
 
-        registry = get_workflow_services()
+        registry = get_pre_production_services()
         registry.clear()
 
         mock_service = Mock()
@@ -1354,17 +1354,17 @@ class TestFactoryFunctionsSingleton:
         registry.clear()
 
         # Get another reference - should be empty
-        registry2 = get_workflow_services()
+        registry2 = get_pre_production_services()
         assert registry2.get("test_item") is None
 
     def test_cache_decorator_is_applied(self):
         """Test that @cache decorator is applied by checking the wrapper."""
-        from src.app.registry import get_workflow_services
+        from src.app.registry import get_pre_production_services
 
         # The function should be wrapped by functools.cache
         # Calling it multiple times should not create new instances
-        instance1 = get_workflow_services()
-        instance2 = get_workflow_services()
+        instance1 = get_pre_production_services()
+        instance2 = get_pre_production_services()
 
         # If cache is properly applied, these are the same object
         assert instance1 is instance2
@@ -1375,10 +1375,10 @@ class TestFactoryFunctionsSingleton:
         from src.app.registry import (
             get_artwork_services,
             get_order_services,
+            get_pre_production_services,
             get_sale_services,
             get_stock_services,
             get_use_cases,
-            get_workflow_services,
         )
 
         functions = [
@@ -1386,7 +1386,7 @@ class TestFactoryFunctionsSingleton:
             get_order_services,
             get_sale_services,
             get_stock_services,
-            get_workflow_services,
+            get_pre_production_services,
             get_use_cases,
         ]
 
@@ -1399,13 +1399,13 @@ class TestFactoryFunctionsSingleton:
         """Test that concurrent access to workflow_services returns same instance."""
         import threading
 
-        from src.app.registry import get_workflow_services
+        from src.app.registry import get_pre_production_services
 
         instances = []
         lock = threading.Lock()
 
         def get_and_store():
-            instance = get_workflow_services()
+            instance = get_pre_production_services()
             with lock:
                 instances.append(instance)
 
@@ -1425,9 +1425,9 @@ class TestFactoryFunctionsSingleton:
         """Test register and unregister operations in singleton workflow_services."""
         from unittest.mock import Mock
 
-        from src.app.registry import get_workflow_services
+        from src.app.registry import get_pre_production_services
 
-        registry = get_workflow_services()
+        registry = get_pre_production_services()
         registry.clear()
 
         mock_service = Mock()
@@ -1438,6 +1438,6 @@ class TestFactoryFunctionsSingleton:
         assert registry.get("temp_service") is None
 
         # Verify same instance
-        registry2 = get_workflow_services()
+        registry2 = get_pre_production_services()
         assert registry2.get("temp_service") is None
         assert registry2 is registry

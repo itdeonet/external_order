@@ -1,0 +1,78 @@
+{
+    "JBLCHARGE6BLKCSTM": {
+        "product_name": "Charge 6",
+        "batch_size": 1,
+        "directory": "HARMAN-JBL Charge 6"
+    },
+    "JBLCHARGEES2CSTM": {
+        "product_name": "Charge Essential 2",
+        "batch_size": 1,
+        "directory": "HARMAN-JBL Charge Essential 2"
+    },
+    "JBLCLIP5WHTCSTM": {
+        "product_name": "JBL Clip 5",
+        "batch_size": 8,
+        "directory": "HARMAN-JBL Clip 5"
+    },
+    "JBLFLIP7BLKCSTM": {
+        "product_name": "Flip 7",
+        "batch_size": 1,
+        "directory": "HARMAN-JBL Flip 7"
+    },
+    "JBLFLIPES2CSTM": {
+        "product_name": "Flip Essential 2",
+        "batch_size": 1,
+        "directory":"HARMAN-JBL Flip Essential 2"
+    },
+    "JBLGO4WHTCSTM": {
+        "product_name": "JBL Go 4",
+        "batch_size": 9,
+        "directory": "HARMAN-JBL Go4"
+    },
+    "JBLGOES2BLKEUCSTM": {
+        "product_name": "Go Essential 2",
+        "batch_size": 12,
+        "directory": "HARMAN-JBL GO Essential"
+    },
+    "JBLGOES2BLUEUCSTM": {
+        "product_name": "Go Essential 2",
+        "batch_size": 12,
+        "directory": "HARMAN-JBL GO Essential"
+    },
+    "JBLGOES2REDEUCSTM": {
+        "product_name": "Go Essential 2",
+        "batch_size": 12,
+        "directory": "HARMAN-JBL GO Essential"
+    },
+    "JBLGRIPBLKNCSTM": {
+        "product_name": "JBL Grip",
+        "batch_size": 1,
+        "directory": "HARMAN-JBL Grip"
+    },
+    "JBLGRIPWHTNCSTM": {
+        "product_name": "JBL Grip",
+        "batch_size": 1,
+        "directory": "HARMAN-JBL Grip"
+    },
+    "JBLLIVE770WHTCSTM": {
+        "product_name": "JBL Live 770",
+        "batch_size": 1,
+        "directory_upper": "HARMAN-JBL Live 770 Upper",
+        "directory_lower" : "HARMAN-JBL Live 770 Lower"
+    },
+    "JBLT520BTBLKCSTM": {
+        "product_name": "JBL Tune 520BT",
+        "batch_size": 1,
+        "directory_lower": "HARMAN-JBL Tune 520BT"
+    },
+    "JBLTFLEX2BLKCSTM": {
+        "product_name": "JBL Tune Flex 2",
+        "batch_size": 24,
+        "directory": "HARMAN-JBL Tune Flex 2"
+    },
+    "JBLWFLEX2BLKCSTM": {
+        "product_name": "JBL Wave Flex 2",
+        "batch_size": 30,
+        "directory": "HARMAN-JBL Wave Flex 2"
+    }
+}

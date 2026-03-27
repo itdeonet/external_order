@@ -32,6 +32,7 @@ class Config:
     ssl_verify: bool = os.getenv("SSL_VERIFY", "true").lower() == "true"
     templates_dir: Path = Path(__file__).parent / "templates"
     work_dir: Path = Path(os.getenv("WORK_DIR", Path.home() / "projects-data" / "external_order"))
+    pre_production_dir: Path = field(init=False)
 
     # Email settings
     smtp_host: str = os.getenv("SMTP_HOST", "smtp-relay.gmail.com")
@@ -100,6 +101,9 @@ class Config:
     spectrum_order_status_endpoint: str = "/api/order/status/"
     spectrum_order_shipment_endpoint: str = "/api/order/ship-notification/"
 
+    # pre-production settings
+    pre_production_data_file: Path = Path(__file__).parent / "files" / "pre_production_data.json"
+
     def __post_init__(self) -> None:
         """Validate required settings and initialize derived paths."""
         # Validate required URLs are set
@@ -117,6 +121,7 @@ class Config:
         object.__setattr__(self, "harman_output_dir", self.work_dir / "harman" / "out")
         object.__setattr__(self, "digitals_dir", self.work_dir / "digitals")
         object.__setattr__(self, "open_orders_dir", self.work_dir / "open_orders")
+        object.__setattr__(self, "pre_production_dir", self.work_dir / "pre_production")
         object.__setattr__(self, "log_file", self.work_dir / "logs" / self.log_file.name)
 
         self.camelbak_input_dir.mkdir(parents=True, exist_ok=True)
@@ -124,7 +129,13 @@ class Config:
         self.harman_output_dir.mkdir(parents=True, exist_ok=True)
         self.digitals_dir.mkdir(parents=True, exist_ok=True)
         self.open_orders_dir.mkdir(parents=True, exist_ok=True)
+        self.pre_production_dir.mkdir(parents=True, exist_ok=True)
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
+
+        if not self.pre_production_data_file.is_file():
+            raise ValueError(
+                f"Pre-production data file not found at {self.pre_production_data_file}"
+            )
 
 
 @cache

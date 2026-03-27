@@ -13,11 +13,11 @@ from threading import Lock
 from src.domain import (
     IArtworkService,
     IOrderService,
+    IPreProductionService,
     IRegistry,
     ISaleService,
     IStockService,
     IUseCase,
-    IWorkflowService,
 )
 
 logger = getLogger(__name__)
@@ -91,8 +91,8 @@ def get_stock_services() -> IRegistry[IStockService]:
 
 
 @cache
-def get_workflow_services() -> IRegistry[IWorkflowService]:
-    return Registry[IWorkflowService]()
+def get_pre_production_services() -> IRegistry[IPreProductionService]:
+    return Registry[IPreProductionService]()
 
 
 @cache
