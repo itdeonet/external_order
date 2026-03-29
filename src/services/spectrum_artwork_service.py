@@ -38,6 +38,7 @@ class SpectrumArtworkService:
     @classmethod
     def register(cls, name: str, session: requests.Session, api_key: str) -> None:
         """Factory method to create and register a SpectrumArtworkService instance."""
+        logger.info("Register SpectrumArtworkService with name '%s'", name)
         session.headers.update({"SPECTRUM_API_TOKEN": api_key})
         artwork_service = cls(session=session)
         get_artwork_services().register(name, artwork_service)

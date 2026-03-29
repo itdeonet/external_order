@@ -26,12 +26,13 @@ class StockTransferUseCase:
     @classmethod
     def register(cls, name: str) -> None:
         """Factory method to create and register a StockTransferUseCase instance."""
+        logger.info("Register StockTransferUseCase with name '%s'", name)
         use_case = cls()
         get_use_cases().register(name, use_case)
 
     def execute(self) -> None:
         """Process stock transfer requests across all registered stock service providers.
-        
+
         Multi-provider orchestration workflow:
         1. For each stock service provider (e.g., Harman, Camelbak):
            a. Read all pending stock transfer requests from that provider
@@ -39,7 +40,7 @@ class StockTransferUseCase:
               i. Create a stock transfer reply (DESADV EDI or equivalent format)
               ii. Send confirmation email with the reply
               iii. Mark transfer as processed
-        
+
         Errors at provider or individual transfer levels are caught and stored without
         stopping processing of remaining transfers, enabling graceful degradation.
         """

@@ -43,6 +43,7 @@ class OdooSaleService:
     @classmethod
     def register(cls, name: str, session: requests.Session) -> None:
         """Factory method to create and register an OdooSaleService instance."""
+        logger.info("Register OdooSaleService with name '%s'", name)
         sale_service = cls(session=session)
         get_sale_services().register(name, sale_service)
 

@@ -27,12 +27,13 @@ class CompletedSaleUseCase:
     @classmethod
     def register(cls, name: str) -> None:
         """Factory method to create and register a CompletedSaleUseCase instance."""
+        logger.info("Register CompletedSaleUseCase with name '%s'", name)
         use_case = cls()
         get_use_cases().register(name, use_case)
 
     def execute(self) -> None:
         """Complete sales across all registered order and sale service providers.
-        
+
         Multi-provider orchestration workflow:
         1. For each order service provider (e.g., HARMAN B2B, HARMAN B2C, Camelbak):
            2. For each sale service provider (e.g., ODOO):
@@ -41,7 +42,7 @@ class CompletedSaleUseCase:
                  i. Load the original order from the order provider
                  ii. Notify the order provider that sale is complete
                  iii. Persist order with COMPLETED status
-        
+
         Errors at provider and individual sale levels are caught and stored without stopping,
         enabling graceful degradation and resilience across multiple integrated systems.
         """

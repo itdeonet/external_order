@@ -25,6 +25,7 @@ class PreProductionUseCase:
     @classmethod
     def register(cls, name: str) -> None:
         """Factory method to create and register a PreProductionUseCase instance."""
+        logger.info("Register PreProductionUseCase with name '%s'", name)
         use_case = cls()
         get_use_cases().register(name, use_case)
 

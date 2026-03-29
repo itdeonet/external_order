@@ -34,6 +34,7 @@ class HarmanStockService:
     @classmethod
     def register(cls, name: str) -> None:
         """Factory method to create and register a HarmanStockService instance."""
+        logger.info("Register HarmanStockService with name '%s'", name)
         stock_service = cls()
         get_stock_services().register(name, stock_service)
 
@@ -54,6 +55,7 @@ class HarmanStockService:
                 transfer_data = xmltodict.parse(file_path.read_text(encoding="utf-8"))
                 yield self._get_transfer_info(transfer_data, file_path)
             except Exception as exc:
+                logger.error("Failed to read stock transfer file: %s", file_path.name, exc_info=exc)
                 get_error_store().add(exc)
 
     def _get_transfer_info(self, transfer_data: dict[str, Any], file_path: Path) -> dict[str, Any]:

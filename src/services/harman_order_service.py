@@ -60,6 +60,7 @@ class HarmanOrderService:
     @classmethod
     def register(cls, name: str, artwork_provider: str, name_filter: str) -> None:
         """Factory method to create and register a HarmanOrderService instance."""
+        logger.info("Register HarmanOrderService with name '%s'", name)
         artwork_service = get_artwork_services().get(artwork_provider)
         if artwork_provider and not artwork_service:
             raise ValueError(f"Artwork service '{artwork_provider}' not found in registry")
@@ -84,10 +85,10 @@ class HarmanOrderService:
         # parse each .insdes file in the directory and yield an Order instance
         chain = itertools.chain.from_iterable(
             [
-                self.input_dir.glob("*.insdes", case_sensitive=False),
                 self.input_dir.glob("*.new", case_sensitive=False),
                 self.input_dir.glob("*.created", case_sensitive=False),
                 self.input_dir.glob("*.artwork", case_sensitive=False),
+                self.input_dir.glob("*.insdes", case_sensitive=False),
             ]
         )
         for file in chain:

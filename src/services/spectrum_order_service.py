@@ -56,6 +56,7 @@ class SpectrumOrderService:
         cls, name: str, session: requests.Session, api_key: str, artwork_provider: str
     ) -> None:
         """Factory method to create and register a SpectrumOrderService instance."""
+        logger.info("Register SpectrumOrderService with name '%s'", name)
         session.headers.update({"SPECTRUM_API_TOKEN": api_key})
         artwork_service = get_artwork_services().get(artwork_provider)
         if not artwork_service:

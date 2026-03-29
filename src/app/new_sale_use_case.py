@@ -37,6 +37,7 @@ class NewSaleUseCase:
     @classmethod
     def register(cls, name: str) -> None:
         """Factory method to create and register a NewSaleUseCase instance."""
+        logger.info("Register NewSaleUseCase with name '%s'", name)
         use_case = cls()
         get_use_cases().register(name, use_case)
 
