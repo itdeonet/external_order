@@ -66,7 +66,6 @@ class OdooSaleService:
                     ["id", "=", order.sale_id]
                     if order.sale_id
                     else ["x_remote_order_id", "=", order.remote_order_id],
-                    ["x_remote_order_provider", "=", order.order_provider],
                 ]
             ],
             query_options={"limit": 1},
