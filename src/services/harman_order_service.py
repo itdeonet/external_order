@@ -223,7 +223,9 @@ class HarmanOrderService:
     def read_order_data_by_remote_order_id(self, remote_order_id: str) -> dict[str, Any] | None:
         """Find and parse the file for `remote_order_id`, returning parsed data."""
         logger.info("Get order data for remote order ID: %s", remote_order_id)
-        for file in self.input_dir.glob(f"{remote_order_id}.confirmed", case_sensitive=False):
+        for file in self.input_dir.glob(f"{remote_order_id}.*", case_sensitive=False):
+            if file.suffix.lower() == ".json":
+                continue  # skip JSON files
             return self._read_order_data(file)
         return None
 
